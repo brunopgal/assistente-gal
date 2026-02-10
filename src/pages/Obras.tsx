@@ -2,7 +2,7 @@ import { Building2 } from "lucide-react";
 import EmbedCard from "@/components/EmbedCard";
 
 // ✏️ CONFIGURE SUAS URLS AQUI
-const SHEETS_EMBED_URL = ""; // Cole a URL de publicação do Google Sheets (Arquivo > Compartilhar > Publicar na web > Incorporar)
+const SHEETS_EMBED_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj4AlBo3824a0HmbV6tusrdz2n5parJjI9gk6TfdHgywOuWKdnr1v013W7cyMJAGqnyyGYr7TSj6sS/pubhtml?widget=true&headers=false";
 const SHEETS_EXTERNAL_URL = "https://docs.google.com/spreadsheets"; // Cole o link direto da sua planilha
 
 export default function Obras() {
