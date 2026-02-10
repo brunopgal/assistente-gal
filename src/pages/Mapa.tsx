@@ -2,7 +2,7 @@ import { Map } from "lucide-react";
 import EmbedCard from "@/components/EmbedCard";
 
 // ✏️ CONFIGURE SUAS URLS AQUI
-const MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d14629.714!2d-43.1729!3d-22.9068!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjLCsDU0JzI0LjUiUyA0M8KwMTAnMjIuNCJX!5e0!3m2!1spt-BR!2sbr!4v1";
+const MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d29439.881216446138!2d-47.008972799999995!3d-22.72879325!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1spt-BR!2sbr!4v1770741293761!5m2!1spt-BR!2sbr";
 const MAPS_EXTERNAL_URL = "https://maps.app.goo.gl/zKDMDUUCH2Wq7pUL9";
 
 export default function Mapa() {
