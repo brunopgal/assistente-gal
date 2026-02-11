@@ -3,7 +3,7 @@ import EmbedCard from "@/components/EmbedCard";
 
 // ✏️ CONFIGURE SUAS URLS AQUI
 const SHEETS_EMBED_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj4AlBo3824a0HmbV6tusrdz2n5parJjI9gk6TfdHgywOuWKdnr1v013W7cyMJAGqnyyGYr7TSj6sS/pubhtml?widget=true&headers=false";
-const SHEETS_EXTERNAL_URL = "https://docs.google.com/spreadsheets"; // Cole o link direto da sua planilha
+const SHEETS_EXTERNAL_URL = "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
 
 export default function Obras() {
   return (
