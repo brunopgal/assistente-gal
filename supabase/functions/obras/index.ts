@@ -194,6 +194,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (req.method === 'PATCH') {
+      const rowIdx = Number(action);
+      if (isNaN(rowIdx)) throw new Error('ID da obra inválido');
+
+      const { field, value } = await req.json();
+      const colIndex = SHEET_HEADERS.indexOf(field);
+      if (colIndex === -1) throw new Error('Campo inválido');
+
+      const colLetter = String.fromCharCode(65 + colIndex);
+      const rowNumber = rowIdx + 1;
+      const updateRange = `Obras!${colLetter}${rowNumber}`;
+
+      const res = await fetch(
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(updateRange)}?valueInputOption=RAW`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [[value]] }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

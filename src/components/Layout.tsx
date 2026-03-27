@@ -1,9 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Calendar, Map, Menu, X, PlusCircle } from "lucide-react";
+import { Building2, Calendar, Map, Menu, X, PlusCircle, PhoneForwarded } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { title: "Obras", path: "/", icon: Building2 },
+  { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded },
   { title: "Agenda", path: "/agenda", icon: Calendar },
   { title: "Mapa", path: "/mapa", icon: Map },
   { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle },
