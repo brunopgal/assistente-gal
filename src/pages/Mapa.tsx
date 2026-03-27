@@ -1,19 +1,8 @@
 import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { listarObras, type Obra } from "@/services/obrasService";
-import { Loader2, Map, ExternalLink, MessageSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-// Fix leaflet default marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
+import { Loader2, Map } from "lucide-react";
 
 interface GeoObra extends Obra {
   lat: number;
@@ -31,7 +20,7 @@ async function geocode(query: string): Promise<{ lat: number; lng: number } | nu
       return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     }
   } catch {
-    // ignore geocoding errors
+    // ignore
   }
   return null;
 }
@@ -66,17 +55,31 @@ export default function Mapa() {
   const [obras, setObras] = useState<GeoObra[]>([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
+  // Initialize map once
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+    mapRef.current = L.map(mapContainerRef.current).setView([-22.7288, -47.009], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(mapRef.current);
+
+    return () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Load and geocode obras
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
         const allObras = await listarObras();
-        const withLocation = allObras.filter(
-          (o) => o.cidade || o.localizacao
-        );
+        const withLocation = allObras.filter((o) => o.cidade || o.localizacao);
         setProgress({ done: 0, total: withLocation.length });
 
         const geoObras: GeoObra[] = [];
@@ -90,7 +93,6 @@ export default function Mapa() {
             geoObras.push({ ...o, ...coords });
           }
           setProgress({ done: i + 1, total: withLocation.length });
-          // Rate limit nominatim (1 req/sec)
           if (i < withLocation.length - 1) {
             await new Promise((r) => setTimeout(r, 1100));
           }
@@ -99,14 +101,6 @@ export default function Mapa() {
         if (!cancelled) {
           setObras(geoObras);
           setLoading(false);
-
-          // Fit bounds
-          if (geoObras.length > 0 && mapRef.current) {
-            const bounds = L.latLngBounds(
-              geoObras.map((o) => [o.lat, o.lng])
-            );
-            mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-          }
         }
       } catch {
         if (!cancelled) setLoading(false);
@@ -116,6 +110,50 @@ export default function Mapa() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Add markers to map when obras change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || obras.length === 0) return;
+
+    const markers: L.Marker[] = [];
+
+    obras.forEach((obra) => {
+      const phone = obra.telefone?.replace(/\D/g, "") || "";
+      const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
+      const mapsQuery = [obra.localizacao, obra.cidade].filter(Boolean).join(", ");
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
+
+      const popupContent = `
+        <div style="min-width:200px">
+          <h3 style="font-weight:bold;font-size:14px;margin:0 0 4px">${obra.nome || "Sem nome"}</h3>
+          <p style="font-size:12px;color:#888;margin:0">${obra.construtora || "—"}</p>
+          <p style="font-size:12px;margin:4px 0">${[obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
+          ${obra.statusProspeccao ? `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <a href="${mapsUrl}" target="_blank" style="font-size:12px;color:#2563eb">📍 Maps</a>
+            ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:12px;color:#16a34a">💬 WhatsApp</a>` : ""}
+            <a href="/nova-obra?id=${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
+          </div>
+        </div>
+      `;
+
+      const marker = L.marker([obra.lat, obra.lng], {
+        icon: createColorIcon(statusColor(obra.statusProspeccao)),
+      })
+        .bindPopup(popupContent)
+        .addTo(map);
+
+      markers.push(marker);
+    });
+
+    const bounds = L.latLngBounds(obras.map((o) => [o.lat, o.lng] as [number, number]));
+    map.fitBounds(bounds, { padding: [50, 50] });
+
+    return () => {
+      markers.forEach((m) => m.remove());
+    };
+  }, [obras]);
 
   return (
     <div className="space-y-4">
@@ -140,70 +178,7 @@ export default function Mapa() {
           </div>
         )}
 
-        <MapContainer
-          center={[-22.7288, -47.009]}
-          zoom={10}
-          style={{ height: "100%", width: "100%" }}
-          ref={mapRef}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {obras.map((obra) => {
-            const phone = obra.telefone?.replace(/\D/g, "") || "";
-            const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-            const mapsQuery = [obra.localizacao, obra.cidade].filter(Boolean).join(", ");
-            const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
-
-            return (
-              <Marker
-                key={obra.id}
-                position={[obra.lat, obra.lng]}
-                icon={createColorIcon(statusColor(obra.statusProspeccao))}
-              >
-                <Popup>
-                  <div className="space-y-2 min-w-[200px]">
-                    <h3 className="font-bold text-sm">{obra.nome || "Sem nome"}</h3>
-                    <p className="text-xs text-gray-600">{obra.construtora || "—"}</p>
-                    <p className="text-xs">{[obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
-                    {obra.statusProspeccao && (
-                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                        {obra.statusProspeccao}
-                      </span>
-                    )}
-                    <div className="flex gap-1 pt-1">
-                      <a
-                        href={mapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:underline flex items-center gap-0.5"
-                      >
-                        📍 Google Maps
-                      </a>
-                      {whatsappUrl && (
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-green-600 hover:underline flex items-center gap-0.5 ml-2"
-                        >
-                          💬 WhatsApp
-                        </a>
-                      )}
-                      <a
-                        href={`/nova-obra?id=${obra.id}`}
-                        className="text-xs text-purple-600 hover:underline flex items-center gap-0.5 ml-2"
-                      >
-                        📋 Detalhes
-                      </a>
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
-        </MapContainer>
+        <div ref={mapContainerRef} style={{ height: "100%", width: "100%" }} />
 
         {!loading && obras.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
