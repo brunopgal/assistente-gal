@@ -5,22 +5,22 @@ const corsHeaders = {
 
 const SHEET_HEADERS = [
   'codigoObra', 'dataCadastro', 'statusProspeccao', 'nome', 'classificacao', 'construtora',
-  'responsavel', 'telefone', 'email', 'cidade', 'localizacao',
+  'responsavel', 'telefone', 'email', '_col_extra', 'cidade', 'localizacao',
   'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita', 'dataUltimaVisita',
   'dataOrcamentoEnviado', 'proximoContato', 'linkOrcamentoRhoden', 'linkOrcamentoPrado',
   'linkOrcamentoImab', 'observacoes', 'concorrentes',
 ];
 
 const SHEET_HEADER_ROW = [
-  'Código', 'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
-  'Construtora/Cliente', 'Responsável/Contato', 'Telefone/WhatsApp', 'Email',
+  'ID', 'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
+  'Construtora/Cliente', 'Responsável/Contato', 'Telefone/WhatsApp', 'Email', '',
   'Cidade Obra', 'Localização/Bairro Obra', 'Produto Oferecido', 'Estágio da Obra',
   'Marcou Reunião?', 'Visita', 'Data da Última Visita', 'Data Orçamento Enviado',
   'Próximo Contato/Follow Up', 'Link Orçamento RHODEN', 'Link Orçamento PRADO',
   'Link Orçamento IMAB', 'Observações', 'Concorrentes',
 ];
 
-const COL_COUNT = SHEET_HEADERS.length; // 23 columns: A-W
+const COL_COUNT = SHEET_HEADERS.length; // 24 columns: A-X
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
