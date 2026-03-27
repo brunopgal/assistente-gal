@@ -4,7 +4,7 @@ const corsHeaders = {
 };
 
 const SHEET_HEADERS = [
-  'dataCadastro', 'statusProspeccao', 'nome', 'classificacao', 'construtora',
+  'codigoObra', 'dataCadastro', 'statusProspeccao', 'nome', 'classificacao', 'construtora',
   'responsavel', 'telefone', 'email', 'cidade', 'localizacao',
   'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita', 'dataUltimaVisita',
   'dataOrcamentoEnviado', 'proximoContato', 'linkOrcamentoRhoden', 'linkOrcamentoPrado',
@@ -12,7 +12,7 @@ const SHEET_HEADERS = [
 ];
 
 const SHEET_HEADER_ROW = [
-  'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
+  'Código', 'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
   'Construtora/Cliente', 'Responsável/Contato', 'Telefone/WhatsApp', 'Email',
   'Cidade Obra', 'Localização/Bairro Obra', 'Produto Oferecido', 'Estágio da Obra',
   'Marcou Reunião?', 'Visita', 'Data da Última Visita', 'Data Orçamento Enviado',
@@ -20,7 +20,7 @@ const SHEET_HEADER_ROW = [
   'Link Orçamento IMAB', 'Observações', 'Concorrentes',
 ];
 
-const COL_COUNT = SHEET_HEADERS.length; // 22 columns: A-V
+const COL_COUNT = SHEET_HEADERS.length; // 23 columns: A-W
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
