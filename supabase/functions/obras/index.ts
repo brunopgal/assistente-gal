@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
     const action = pathParts[pathParts.length - 1];
-    const range = `Obras!A:V`;
+    const range = `Obras!A:W`;
 
     if (req.method === 'GET') {
       const res = await fetch(
