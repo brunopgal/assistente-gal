@@ -2,19 +2,33 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface Obra {
   id?: string;
+  dataCadastro: string;
+  statusProspeccao: string;
   nome: string;
+  classificacao: string;
   construtora: string;
-  cidade: string;
-  status: string;
   responsavel: string;
-  dataContato: string;
+  telefone: string;
+  email: string;
+  cidade: string;
+  localizacao: string;
+  produtoOferecido: string;
+  estagioObra: string;
+  marcouReuniao: string;
+  visita: string;
+  dataUltimaVisita: string;
+  dataOrcamentoEnviado: string;
+  proximoContato: string;
+  linkOrcamentoRhoden: string;
+  linkOrcamentoPrado: string;
+  linkOrcamentoImab: string;
   observacoes: string;
+  concorrentes: string;
 }
 
 async function invokeObras(method: string, body?: Obra, id?: string) {
   const path = id ? `obras/${id}` : 'obras';
   
-  // Build the URL manually for the edge function
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   
