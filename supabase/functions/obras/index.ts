@@ -139,13 +139,13 @@ Deno.serve(async (req) => {
 
       // Ensure header row exists
       const checkRes = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:V1')}`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:W1')}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const checkData = await checkRes.json();
       if (!checkData.values || checkData.values.length === 0) {
         await fetch(
-          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:V1')}?valueInputOption=RAW`,
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:W1')}?valueInputOption=RAW`,
           {
             method: 'PUT',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       }
 
       const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:V')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:W')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
 
       const body = await req.json();
       const rowNumber = rowIdx + 1;
-      const updateRange = `Obras!A${rowNumber}:V${rowNumber}`;
+      const updateRange = `Obras!A${rowNumber}:W${rowNumber}`;
       const values = [bodyToRow(body)];
 
       const res = await fetch(
