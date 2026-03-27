@@ -69,3 +69,22 @@ export async function buscarObra(id: string): Promise<Obra> {
 export async function listarObras(): Promise<Obra[]> {
   return invokeObras('GET');
 }
+
+export async function limparFollowUp(id: string): Promise<void> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const url = `${supabaseUrl}/functions/v1/obras/${id}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ field: 'proximoContato', value: '' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Erro ao limpar follow-up');
+  }
+}
