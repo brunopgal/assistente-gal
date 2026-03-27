@@ -27,10 +27,10 @@ export default function NovaObra() {
     setIsSubmitting(true);
     try {
       if (editId) {
-        await atualizarObra(editId, values);
+        await atualizarObra(editId, values as any);
         toast({ title: "Obra atualizada com sucesso" });
       } else {
-        await criarObra(values);
+        await criarObra(values as any);
         toast({ title: "Obra criada com sucesso" });
       }
     } catch {
