@@ -3,19 +3,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SHEET_HEADERS = [
+  'dataCadastro', 'statusProspeccao', 'nome', 'classificacao', 'construtora',
+  'responsavel', 'telefone', 'email', 'cidade', 'localizacao',
+  'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita', 'dataUltimaVisita',
+  'dataOrcamentoEnviado', 'proximoContato', 'linkOrcamentoRhoden', 'linkOrcamentoPrado',
+  'linkOrcamentoImab', 'observacoes', 'concorrentes',
+];
+
+const SHEET_HEADER_ROW = [
+  'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
+  'Construtora/Cliente', 'Responsável/Contato', 'Telefone/WhatsApp', 'Email',
+  'Cidade Obra', 'Localização/Bairro Obra', 'Produto Oferecido', 'Estágio da Obra',
+  'Marcou Reunião?', 'Visita', 'Data da Última Visita', 'Data Orçamento Enviado',
+  'Próximo Contato/Follow Up', 'Link Orçamento RHODEN', 'Link Orçamento PRADO',
+  'Link Orçamento IMAB', 'Observações', 'Concorrentes',
+];
+
+const COL_COUNT = SHEET_HEADERS.length; // 22 columns: A-V
+
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
   let rawKey = Deno.env.get('GOOGLE_PRIVATE_KEY')!;
-
-  // Normalize the private key - handle various escaping scenarios
-  // Replace literal \n with actual newlines
-  rawKey = rawKey.replace(/\\n/g, '\n');
-  // Ensure proper PEM format
-  rawKey = rawKey.trim();
+  rawKey = rawKey.replace(/\\n/g, '\n').trim();
 
   const now = Math.floor(Date.now() / 1000);
-
-  // Create JWT header and payload
   const header = { alg: 'RS256', typ: 'JWT' };
   const payload = {
     iss: email,
@@ -29,9 +41,7 @@ async function getAccessToken(): Promise<string> {
   const b64url = (buf: ArrayBuffer) => {
     const bytes = new Uint8Array(buf);
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   };
 
@@ -39,40 +49,20 @@ async function getAccessToken(): Promise<string> {
   const payloadB64 = b64url(enc.encode(JSON.stringify(payload)));
   const signingInput = `${headerB64}.${payloadB64}`;
 
-  // Extract and decode PEM body
-  const pemLines = rawKey.split('\n').filter(line => 
-    line.trim() !== '' && 
-    !line.includes('BEGIN PRIVATE KEY') && 
-    !line.includes('END PRIVATE KEY')
+  const pemLines = rawKey.split('\n').filter(line =>
+    line.trim() !== '' && !line.includes('BEGIN PRIVATE KEY') && !line.includes('END PRIVATE KEY')
   );
-  const pemBody = pemLines.join('');
-  
-  console.log('PEM body length:', pemBody.length);
-  console.log('PEM body first 20 chars:', pemBody.substring(0, 20));
-  
-  const binaryStr = atob(pemBody);
+  const binaryStr = atob(pemLines.join(''));
   const binaryKey = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) {
-    binaryKey[i] = binaryStr.charCodeAt(i);
-  }
-
-  console.log('Binary key length:', binaryKey.length);
-  console.log('First 4 bytes:', Array.from(binaryKey.slice(0, 4)).map(b => b.toString(16)));
+  for (let i = 0; i < binaryStr.length; i++) binaryKey[i] = binaryStr.charCodeAt(i);
 
   const key = await crypto.subtle.importKey(
-    'pkcs8',
-    binaryKey.buffer,
+    'pkcs8', binaryKey.buffer,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
+    false, ['sign']
   );
 
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    key,
-    enc.encode(signingInput)
-  );
-
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput));
   const jwt = `${signingInput}.${b64url(signature)}`;
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -82,11 +72,18 @@ async function getAccessToken(): Promise<string> {
   });
 
   const tokenData = await tokenRes.json();
-  if (!tokenRes.ok) {
-    console.error('Token exchange error:', JSON.stringify(tokenData));
-    throw new Error(`Token error: ${JSON.stringify(tokenData)}`);
-  }
+  if (!tokenRes.ok) throw new Error(`Token error: ${JSON.stringify(tokenData)}`);
   return tokenData.access_token;
+}
+
+function rowToObra(row: string[], idx: number): Record<string, string> {
+  const obra: Record<string, string> = { id: String(idx) };
+  SHEET_HEADERS.forEach((h, i) => { obra[h] = row[i] || ''; });
+  return obra;
+}
+
+function bodyToRow(body: Record<string, string>): string[] {
+  return SHEET_HEADERS.map(h => body[h] || '');
 }
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -104,9 +101,9 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
     const action = pathParts[pathParts.length - 1];
+    const range = `Obras!A:V`;
 
     if (req.method === 'GET') {
-      const range = 'Obras!A:H';
       const res = await fetch(
         `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -115,7 +112,6 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
 
       const rows = data.values || [];
-      const headers = rows[0] || ['nome', 'construtora', 'cidade', 'status', 'responsavel', 'dataContato', 'observacoes'];
 
       if (action !== 'obras' && !isNaN(Number(action))) {
         const rowIdx = Number(action);
@@ -125,19 +121,12 @@ Deno.serve(async (req) => {
             status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        const obra: Record<string, string> = { id: String(rowIdx) };
-        headers.forEach((h: string, i: number) => { obra[h] = row[i] || ''; });
-        return new Response(JSON.stringify(obra), {
+        return new Response(JSON.stringify(rowToObra(row, rowIdx)), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const obras = rows.slice(1).map((row: string[], idx: number) => {
-        const obra: Record<string, string> = { id: String(idx + 1) };
-        headers.forEach((h: string, i: number) => { obra[h] = row[i] || ''; });
-        return obra;
-      });
-
+      const obras = rows.slice(1).map((row: string[], idx: number) => rowToObra(row, idx + 1));
       return new Response(JSON.stringify(obras), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -145,31 +134,27 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
-      const values = [[
-        body.nome || '', body.construtora || '', body.cidade || '',
-        body.status || '', body.responsavel || '', body.dataContato || '',
-        body.observacoes || '',
-      ]];
+      const values = [bodyToRow(body)];
 
       // Ensure header row exists
       const checkRes = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:G1')}`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:V1')}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const checkData = await checkRes.json();
       if (!checkData.values || checkData.values.length === 0) {
         await fetch(
-          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:G1')}?valueInputOption=RAW`,
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:V1')}?valueInputOption=RAW`,
           {
             method: 'PUT',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ values: [['nome', 'construtora', 'cidade', 'status', 'responsavel', 'dataContato', 'observacoes']] }),
+            body: JSON.stringify({ values: [SHEET_HEADER_ROW] }),
           }
         );
       }
 
       const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:G')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:V')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -190,15 +175,11 @@ Deno.serve(async (req) => {
 
       const body = await req.json();
       const rowNumber = rowIdx + 1;
-      const range = `Obras!A${rowNumber}:G${rowNumber}`;
-      const values = [[
-        body.nome || '', body.construtora || '', body.cidade || '',
-        body.status || '', body.responsavel || '', body.dataContato || '',
-        body.observacoes || '',
-      ]];
+      const updateRange = `Obras!A${rowNumber}:V${rowNumber}`;
+      const values = [bodyToRow(body)];
 
       const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(updateRange)}?valueInputOption=RAW`,
         {
           method: 'PUT',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
