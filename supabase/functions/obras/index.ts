@@ -8,7 +8,9 @@ const corsHeaders = {
 // Google Sheets API helper: create JWT and get access token
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
-  const privateKeyPem = Deno.env.get('GOOGLE_PRIVATE_KEY')!.replace(/\\n/g, '\n');
+  const rawKey = Deno.env.get('GOOGLE_PRIVATE_KEY')!;
+  // Handle both literal \n and actual newlines
+  const privateKeyPem = rawKey.includes('\\n') ? rawKey.replace(/\\n/g, '\n') : rawKey;
 
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
