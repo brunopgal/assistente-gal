@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
 
   try {
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID');
+    console.log('GOOGLE_SHEET_ID exists:', !!sheetId, 'length:', sheetId?.length);
     if (!sheetId) throw new Error('GOOGLE_SHEET_ID not configured');
 
     const accessToken = await getAccessToken();
