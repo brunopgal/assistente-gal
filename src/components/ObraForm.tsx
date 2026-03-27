@@ -325,32 +325,32 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
           </div>
         </div>
 
-        {/* Seção: Links de Orçamentos */}
+        {/* Seção: Orçamentos (Upload de Arquivos) */}
         <div>
-          <h3 className="text-lg font-semibold text-foreground mb-3">Links de Orçamentos</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Orçamentos</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={form.control} name="linkOrcamentoRhoden" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Link Orçamento RHODEN</FormLabel>
-                <FormControl><Input placeholder="https://..." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FileUploadField
+                label="Orçamento RHODEN"
+                value={field.value}
+                onChange={field.onChange}
+              />
             )} />
 
             <FormField control={form.control} name="linkOrcamentoPrado" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Link Orçamento PRADO</FormLabel>
-                <FormControl><Input placeholder="https://..." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FileUploadField
+                label="Orçamento PRADO"
+                value={field.value}
+                onChange={field.onChange}
+              />
             )} />
 
             <FormField control={form.control} name="linkOrcamentoImab" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Link Orçamento IMAB</FormLabel>
-                <FormControl><Input placeholder="https://..." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FileUploadField
+                label="Orçamento IMAB"
+                value={field.value}
+                onChange={field.onChange}
+              />
             )} />
           </div>
         </div>
