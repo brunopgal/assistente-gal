@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -5,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import FileUploadField from "@/components/FileUploadField";
 import {
   Form,
@@ -23,22 +25,18 @@ import {
 } from "@/components/ui/select";
 
 const STATUS_OPTIONS = [
-  "Prospecção",
-  "Contato Inicial",
-  "Em Negociação",
-  "Proposta Enviada",
-  "Fechado",
-  "Perdido",
+  "orçamento enviado",
+  "fechado",
+  "perdido",
+  "prospectar",
+  "em prospecção",
+  "fazendo orçamento",
 ] as const;
 
-const CLASSIFICACAO_OPTIONS = [
-  "Residencial",
-  "Comercial",
-  "Industrial",
-  "Misto",
-  "Infraestrutura",
-] as const;
-
+const CLASSIFICACAO_OPTIONS = ["baixo", "medio", "medio/alto", "alto"] as const;
+const PRODUTO_OPTIONS = ["imab", "rhoden", "prado", "nenhum"] as const;
+const VISITA_OPTIONS = ["visitado", "não visitado"] as const;
+const REUNIAO_OPTIONS = ["Sim", "Não"] as const;
 const ESTAGIO_OPTIONS = [
   "Fundação",
   "Estrutura",
@@ -48,10 +46,8 @@ const ESTAGIO_OPTIONS = [
   "Não iniciado",
 ] as const;
 
-const REUNIAO_OPTIONS = ["Sim", "Não"] as const;
-const VISITA_OPTIONS = ["Sim", "Não"] as const;
-
 const obraSchema = z.object({
+  codigoObra: z.string().optional(),
   dataCadastro: z.string(),
   statusProspeccao: z.string(),
   nome: z.string().min(1, "Nome da obra é obrigatório"),
@@ -85,13 +81,22 @@ interface ObraFormProps {
   isEdit?: boolean;
 }
 
-export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit }: ObraFormProps) {
-  const today = new Date().toISOString().split("T")[0];
+function todayIso(): string {
+  return new Date().toISOString().split("T")[0];
+}
 
+function addDaysIso(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit }: ObraFormProps) {
   const form = useForm<ObraFormValues>({
     resolver: zodResolver(obraSchema),
     defaultValues: {
-      dataCadastro: today,
+      codigoObra: "",
+      dataCadastro: todayIso(),
       statusProspeccao: "",
       nome: "",
       classificacao: "",
@@ -117,16 +122,62 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
     },
   });
 
+  // Auto-fill "Data orçamento enviado" when status = "orçamento enviado"
+  const statusValue = form.watch("statusProspeccao");
+  useEffect(() => {
+    if (statusValue === "orçamento enviado" && !form.getValues("dataOrcamentoEnviado")) {
+      form.setValue("dataOrcamentoEnviado", todayIso(), { shouldDirty: true });
+    }
+  }, [statusValue, form]);
+
+  // Visit date editing only enabled when visita = "visitado"
+  const visitaValue = form.watch("visita");
+  const visitaEnabled = visitaValue === "visitado";
+
+  // Multi-select: produtoOferecido is stored as comma-separated string
+  const produtoValue = form.watch("produtoOferecido");
+  const produtoSelected = (produtoValue || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const toggleProduto = (option: string, checked: boolean) => {
+    let next: string[];
+    if (option === "nenhum") {
+      next = checked ? ["nenhum"] : [];
+    } else {
+      next = produtoSelected.filter((p) => p !== "nenhum");
+      if (checked) next = [...next, option];
+      else next = next.filter((p) => p !== option);
+    }
+    form.setValue("produtoOferecido", next.join(", "), { shouldDirty: true });
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Seção: Informações Básicas */}
+        {/* Informações Básicas */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Informações Básicas</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField control={form.control} name="codigoObra" render={({ field }) => (
+              <FormItem>
+                <FormLabel>ID</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    readOnly
+                    placeholder={isEdit ? "" : "Gerado automaticamente"}
+                    className="bg-muted"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="dataCadastro" render={({ field }) => (
               <FormItem>
-                <FormLabel>Data de Cadastro</FormLabel>
+                <FormLabel>Data de cadastro</FormLabel>
                 <FormControl><Input type="date" {...field} readOnly className="bg-muted" /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -134,8 +185,8 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="statusProspeccao" render={({ field }) => (
               <FormItem>
-                <FormLabel>Status da Prospecção</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormLabel>Status da prospecção</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
@@ -151,7 +202,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="nome" render={({ field }) => (
               <FormItem>
-                <FormLabel>Nome da Obra *</FormLabel>
+                <FormLabel>Nome da obra *</FormLabel>
                 <FormControl><Input placeholder="Ex: Residencial Aurora" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -159,8 +210,8 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="classificacao" render={({ field }) => (
               <FormItem>
-                <FormLabel>Classificação da Obra</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormLabel>Classificação da obra</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
@@ -184,8 +235,8 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="estagioObra" render={({ field }) => (
               <FormItem>
-                <FormLabel>Estágio da Obra</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormLabel>Estágio da obra</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
@@ -201,7 +252,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
           </div>
         </div>
 
-        {/* Seção: Contato */}
+        {/* Contato */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Contato</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -215,7 +266,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="telefone" render={({ field }) => (
               <FormItem>
-                <FormLabel>Telefone/WhatsApp</FormLabel>
+                <FormLabel>Telefone/Whastapp</FormLabel>
                 <FormControl><Input placeholder="(00) 00000-0000" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -231,13 +282,13 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
           </div>
         </div>
 
-        {/* Seção: Localização */}
+        {/* Localização */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Localização</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={form.control} name="cidade" render={({ field }) => (
               <FormItem>
-                <FormLabel>Cidade da Obra</FormLabel>
+                <FormLabel>Cidade Obra</FormLabel>
                 <FormControl><Input placeholder="Ex: Campinas" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -245,7 +296,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="localizacao" render={({ field }) => (
               <FormItem>
-                <FormLabel>Localização/Bairro</FormLabel>
+                <FormLabel>Localização/Bairro Obra</FormLabel>
                 <FormControl><Input placeholder="Ex: Centro, Zona Norte" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -253,22 +304,34 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
           </div>
         </div>
 
-        {/* Seção: Produto e Acompanhamento */}
+        {/* Produto e Acompanhamento */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Produto e Acompanhamento</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={form.control} name="produtoOferecido" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Produto Oferecido</FormLabel>
-                <FormControl><Input placeholder="Ex: Concreto usinado" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
 
+          {/* Produto Oferecido — multi select */}
+          <div className="mb-4">
+            <FormLabel>Produto Oferecido</FormLabel>
+            <div className="flex flex-wrap gap-4 mt-2">
+              {PRODUTO_OPTIONS.map((opt) => {
+                const checked = produtoSelected.includes(opt);
+                return (
+                  <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(c) => toggleProduto(opt, !!c)}
+                    />
+                    <span className="capitalize">{opt}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={form.control} name="marcouReuniao" render={({ field }) => (
               <FormItem>
                 <FormLabel>Marcou Reunião?</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
@@ -285,7 +348,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
             <FormField control={form.control} name="visita" render={({ field }) => (
               <FormItem>
                 <FormLabel>Visita</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
@@ -301,61 +364,75 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="dataUltimaVisita" render={({ field }) => (
               <FormItem>
-                <FormLabel>Data da Última Visita</FormLabel>
-                <FormControl><Input type="date" {...field} /></FormControl>
+                <FormLabel>Data da última visita</FormLabel>
+                <FormControl>
+                  <Input
+                    type="date"
+                    {...field}
+                    disabled={!visitaEnabled}
+                    className={!visitaEnabled ? "bg-muted" : ""}
+                  />
+                </FormControl>
+                {!visitaEnabled && (
+                  <p className="text-xs text-muted-foreground">Disponível quando "Visita" = visitado</p>
+                )}
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="dataOrcamentoEnviado" render={({ field }) => (
               <FormItem>
-                <FormLabel>Data Orçamento Enviado</FormLabel>
+                <FormLabel>Data orçamento enviado</FormLabel>
                 <FormControl><Input type="date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="proximoContato" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Próximo Contato/Follow Up</FormLabel>
+              <FormItem className="md:col-span-2">
+                <FormLabel>Próximo contato/Follow up</FormLabel>
                 <FormControl><Input type="date" {...field} /></FormControl>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <Button type="button" variant="outline" size="sm"
+                    onClick={() => form.setValue("proximoContato", addDaysIso(7), { shouldDirty: true })}>
+                    +7 dias
+                  </Button>
+                  <Button type="button" variant="outline" size="sm"
+                    onClick={() => form.setValue("proximoContato", addDaysIso(15), { shouldDirty: true })}>
+                    +15 dias
+                  </Button>
+                  <Button type="button" variant="outline" size="sm"
+                    onClick={() => form.setValue("proximoContato", addDaysIso(30), { shouldDirty: true })}>
+                    +30 dias
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm"
+                    onClick={() => form.setValue("proximoContato", "", { shouldDirty: true })}>
+                    Limpar
+                  </Button>
+                </div>
                 <FormMessage />
               </FormItem>
             )} />
           </div>
         </div>
 
-        {/* Seção: Orçamentos (Upload de Arquivos) */}
+        {/* Orçamentos (Upload) */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Orçamentos</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={form.control} name="linkOrcamentoRhoden" render={({ field }) => (
-              <FileUploadField
-                label="Orçamento RHODEN"
-                value={field.value}
-                onChange={field.onChange}
-              />
+              <FileUploadField label="Link do orçamento/PDF RHODEN" value={field.value} onChange={field.onChange} />
             )} />
-
             <FormField control={form.control} name="linkOrcamentoPrado" render={({ field }) => (
-              <FileUploadField
-                label="Orçamento PRADO"
-                value={field.value}
-                onChange={field.onChange}
-              />
+              <FileUploadField label="Link do orçamento/PDF PRADO" value={field.value} onChange={field.onChange} />
             )} />
-
             <FormField control={form.control} name="linkOrcamentoImab" render={({ field }) => (
-              <FileUploadField
-                label="Orçamento IMAB"
-                value={field.value}
-                onChange={field.onChange}
-              />
+              <FileUploadField label="Link do orçamento/PDF IMAB" value={field.value} onChange={field.onChange} />
             )} />
           </div>
         </div>
 
-        {/* Seção: Observações */}
+        {/* Observações */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-3">Outras Informações</h3>
           <div className="grid grid-cols-1 gap-4">
@@ -369,7 +446,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
 
             <FormField control={form.control} name="observacoes" render={({ field }) => (
               <FormItem>
-                <FormLabel>Observações</FormLabel>
+                <FormLabel>Observação</FormLabel>
                 <FormControl><Textarea placeholder="Detalhes adicionais..." rows={4} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>

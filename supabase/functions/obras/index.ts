@@ -3,24 +3,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// EXACT mapping: column letter ↔ field key (A..W = 23 columns)
 const SHEET_HEADERS = [
-  'codigoObra', 'dataCadastro', 'statusProspeccao', 'nome', 'classificacao', 'construtora',
-  'responsavel', 'telefone', 'email', '_col_extra', 'cidade', 'localizacao',
-  'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita', 'dataUltimaVisita',
-  'dataOrcamentoEnviado', 'proximoContato', 'linkOrcamentoRhoden', 'linkOrcamentoPrado',
-  'linkOrcamentoImab', 'observacoes', 'concorrentes',
+  'codigoObra',          // A - ID
+  'dataCadastro',        // B - Data de cadastro
+  'statusProspeccao',    // C - Status da prospecção
+  'nome',                // D - Nome da obra
+  'classificacao',       // E - Classificação da obra
+  'construtora',         // F - Construtora/Cliente
+  'responsavel',         // G - Responsável/Contato
+  'telefone',            // H - Telefone/Whastapp
+  'email',               // I - Email
+  'cidade',              // J - Cidade Obra
+  'localizacao',         // K - Localização/Bairro Obra
+  'produtoOferecido',    // L - Produto Oferecido
+  'estagioObra',         // M - Estágio da obra
+  'marcouReuniao',       // N - Marcou Reunião?
+  'visita',              // O - Visita
+  'dataUltimaVisita',    // P - Data da última visita
+  'dataOrcamentoEnviado',// Q - Data orçamento enviado
+  'proximoContato',      // R - Próximo contato/Follow up
+  'linkOrcamentoRhoden', // S - Link do orçamento/PDF RHODEN
+  'linkOrcamentoPrado',  // T - Link do orçamento/PDF PRADO
+  'linkOrcamentoImab',   // U - Link do orçamento/PDF IMAB
+  'observacoes',         // V - Observação
+  'concorrentes',        // W - Concorrentes
 ];
 
 const SHEET_HEADER_ROW = [
-  'ID', 'Data de Cadastro', 'Status da Prospecção', 'Nome da Obra', 'Classificação da Obra',
-  'Construtora/Cliente', 'Responsável/Contato', 'Telefone/WhatsApp', 'Email', '',
-  'Cidade Obra', 'Localização/Bairro Obra', 'Produto Oferecido', 'Estágio da Obra',
-  'Marcou Reunião?', 'Visita', 'Data da Última Visita', 'Data Orçamento Enviado',
-  'Próximo Contato/Follow Up', 'Link Orçamento RHODEN', 'Link Orçamento PRADO',
-  'Link Orçamento IMAB', 'Observações', 'Concorrentes',
+  'ID', 'Data de cadastro', 'Status da prospecção', 'Nome da obra',
+  'Classificação da obra', 'Construtora/Cliente', 'Responsável/Contato',
+  'Telefone/Whastapp', 'Email', 'Cidade Obra', 'Localização/Bairro Obra',
+  'Produto Oferecido', 'Estágio da obra', 'Marcou Reunião?', 'Visita',
+  'Data da última visita', 'Data orçamento enviado', 'Próximo contato/Follow up',
+  'Link do orçamento/PDF RHODEN', 'Link do orçamento/PDF PRADO',
+  'Link do orçamento/PDF IMAB', 'Observação', 'Concorrentes',
 ];
 
-const COL_COUNT = SHEET_HEADERS.length; // 24 columns: A-X
+const RANGE = 'Obras!A:W';
+const LAST_COL = 'W';
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
@@ -76,14 +97,67 @@ async function getAccessToken(): Promise<string> {
   return tokenData.access_token;
 }
 
-function rowToObra(row: string[], idx: number): Record<string, string> {
-  const obra: Record<string, string> = { id: String(idx) };
+function rowToObra(row: string[]): Record<string, string> {
+  const obra: Record<string, string> = {};
   SHEET_HEADERS.forEach((h, i) => { obra[h] = row[i] || ''; });
+  // 'id' is the logical ID (column A) — same as codigoObra
+  obra.id = obra.codigoObra;
   return obra;
 }
 
 function bodyToRow(body: Record<string, string>): string[] {
-  return SHEET_HEADERS.map(h => body[h] || '');
+  return SHEET_HEADERS.map(h => body[h] ?? '');
+}
+
+function generateNextId(rows: string[][]): string {
+  let maxNum = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const id = rows[i]?.[0] || '';
+    const m = id.match(/^OBRA(\d+)$/i);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  return `OBRA${String(maxNum + 1).padStart(9, '0')}`;
+}
+
+async function ensureHeader(sheetId: string, accessToken: string) {
+  const checkRes = await fetch(
+    `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`Obras!A1:${LAST_COL}1`)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const checkData = await checkRes.json();
+  if (!checkData.values || checkData.values.length === 0) {
+    await fetch(
+      `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`Obras!A1:${LAST_COL}1`)}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [SHEET_HEADER_ROW] }),
+      }
+    );
+  }
+}
+
+async function fetchAllRows(sheetId: string, accessToken: string): Promise<string[][]> {
+  const res = await fetch(
+    `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(RANGE)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+  return data.values || [];
+}
+
+// Find sheet row number (1-indexed) for a given logical ID
+function findRowNumberById(rows: string[][], id: string): number {
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i]?.[0] || '').trim().toUpperCase() === id.trim().toUpperCase()) {
+      return i + 1; // sheet is 1-indexed
+    }
+  }
+  return -1;
 }
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -101,32 +175,24 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
     const action = pathParts[pathParts.length - 1];
-    const range = `Obras!A:X`;
+    const isIdAction = action !== 'obras' && action !== '' && action !== undefined;
 
     if (req.method === 'GET') {
-      const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      const rows = await fetchAllRows(sheetId, accessToken);
 
-      const rows = data.values || [];
-
-      if (action !== 'obras' && !isNaN(Number(action))) {
-        const rowIdx = Number(action);
-        const row = rows[rowIdx];
-        if (!row) {
+      if (isIdAction) {
+        const rowNum = findRowNumberById(rows, decodeURIComponent(action));
+        if (rowNum === -1) {
           return new Response(JSON.stringify({ error: 'Obra não encontrada' }), {
             status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        return new Response(JSON.stringify(rowToObra(row, rowIdx)), {
+        return new Response(JSON.stringify(rowToObra(rows[rowNum - 1])), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const obras = rows.slice(1).map((row: string[], idx: number) => rowToObra(row, idx + 1));
+      const obras = rows.slice(1).map((row) => rowToObra(row)).filter(o => o.codigoObra);
       return new Response(JSON.stringify(obras), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -134,27 +200,19 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
+      await ensureHeader(sheetId, accessToken);
+
+      // Generate next ID if not provided
+      const rows = await fetchAllRows(sheetId, accessToken);
+      const newId = body.codigoObra && String(body.codigoObra).trim()
+        ? String(body.codigoObra).trim()
+        : generateNextId(rows);
+      body.codigoObra = newId;
+
       const values = [bodyToRow(body)];
 
-      // Ensure header row exists
-      const checkRes = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:X1')}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const checkData = await checkRes.json();
-      if (!checkData.values || checkData.values.length === 0) {
-        await fetch(
-          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:X1')}?valueInputOption=RAW`,
-          {
-            method: 'PUT',
-            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ values: [SHEET_HEADER_ROW] }),
-          }
-        );
-      }
-
       const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:X')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(RANGE)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -164,18 +222,23 @@ Deno.serve(async (req) => {
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
 
-      return new Response(JSON.stringify({ success: true, ...body }), {
+      return new Response(JSON.stringify({ success: true, id: newId, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (req.method === 'PUT') {
-      const rowIdx = Number(action);
-      if (isNaN(rowIdx)) throw new Error('ID da obra inválido');
+      if (!isIdAction) throw new Error('ID da obra obrigatório');
+      const id = decodeURIComponent(action);
 
       const body = await req.json();
-      const rowNumber = rowIdx + 1;
-      const updateRange = `Obras!A${rowNumber}:X${rowNumber}`;
+      const rows = await fetchAllRows(sheetId, accessToken);
+      const rowNumber = findRowNumberById(rows, id);
+      if (rowNumber === -1) throw new Error('Obra não encontrada');
+
+      // Preserve the original ID
+      body.codigoObra = id;
+      const updateRange = `Obras!A${rowNumber}:${LAST_COL}${rowNumber}`;
       const values = [bodyToRow(body)];
 
       const res = await fetch(
@@ -189,21 +252,24 @@ Deno.serve(async (req) => {
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
 
-      return new Response(JSON.stringify({ success: true, id: String(rowIdx), ...body }), {
+      return new Response(JSON.stringify({ success: true, id, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (req.method === 'PATCH') {
-      const rowIdx = Number(action);
-      if (isNaN(rowIdx)) throw new Error('ID da obra inválido');
+      if (!isIdAction) throw new Error('ID da obra obrigatório');
+      const id = decodeURIComponent(action);
 
       const { field, value } = await req.json();
       const colIndex = SHEET_HEADERS.indexOf(field);
       if (colIndex === -1) throw new Error('Campo inválido');
 
+      const rows = await fetchAllRows(sheetId, accessToken);
+      const rowNumber = findRowNumberById(rows, id);
+      if (rowNumber === -1) throw new Error('Obra não encontrada');
+
       const colLetter = String.fromCharCode(65 + colIndex);
-      const rowNumber = rowIdx + 1;
       const updateRange = `Obras!${colLetter}${rowNumber}`;
 
       const res = await fetch(

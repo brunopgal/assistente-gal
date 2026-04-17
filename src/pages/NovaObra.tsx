@@ -2,51 +2,73 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { HardHat } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { HardHat, Search, Loader2 } from "lucide-react";
 import ObraForm, { type ObraFormValues } from "@/components/ObraForm";
 import { criarObra, atualizarObra, buscarObra } from "@/services/obrasService";
 
 export default function NovaObra() {
-  const [searchParams] = useSearchParams();
-  const editId = searchParams.get("id");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editId = searchParams.get("id") || "";
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [defaultValues, setDefaultValues] = useState<Partial<ObraFormValues>>();
   const [loading, setLoading] = useState(!!editId);
+  const [searchInput, setSearchInput] = useState(editId);
 
   useEffect(() => {
-    if (editId) {
-      buscarObra(editId)
-        .then((data) => setDefaultValues(data))
-        .catch(() => toast({ title: "Erro ao carregar obra", variant: "destructive" }))
-        .finally(() => setLoading(false));
+    setSearchInput(editId);
+    if (!editId) {
+      setDefaultValues(undefined);
+      setLoading(false);
+      return;
     }
+    setLoading(true);
+    buscarObra(editId)
+      .then((data) => setDefaultValues(data as Partial<ObraFormValues>))
+      .catch(() => toast({ title: "Obra não encontrada", variant: "destructive" }))
+      .finally(() => setLoading(false));
   }, [editId]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = searchInput.trim();
+    if (!id) {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ id });
+  };
+
+  const handleClear = () => {
+    setSearchInput("");
+    setSearchParams({});
+  };
 
   const handleSubmit = async (values: ObraFormValues) => {
     setIsSubmitting(true);
     try {
       if (editId) {
-        await atualizarObra(editId, values as any);
+        await atualizarObra(editId, values as never);
         toast({ title: "Obra atualizada com sucesso" });
       } else {
-        await criarObra(values as any);
-        toast({ title: "Obra criada com sucesso" });
+        const created = await criarObra(values as never);
+        toast({ title: `Obra criada (${created.codigoObra || created.id})` });
+        if (created.codigoObra || created.id) {
+          setSearchParams({ id: (created.codigoObra || created.id) as string });
+        }
       }
-    } catch {
-      toast({ title: "Erro ao salvar obra", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Erro ao salvar obra",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -56,9 +78,34 @@ export default function NovaObra() {
           {editId ? "Editar Obra" : "Nova Obra"}
         </h1>
         <p className="text-muted-foreground mt-1">
-          {editId ? "Atualize os dados da obra" : "Cadastre ou edite uma obra"}
+          {editId ? `Editando ${editId}` : "Cadastre uma nova obra ou busque por ID para editar"}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Buscar obra existente</CardTitle>
+          <CardDescription>Digite o ID (ex: OBRA000000001) para editar</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+              placeholder="OBRA000000001"
+              className="font-mono"
+            />
+            <Button type="submit" variant="default">
+              <Search className="h-4 w-4 mr-1" /> Buscar
+            </Button>
+            {editId && (
+              <Button type="button" variant="outline" onClick={handleClear}>
+                Nova obra
+              </Button>
+            )}
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -66,13 +113,19 @@ export default function NovaObra() {
           <CardDescription>Preencha as informações abaixo</CardDescription>
         </CardHeader>
         <CardContent>
-          <ObraForm
-            key={editId || "new"}
-            defaultValues={defaultValues}
-            onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
-            isEdit={!!editId}
-          />
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ObraForm
+              key={editId || "new"}
+              defaultValues={defaultValues}
+              onSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+              isEdit={!!editId}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
