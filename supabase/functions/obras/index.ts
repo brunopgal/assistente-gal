@@ -180,6 +180,17 @@ Deno.serve(async (req) => {
     if (req.method === 'GET') {
       const rows = await fetchAllRows(sheetId, accessToken);
 
+      // Debug: return raw header + first row to inspect column alignment
+      if (url.searchParams.get('debug') === 'headers') {
+        return new Response(JSON.stringify({
+          headers: rows[0] || [],
+          sampleRow: rows[1] || [],
+          totalRows: rows.length,
+        }, null, 2), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       if (isIdAction) {
         const rowNum = findRowNumberById(rows, decodeURIComponent(action));
         if (rowNum === -1) {
