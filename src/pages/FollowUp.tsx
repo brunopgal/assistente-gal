@@ -52,8 +52,14 @@ function statusColor(status: string) {
 function FollowUpCard({ obra, onDone, loading }: { obra: FollowUpObra; onDone: () => void; loading: boolean }) {
   const phone = obra.telefone?.replace(/\D/g, "") || "";
   const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-  const mapsQuery = [obra.localizacao, obra.cidade].filter(Boolean).join(", ");
-  const mapsUrl = mapsQuery ? `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}` : "";
+  const loc = (obra.localizacao || "").trim();
+  const isLocUrl = /^https?:\/\//i.test(loc);
+  const mapsQuery = [obra.nome, loc, obra.cidade].filter(Boolean).join(", ");
+  const mapsUrl = isLocUrl
+    ? loc
+    : mapsQuery
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`
+      : "";
 
   return (
     <Card className="border-border/50 bg-card hover:border-primary/30 transition-colors">
