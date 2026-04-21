@@ -25,10 +25,87 @@ export default function SecretariaChat() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1] || "");
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        if (blob.size === 0) return;
+        setTranscribing(true);
+        try {
+          const base64 = await blobToBase64(blob);
+          const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ audio: base64, mime: "audio/webm" }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Erro ${res.status}`);
+          }
+          const { text } = (await res.json()) as { text: string };
+          if (text) {
+            setInput((prev) => (prev ? `${prev} ${text}` : text));
+          } else {
+            toast({ title: "Áudio vazio", description: "Não consegui transcrever." });
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Erro na transcrição";
+          toast({ title: "Erro", description: msg, variant: "destructive" });
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mr.start();
+      recorderRef.current = mr;
+      setRecording(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Não foi possível acessar o microfone";
+      toast({ title: "Microfone bloqueado", description: msg, variant: "destructive" });
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+    setRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (recording) stopRecording();
+    else startRecording();
+  };
 
   const applyAction = (action: SecretariaAction) => {
     if (action.modo === "editar" && action.id) {
