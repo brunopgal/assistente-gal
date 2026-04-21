@@ -229,10 +229,32 @@ export default function SecretariaChat() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ex: Crie obra Aurora em Campinas"
-              disabled={loading}
+              placeholder={
+                transcribing
+                  ? "Transcrevendo áudio…"
+                  : recording
+                    ? "Gravando… toque no quadrado para parar"
+                    : "Ex: Crie obra Aurora em Campinas"
+              }
+              disabled={loading || transcribing}
             />
-            <Button type="submit" size="icon" disabled={loading || !input.trim()}>
+            <Button
+              type="button"
+              size="icon"
+              variant={recording ? "destructive" : "outline"}
+              onClick={toggleRecording}
+              disabled={loading || transcribing}
+              aria-label={recording ? "Parar gravação" : "Gravar áudio"}
+            >
+              {transcribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : recording ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+            <Button type="submit" size="icon" disabled={loading || transcribing || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </form>
