@@ -1,1 +1,4 @@
 project_id = "kvqvjyhyrmaeuwpxvfyy"
+
+[functions.secretaria]
+verify_jwt = false
