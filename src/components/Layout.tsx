@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { Building2, Calendar, Map, Menu, X, PlusCircle, PhoneForwarded } from "lucide-react";
 import { useState } from "react";
+import SecretariaChat from "@/components/SecretariaChat";
 
 const navItems = [
   { title: "Obras", path: "/", icon: Building2 },
@@ -85,6 +86,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
         {children}
       </main>
+
+      {/* Floating AI Secretary */}
+      <SecretariaChat />
     </div>
   );
 }

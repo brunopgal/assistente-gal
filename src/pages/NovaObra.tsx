@@ -19,14 +19,37 @@ export default function NovaObra() {
 
   useEffect(() => {
     setSearchInput(editId);
+
+    // Read optional prefill from Secretária chat
+    let prefill: Partial<ObraFormValues> | undefined;
+    try {
+      const raw = sessionStorage.getItem("secretaria_prefill");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { mode: string; id?: string; fields?: Record<string, string> };
+        const matchesEdit = parsed.mode === "editar" && parsed.id === editId;
+        const matchesNew = parsed.mode === "nova" && !editId;
+        if (matchesEdit || matchesNew) {
+          prefill = parsed.fields as Partial<ObraFormValues>;
+        }
+        sessionStorage.removeItem("secretaria_prefill");
+      }
+    } catch {
+      // ignore
+    }
+
     if (!editId) {
-      setDefaultValues(undefined);
+      setDefaultValues(prefill);
       setLoading(false);
+      if (prefill) toast({ title: "Campos preenchidos pela Secretária" });
       return;
     }
     setLoading(true);
     buscarObra(editId)
-      .then((data) => setDefaultValues(data as Partial<ObraFormValues>))
+      .then((data) => {
+        const merged = { ...(data as Partial<ObraFormValues>), ...(prefill || {}) };
+        setDefaultValues(merged);
+        if (prefill) toast({ title: "Obra carregada e atualizada pela Secretária" });
+      })
       .catch(() => toast({ title: "Obra não encontrada", variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [editId]);
