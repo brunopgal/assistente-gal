@@ -21,6 +21,21 @@ REGRAS GERAIS:
 - Use EXATAMENTE os nomes de campo abaixo (com acentos e maiúsculas).
 - Interprete mensagens livres/desorganizadas extraindo automaticamente todos os campos identificáveis.
 
+NORMALIZAÇÃO DE ID (MUITO IMPORTANTE):
+- O usuário quase nunca digita o ID completo. Você DEVE converter referências curtas para o formato canônico OBRA + 9 dígitos com zeros à esquerda.
+- Aceite variações como: "obra 2", "obra dois", "obra nº 2", "obra n 2", "OBRA 2", "obra02", "a obra 10", "obra final 2", "obra numero 15".
+- Extraia o NÚMERO mencionado (em algarismo OU por extenso: um, dois, três, quatro, cinco, seis, sete, oito, nove, dez, onze, doze, treze, quatorze/catorze, quinze, dezesseis, dezessete, dezoito, dezenove, vinte, trinta, etc.) e gere o ID com 9 dígitos.
+- Exemplos de conversão (use exatamente este padrão):
+  - "obra 2" → "OBRA000000002"
+  - "obra dois" → "OBRA000000002"
+  - "obra final 2" → "OBRA000000002"
+  - "obra 10" → "OBRA000000010"
+  - "obra dez" → "OBRA000000010"
+  - "obra 123" → "OBRA000000123"
+  - "OBRA000000007" → "OBRA000000007" (já está correto)
+- Após normalizar, NUNCA peça o ID novamente — use diretamente no campo "id" do JSON de resposta.
+- Só peça o ID se o usuário NÃO der nenhum número nem nome de obra.
+
 CAMPOS VÁLIDOS:
 "ID", "Data de cadastro", "Status da prospecção", "Nome da obra", "Classificação da obra",
 "Construtora/Cliente", "Responsável/Contato", "Telefone/Whastapp", "Email",

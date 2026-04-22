@@ -107,15 +107,44 @@ export default function SecretariaChat() {
     else startRecording();
   };
 
+  const normalizeObraId = (raw?: string): string | undefined => {
+    if (!raw) return undefined;
+    const cleaned = raw.trim().toUpperCase();
+    // Already canonical
+    const canonical = cleaned.match(/^OBRA(\d{1,9})$/);
+    if (canonical) return `OBRA${canonical[1].padStart(9, "0")}`;
+    // Words to numbers (PT-BR, 1-30)
+    const words: Record<string, number> = {
+      UM: 1, UMA: 1, DOIS: 2, DUAS: 2, TRES: 3, "TRÊS": 3, QUATRO: 4, CINCO: 5,
+      SEIS: 6, SETE: 7, OITO: 8, NOVE: 9, DEZ: 10, ONZE: 11, DOZE: 12, TREZE: 13,
+      QUATORZE: 14, CATORZE: 14, QUINZE: 15, DEZESSEIS: 16, DEZESSETE: 17,
+      DEZOITO: 18, DEZENOVE: 19, VINTE: 20, TRINTA: 30,
+    };
+    // Find any number (digits or word) after "OBRA"
+    const m = cleaned.match(/OBRA\s*N?º?\.?\s*([A-Z]+|\d+)/);
+    if (m) {
+      const token = m[1];
+      const num = /^\d+$/.test(token) ? parseInt(token, 10) : words[token];
+      if (num && num > 0) return `OBRA${String(num).padStart(9, "0")}`;
+    }
+    // Loose: any digits at all
+    const digits = cleaned.match(/\d+/);
+    if (digits && cleaned.includes("OBRA")) {
+      return `OBRA${digits[0].padStart(9, "0")}`;
+    }
+    return raw;
+  };
+
   const applyAction = (action: SecretariaAction) => {
     if (action.modo === "editar" && action.id) {
+      const normalizedId = normalizeObraId(action.id) || action.id;
       const formFields = mapFieldsToForm(action.campos);
       sessionStorage.setItem(
         "secretaria_prefill",
-        JSON.stringify({ mode: "editar", id: action.id, fields: formFields }),
+        JSON.stringify({ mode: "editar", id: normalizedId, fields: formFields }),
       );
-      navigate(`/nova-obra?id=${encodeURIComponent(action.id)}`);
-      toast({ title: "Abrindo obra", description: action.id });
+      navigate(`/nova-obra?id=${encodeURIComponent(normalizedId)}`);
+      toast({ title: "Abrindo obra", description: normalizedId });
     } else if (action.modo === "nova") {
       const formFields = mapFieldsToForm(action.campos);
       sessionStorage.setItem(
