@@ -38,8 +38,12 @@ export function mapFieldsToForm(
 }
 
 export interface SecretariaAction {
-  modo: "nova" | "editar" | "perguntar" | "conversa";
+  modo: "nova" | "editar" | "executar" | "analisar" | "perguntar" | "conversa";
   id?: string;
   campos?: Record<string, string>;
+  criar?: boolean;
+  consulta?: string;
   mensagem?: string;
+  salvarDica?: string;
+  limparDicas?: boolean;
 }
