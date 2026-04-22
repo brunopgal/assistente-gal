@@ -5,10 +5,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { mapFieldsToForm, type SecretariaAction } from "@/lib/secretariaFields";
+import { atualizarObra, criarObra, buscarObra, type Obra } from "@/services/obrasService";
 
 interface ChatMsg {
   role: "user" | "assistant";
   content: string;
+}
+
+const DICAS_STORAGE_KEY = "secretaria_dicas";
+
+function loadDicas(): string[] {
+  try {
+    const raw = localStorage.getItem(DICAS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDicas(dicas: string[]) {
+  localStorage.setItem(DICAS_STORAGE_KEY, JSON.stringify(dicas));
 }
 
 export default function SecretariaChat() {
