@@ -174,6 +174,52 @@ export default function SecretariaChat() {
     }
   };
 
+  // Saves directly to the sheet without opening the form
+  const executarAcao = async (action: SecretariaAction): Promise<string> => {
+    const formFields = mapFieldsToForm(action.campos) as Partial<Obra>;
+
+    if (action.criar) {
+      // Create new obra directly
+      const today = new Date().toISOString().slice(0, 10);
+      const novaObra: Obra = {
+        dataCadastro: today,
+        statusProspeccao: "",
+        nome: "",
+        classificacao: "",
+        construtora: "",
+        responsavel: "",
+        telefone: "",
+        email: "",
+        cidade: "",
+        localizacao: "",
+        produtoOferecido: "",
+        estagioObra: "",
+        marcouReuniao: "",
+        visita: "",
+        dataUltimaVisita: "",
+        dataOrcamentoEnviado: "",
+        proximoContato: "",
+        linkOrcamentoRhoden: "",
+        linkOrcamentoPrado: "",
+        linkOrcamentoImab: "",
+        observacoes: "",
+        concorrentes: "",
+        ...formFields,
+      };
+      const created = await criarObra(novaObra);
+      return `✅ Obra criada (${created.id || created.codigoObra}).`;
+    }
+
+    if (!action.id) throw new Error("ID da obra não informado para atualização direta.");
+    const normalizedId = normalizeObraId(action.id) || action.id;
+
+    // Merge with existing values so we don't blank out other columns
+    const existing = await buscarObra(normalizedId);
+    const merged: Obra = { ...existing, ...formFields, codigoObra: normalizedId } as Obra;
+    await atualizarObra(normalizedId, merged);
+    return `✅ Obra ${normalizedId} atualizada.`;
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
@@ -183,6 +229,16 @@ export default function SecretariaChat() {
     setLoading(true);
 
     try {
+      const dicas = loadDicas();
+      const dicasMsg: ChatMsg[] = dicas.length
+        ? [
+            {
+              role: "assistant",
+              content: `DICAS_USUARIO (regras permanentes a seguir):\n- ${dicas.join("\n- ")}`,
+            },
+          ]
+        : [];
+
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/secretaria`;
       const res = await fetch(url, {
         method: "POST",
@@ -191,7 +247,7 @@ export default function SecretariaChat() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
+          messages: [...dicasMsg, ...next].map((m) => ({ role: m.role, content: m.content })),
         }),
       });
 
@@ -201,8 +257,34 @@ export default function SecretariaChat() {
       }
 
       const { action } = (await res.json()) as { action: SecretariaAction };
-      const reply = action.mensagem || "Pronto.";
+      let reply = action.mensagem || "Pronto.";
+
+      // Handle dicas memory
+      if (action.salvarDica) {
+        const current = loadDicas();
+        if (!current.includes(action.salvarDica)) {
+          current.push(action.salvarDica);
+          saveDicas(current);
+        }
+      }
+      if (action.limparDicas) {
+        saveDicas([]);
+      }
+
+      if (action.modo === "executar") {
+        try {
+          const result = await executarAcao(action);
+          reply = `${reply}\n${result}`.trim();
+          toast({ title: "Salvo direto", description: result });
+        } catch (e) {
+          const m = e instanceof Error ? e.message : "Falha ao salvar";
+          reply = `${reply}\n⚠️ ${m}`.trim();
+          toast({ title: "Erro ao salvar", description: m, variant: "destructive" });
+        }
+      }
+
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
+
       if (action.modo === "nova" || action.modo === "editar") {
         applyAction(action);
       }
