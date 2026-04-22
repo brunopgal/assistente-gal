@@ -25,17 +25,17 @@ import {
 } from "@/components/ui/select";
 
 const STATUS_OPTIONS = [
-  "orçamento enviado",
-  "fechado",
-  "perdido",
-  "prospectar",
-  "em prospecção",
-  "fazendo orçamento",
+  "Prospectar",
+  "Em prospecção",
+  "Fazendo Orçamento",
+  "Orçamento Enviado",
+  "Fechado",
+  "Perdido",
 ] as const;
 
-const CLASSIFICACAO_OPTIONS = ["baixo", "medio", "medio/alto", "alto"] as const;
-const PRODUTO_OPTIONS = ["imab", "rhoden", "prado", "nenhum"] as const;
-const VISITA_OPTIONS = ["visitado", "não visitado"] as const;
+const CLASSIFICACAO_OPTIONS = ["Baixo", "Médio", "Médio/Alto", "Alto"] as const;
+const PRODUTO_OPTIONS = ["IMAB", "RHODEN", "PRADO", "Nenhum"] as const;
+const VISITA_OPTIONS = ["Visitado", "Não visitado"] as const;
 const REUNIAO_OPTIONS = ["Sim", "Não"] as const;
 const ESTAGIO_OPTIONS = [
   "Fundação",
@@ -122,17 +122,17 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
     },
   });
 
-  // Auto-fill "Data orçamento enviado" when status = "orçamento enviado"
+  // Auto-fill "Data orçamento enviado" when status = "Orçamento Enviado"
   const statusValue = form.watch("statusProspeccao");
   useEffect(() => {
-    if (statusValue === "orçamento enviado" && !form.getValues("dataOrcamentoEnviado")) {
+    if (statusValue === "Orçamento Enviado" && !form.getValues("dataOrcamentoEnviado")) {
       form.setValue("dataOrcamentoEnviado", todayIso(), { shouldDirty: true });
     }
   }, [statusValue, form]);
 
-  // Visit date editing only enabled when visita = "visitado"
+  // Visit date editing only enabled when visita = "Visitado"
   const visitaValue = form.watch("visita");
-  const visitaEnabled = visitaValue === "visitado";
+  const visitaEnabled = visitaValue === "Visitado";
 
   // Multi-select: produtoOferecido is stored as comma-separated string
   const produtoValue = form.watch("produtoOferecido");
@@ -374,7 +374,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
                   />
                 </FormControl>
                 {!visitaEnabled && (
-                  <p className="text-xs text-muted-foreground">Disponível quando "Visita" = visitado</p>
+                  <p className="text-xs text-muted-foreground">Disponível quando "Visita" = Visitado</p>
                 )}
                 <FormMessage />
               </FormItem>
