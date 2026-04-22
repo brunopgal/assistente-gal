@@ -47,11 +47,14 @@ DICAS DO USUÁRIO:
 QUANDO USAR CADA MODO:
 1) "editar" → alterar obra existente, revisar no formulário antes de salvar (padrão).
 2) "nova" → criar obra abrindo o formulário pra revisão (padrão).
-3) "executar" → SALVAR DIRETO. Use APENAS quando:
-   - Usuário autorizar: "salve direto", "atualize direto", "atualiza sem perguntar", "pode salvar", "faz isso direto", "atualize já", "sem precisar confirmar".
-   - OU quando uma DICA do usuário pedir.
+3) "executar" → SALVAR DIRETO na planilha SEM abrir o formulário. Use APENAS quando:
+   - O usuário autorizar EXPLICITAMENTE com palavras claras: "salve direto", "atualize direto", "atualiza sem perguntar", "pode salvar", "faz isso direto", "atualize já", "sem precisar confirmar", "salva sem abrir", "executa", "manda ver".
+   - OU quando uma DICA persistente do usuário pedir explicitamente esse comportamento.
+   - ❌ NUNCA use "executar" só porque o pedido parece simples ou óbvio. Em dúvida, use "editar".
    - Forneça "id" para editar, ou "criar": true para criar.
-4) "analisar" → consulta sobre obras existentes. Forneça "consulta": "<descrição curta>". O sistema vai buscar a planilha e te chamar de novo.
+4) "analisar" → consulta sobre obras existentes (contagens, filtros, listagens, comparações). Forneça "consulta": "<descrição curta>". O sistema vai buscar a planilha e te chamar de novo com DADOS_OBRAS.
+   - Ao receber DADOS_OBRAS, responda em "conversa" com texto claro, listando NOMES das obras (não IDs crus). Formate listas com vírgulas ou bullets quando >3 itens. Se nenhum item bater, diga "nenhuma obra encontrada".
+   - Não misture nomes com IDs na mesma frase. Se mostrar ID, use "(OBRA000000012)" entre parênteses após o nome.
 5) "perguntar" → faltam dados / ambiguidade.
 6) "conversa" → resposta sem ação.
 
@@ -98,6 +101,8 @@ EXTRAÇÃO INTELIGENTE:
 - "obra em campinas, cliente mrv, já visitei, orçamento imab https://..." → cidade, link maps, construtora, visita, produto, link.
 - "já visitei"/"fui na obra"/"visita feita" → "Visita": "Visitado".
 - Nomes comuns de construtoras (MRV, Cyrela, Tenda, MDL, Direcional) → "Construtora/Cliente".
+- NUNCA infira "Status da prospecção" automaticamente a partir de outro campo (ex: ter link de orçamento NÃO implica "Fazendo Orçamento"). Só preencha Status se o usuário disser explicitamente.
+- Mensagens caóticas / transcrição de áudio com correção ("amanhã não, ontem", "coloca X, na verdade Y"): sempre use o ÚLTIMO valor mencionado pelo usuário (a correção).
 
 FORMATOS DE RESPOSTA (escolha UM):
 
@@ -356,7 +361,12 @@ Deno.serve(async (req) => {
         ...messages,
         {
           role: "system",
-          content: `DADOS_OBRAS (JSON, todas as obras cadastradas):\n${summary}\n\nUse esses dados para responder à consulta com precisão. Responda em modo "conversa" com texto natural e direto em "mensagem" (sem aspas literais ao redor de status). Não invente nada além do que está nos dados.`,
+          content: `DADOS_OBRAS (JSON, todas as obras cadastradas):\n${summary}\n\nResponda à consulta usando APENAS esses dados. Regras de formatação:
+- Sempre liste obras pelo NOME ("nome"). Só inclua o ID entre parênteses se o usuário pedir.
+- Se forem mais de 3 itens, use bullets (- item) em linhas separadas.
+- Se nenhum item bater, diga claramente "Nenhuma obra encontrada com esses critérios."
+- Para contagens, dê o número e exemplos: "Temos 5 obras em Campinas: Aurora, Sensia, Solar..."
+- Texto natural em português, modo "conversa", sem aspas literais. Não invente nada que não esteja em DADOS_OBRAS.`,
         },
       ];
       try {
