@@ -361,7 +361,12 @@ Deno.serve(async (req) => {
         ...messages,
         {
           role: "system",
-          content: `DADOS_OBRAS (JSON, todas as obras cadastradas):\n${summary}\n\nUse esses dados para responder à consulta com precisão. Responda em modo "conversa" com texto natural e direto em "mensagem" (sem aspas literais ao redor de status). Não invente nada além do que está nos dados.`,
+          content: `DADOS_OBRAS (JSON, todas as obras cadastradas):\n${summary}\n\nResponda à consulta usando APENAS esses dados. Regras de formatação:
+- Sempre liste obras pelo NOME ("nome"). Só inclua o ID entre parênteses se o usuário pedir.
+- Se forem mais de 3 itens, use bullets (- item) em linhas separadas.
+- Se nenhum item bater, diga claramente "Nenhuma obra encontrada com esses critérios."
+- Para contagens, dê o número e exemplos: "Temos 5 obras em Campinas: Aurora, Sensia, Solar..."
+- Texto natural em português, modo "conversa", sem aspas literais. Não invente nada que não esteja em DADOS_OBRAS.`,
         },
       ];
       try {
