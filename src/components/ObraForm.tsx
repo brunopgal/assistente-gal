@@ -374,7 +374,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
                   />
                 </FormControl>
                 {!visitaEnabled && (
-                  <p className="text-xs text-muted-foreground">Disponível quando "Visita" = visitado</p>
+                  <p className="text-xs text-muted-foreground">Disponível quando "Visita" = Visitado</p>
                 )}
                 <FormMessage />
               </FormItem>
