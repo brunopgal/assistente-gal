@@ -51,12 +51,45 @@ export default function SecretariaChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  const handleAttachClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const ext = file.name.split(".").pop() || "bin";
+        const safeBase = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
+        const filePath = `chat/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}.${ext}`;
+        const { error } = await supabase.storage.from("orcamentos").upload(filePath, file);
+        if (error) throw error;
+        const { data } = supabase.storage.from("orcamentos").getPublicUrl(filePath);
+        setAttachments((prev) => [...prev, { name: file.name, url: data.publicUrl }]);
+      }
+      toast({ title: "Arquivo anexado", description: "Será enviado junto com sua mensagem." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha no upload";
+      toast({ title: "Erro no upload", description: msg, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const blobToBase64 = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
