@@ -261,10 +261,19 @@ export default function SecretariaChat() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
-    const next: ChatMsg[] = [...messages, { role: "user", content: text }];
+    if ((!text && attachments.length === 0) || loading) return;
+
+    // Compose user message including attached file URLs so the AI can map them to fields
+    const attachLines = attachments.length
+      ? "\n\n[ARQUIVOS ANEXADOS]\n" +
+        attachments.map((a) => `- ${a.name}: ${a.url}`).join("\n")
+      : "";
+    const fullText = (text || "(arquivo anexado)") + attachLines;
+
+    const next: ChatMsg[] = [...messages, { role: "user", content: fullText }];
     setMessages(next);
     setInput("");
+    setAttachments([]);
     setLoading(true);
 
     try {
