@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, Loader2, X, MessageCircle, Mic, Square } from "lucide-react";
+import { Bot, Send, Loader2, X, MessageCircle, Mic, Square, Paperclip, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { mapFieldsToForm, type SecretariaAction } from "@/lib/secretariaFields";
 import { atualizarObra, criarObra, buscarObra, type Obra } from "@/services/obrasService";
+import { supabase } from "@/integrations/supabase/client";
+
+interface AttachedFile {
+  name: string;
+  url: string;
+}
 
 interface ChatMsg {
   role: "user" | "assistant";
