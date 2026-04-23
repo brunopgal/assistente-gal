@@ -396,6 +396,28 @@ export default function SecretariaChat() {
             )}
           </div>
 
+          {attachments.length > 0 && (
+            <div className="px-3 pt-2 flex flex-wrap gap-1.5 border-t border-border">
+              {attachments.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 bg-muted rounded-full pl-2 pr-1 py-1 text-xs max-w-[200px]"
+                >
+                  <FileText className="h-3 w-3 text-primary shrink-0" />
+                  <span className="truncate">{a.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    className="h-4 w-4 rounded-full hover:bg-background flex items-center justify-center shrink-0"
+                    aria-label="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -403,6 +425,14 @@ export default function SecretariaChat() {
             }}
             className="p-3 border-t border-border flex gap-2"
           >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+              onChange={handleFileSelected}
+            />
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -411,16 +441,32 @@ export default function SecretariaChat() {
                   ? "Transcrevendo áudio…"
                   : recording
                     ? "Gravando… toque no quadrado para parar"
-                    : "Ex: Crie obra Aurora em Campinas"
+                    : uploading
+                      ? "Enviando arquivo…"
+                      : "Ex: Crie obra Aurora em Campinas"
               }
               disabled={loading || transcribing}
             />
             <Button
               type="button"
               size="icon"
+              variant="outline"
+              onClick={handleAttachClick}
+              disabled={loading || transcribing || uploading}
+              aria-label="Anexar arquivo"
+            >
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Paperclip className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
               variant={recording ? "destructive" : "outline"}
               onClick={toggleRecording}
-              disabled={loading || transcribing}
+              disabled={loading || transcribing || uploading}
               aria-label={recording ? "Parar gravação" : "Gravar áudio"}
             >
               {transcribing ? (
@@ -431,7 +477,11 @@ export default function SecretariaChat() {
                 <Mic className="h-4 w-4" />
               )}
             </Button>
-            <Button type="submit" size="icon" disabled={loading || transcribing || !input.trim()}>
+            <Button
+              type="submit"
+              size="icon"
+              disabled={loading || transcribing || uploading || (!input.trim() && attachments.length === 0)}
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>
