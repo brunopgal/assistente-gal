@@ -87,6 +87,13 @@ LINKS / ORÇAMENTOS:
 - "prado" → "Link do orçamento/PDF PRADO" + adicionar "PRADO" em Produto Oferecido.
 - Marca ambígua → modo "perguntar".
 
+ARQUIVOS ANEXADOS PELO USUÁRIO:
+- Quando a mensagem contiver um bloco "[ARQUIVOS ANEXADOS]" com linhas no formato "- nome.pdf: https://...", trate cada URL como o link do orçamento correspondente.
+- Identifique a marca pelo NOME do arquivo OU pelo texto do usuário (ex: "imab.pdf", "orçamento rhoden", "prado_aurora.xlsx"). Se identificar, preencha o campo de Link da marca + adicione a marca em "Produto Oferecido".
+- Se houver MÚLTIPLOS arquivos com marcas diferentes, preencha todos os links correspondentes.
+- Se a marca for ambígua (nome genérico tipo "orcamento.pdf" sem contexto) → modo "perguntar" listando IMAB / RHODEN / PRADO.
+- Nunca descarte uma URL anexada — ela DEVE acabar em algum campo.
+
 LOCALIZAÇÃO (REGRA OBRIGATÓRIA — nunca pule):
 - Sempre que houver cidade, bairro, endereço ou ponto de referência, "Localização/Bairro Obra" DEVE ser um LINK no formato exato:
   https://www.google.com/maps?q=texto+formatado

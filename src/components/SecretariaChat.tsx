@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, Loader2, X, MessageCircle, Mic, Square } from "lucide-react";
+import { Bot, Send, Loader2, X, MessageCircle, Mic, Square, Paperclip, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { mapFieldsToForm, type SecretariaAction } from "@/lib/secretariaFields";
 import { atualizarObra, criarObra, buscarObra, type Obra } from "@/services/obrasService";
+import { supabase } from "@/integrations/supabase/client";
+
+interface AttachedFile {
+  name: string;
+  url: string;
+}
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -45,12 +51,45 @@ export default function SecretariaChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  const handleAttachClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const ext = file.name.split(".").pop() || "bin";
+        const safeBase = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
+        const filePath = `chat/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}.${ext}`;
+        const { error } = await supabase.storage.from("orcamentos").upload(filePath, file);
+        if (error) throw error;
+        const { data } = supabase.storage.from("orcamentos").getPublicUrl(filePath);
+        setAttachments((prev) => [...prev, { name: file.name, url: data.publicUrl }]);
+      }
+      toast({ title: "Arquivo anexado", description: "Será enviado junto com sua mensagem." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha no upload";
+      toast({ title: "Erro no upload", description: msg, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const blobToBase64 = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -222,10 +261,19 @@ export default function SecretariaChat() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
-    const next: ChatMsg[] = [...messages, { role: "user", content: text }];
+    if ((!text && attachments.length === 0) || loading) return;
+
+    // Compose user message including attached file URLs so the AI can map them to fields
+    const attachLines = attachments.length
+      ? "\n\n[ARQUIVOS ANEXADOS]\n" +
+        attachments.map((a) => `- ${a.name}: ${a.url}`).join("\n")
+      : "";
+    const fullText = (text || "(arquivo anexado)") + attachLines;
+
+    const next: ChatMsg[] = [...messages, { role: "user", content: fullText }];
     setMessages(next);
     setInput("");
+    setAttachments([]);
     setLoading(true);
 
     try {
@@ -348,6 +396,28 @@ export default function SecretariaChat() {
             )}
           </div>
 
+          {attachments.length > 0 && (
+            <div className="px-3 pt-2 flex flex-wrap gap-1.5 border-t border-border">
+              {attachments.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 bg-muted rounded-full pl-2 pr-1 py-1 text-xs max-w-[200px]"
+                >
+                  <FileText className="h-3 w-3 text-primary shrink-0" />
+                  <span className="truncate">{a.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    className="h-4 w-4 rounded-full hover:bg-background flex items-center justify-center shrink-0"
+                    aria-label="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -355,6 +425,14 @@ export default function SecretariaChat() {
             }}
             className="p-3 border-t border-border flex gap-2"
           >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+              onChange={handleFileSelected}
+            />
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -363,16 +441,32 @@ export default function SecretariaChat() {
                   ? "Transcrevendo áudio…"
                   : recording
                     ? "Gravando… toque no quadrado para parar"
-                    : "Ex: Crie obra Aurora em Campinas"
+                    : uploading
+                      ? "Enviando arquivo…"
+                      : "Ex: Crie obra Aurora em Campinas"
               }
               disabled={loading || transcribing}
             />
             <Button
               type="button"
               size="icon"
+              variant="outline"
+              onClick={handleAttachClick}
+              disabled={loading || transcribing || uploading}
+              aria-label="Anexar arquivo"
+            >
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Paperclip className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
               variant={recording ? "destructive" : "outline"}
               onClick={toggleRecording}
-              disabled={loading || transcribing}
+              disabled={loading || transcribing || uploading}
               aria-label={recording ? "Parar gravação" : "Gravar áudio"}
             >
               {transcribing ? (
@@ -383,7 +477,11 @@ export default function SecretariaChat() {
                 <Mic className="h-4 w-4" />
               )}
             </Button>
-            <Button type="submit" size="icon" disabled={loading || transcribing || !input.trim()}>
+            <Button
+              type="submit"
+              size="icon"
+              disabled={loading || transcribing || uploading || (!input.trim() && attachments.length === 0)}
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>
