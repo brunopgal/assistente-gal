@@ -197,6 +197,27 @@ export default function FollowUp() {
     }
   };
 
+  const handleReschedule = async (obra: FollowUpObra, newDateBR: string) => {
+    setReschedulingId(obra.id!);
+    try {
+      await atualizarFollowUp(obra.id!, newDateBR);
+      setObras((prev) =>
+        prev
+          .map((o) =>
+            o.id === obra.id
+              ? { ...o, proximoContato: newDateBR, followUpDate: dateToCompare(newDateBR) }
+              : o,
+          )
+          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
+      );
+      toast({ title: `Follow-up de "${obra.nome}" reagendado para ${newDateBR}` });
+    } catch {
+      toast({ title: "Erro ao reagendar", variant: "destructive" });
+    } finally {
+      setReschedulingId(null);
+    }
+  };
+
   const today = todayStr();
   const atrasados = obras.filter((o) => o.followUpDate < today);
   const hoje = obras.filter((o) => o.followUpDate === today);
