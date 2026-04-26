@@ -246,7 +246,9 @@ export default function FollowUp() {
               key={obra.id}
               obra={obra}
               onDone={() => handleDone(obra)}
+              onReschedule={(newDate) => handleReschedule(obra, newDate)}
               loading={markingId === obra.id}
+              rescheduling={reschedulingId === obra.id}
             />
           ))}
         </div>
