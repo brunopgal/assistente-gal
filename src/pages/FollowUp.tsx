@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { listarObras, limparFollowUp, type Obra } from "@/services/obrasService";
+import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function parseDate(str: string): Date | null {
@@ -49,7 +51,9 @@ function statusColor(status: string) {
   return "outline";
 }
 
-function FollowUpCard({ obra, onDone, loading }: { obra: FollowUpObra; onDone: () => void; loading: boolean }) {
+function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling }: { obra: FollowUpObra; onDone: () => void; onReschedule: (newDate: string) => Promise<void>; loading: boolean; rescheduling: boolean }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [newDate, setNewDate] = useState<string>(dateToCompare(obra.proximoContato) || todayStr());
   const phone = obra.telefone?.replace(/\D/g, "") || "";
   const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
   const loc = (obra.localizacao || "").trim();
@@ -77,6 +81,36 @@ function FollowUpCard({ obra, onDone, loading }: { obra: FollowUpObra; onDone: (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
           <span>Follow-up: <span className="text-foreground font-medium">{formatDate(obra.proximoContato)}</span></span>
+          <Popover open={editOpen} onOpenChange={setEditOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" disabled={rescheduling}>
+                {rescheduling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3 space-y-2" align="end">
+              <p className="text-xs font-medium text-foreground">Reagendar follow-up</p>
+              <Input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="h-9"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setEditOpen(false)}>Cancelar</Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (!newDate) return;
+                    const [y, m, d] = newDate.split("-");
+                    await onReschedule(`${d}/${m}/${y}`);
+                    setEditOpen(false);
+                  }}
+                >
+                  Salvar
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {obra.observacoes && (
@@ -128,6 +162,7 @@ export default function FollowUp() {
   const [obras, setObras] = useState<FollowUpObra[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -162,6 +197,27 @@ export default function FollowUp() {
     }
   };
 
+  const handleReschedule = async (obra: FollowUpObra, newDateBR: string) => {
+    setReschedulingId(obra.id!);
+    try {
+      await atualizarFollowUp(obra.id!, newDateBR);
+      setObras((prev) =>
+        prev
+          .map((o) =>
+            o.id === obra.id
+              ? { ...o, proximoContato: newDateBR, followUpDate: dateToCompare(newDateBR) }
+              : o,
+          )
+          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
+      );
+      toast({ title: `Follow-up de "${obra.nome}" reagendado para ${newDateBR}` });
+    } catch {
+      toast({ title: "Erro ao reagendar", variant: "destructive" });
+    } finally {
+      setReschedulingId(null);
+    }
+  };
+
   const today = todayStr();
   const atrasados = obras.filter((o) => o.followUpDate < today);
   const hoje = obras.filter((o) => o.followUpDate === today);
@@ -190,7 +246,9 @@ export default function FollowUp() {
               key={obra.id}
               obra={obra}
               onDone={() => handleDone(obra)}
+              onReschedule={(newDate) => handleReschedule(obra, newDate)}
               loading={markingId === obra.id}
+              rescheduling={reschedulingId === obra.id}
             />
           ))}
         </div>
