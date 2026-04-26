@@ -75,3 +75,15 @@ export async function listarObras(): Promise<Obra[]> {
 export async function limparFollowUp(id: string): Promise<void> {
   await request("PATCH", { field: "proximoContato", value: "" }, id);
 }
+
+export async function atualizarFollowUp(id: string, data: string): Promise<void> {
+  await request("PATCH", { field: "proximoContato", value: data }, id);
+}
+
+export async function atualizarCampoObra(
+  id: string,
+  field: keyof Obra,
+  value: string,
+): Promise<void> {
+  await request("PATCH", { field, value }, id);
+}
