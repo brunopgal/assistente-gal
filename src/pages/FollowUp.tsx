@@ -51,7 +51,9 @@ function statusColor(status: string) {
   return "outline";
 }
 
-function FollowUpCard({ obra, onDone, loading }: { obra: FollowUpObra; onDone: () => void; loading: boolean }) {
+function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling }: { obra: FollowUpObra; onDone: () => void; onReschedule: (newDate: string) => Promise<void>; loading: boolean; rescheduling: boolean }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [newDate, setNewDate] = useState<string>(dateToCompare(obra.proximoContato) || todayStr());
   const phone = obra.telefone?.replace(/\D/g, "") || "";
   const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
   const loc = (obra.localizacao || "").trim();
