@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { listarObras, limparFollowUp, type Obra } from "@/services/obrasService";
+import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function parseDate(str: string): Date | null {
