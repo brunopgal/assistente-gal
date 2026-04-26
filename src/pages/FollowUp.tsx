@@ -162,6 +162,7 @@ export default function FollowUp() {
   const [obras, setObras] = useState<FollowUpObra[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchData = async () => {
