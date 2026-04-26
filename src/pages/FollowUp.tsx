@@ -81,6 +81,36 @@ function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling }: { o
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
           <span>Follow-up: <span className="text-foreground font-medium">{formatDate(obra.proximoContato)}</span></span>
+          <Popover open={editOpen} onOpenChange={setEditOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" disabled={rescheduling}>
+                {rescheduling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3 space-y-2" align="end">
+              <p className="text-xs font-medium text-foreground">Reagendar follow-up</p>
+              <Input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="h-9"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setEditOpen(false)}>Cancelar</Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (!newDate) return;
+                    const [y, m, d] = newDate.split("-");
+                    await onReschedule(`${d}/${m}/${y}`);
+                    setEditOpen(false);
+                  }}
+                >
+                  Salvar
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {obra.observacoes && (
