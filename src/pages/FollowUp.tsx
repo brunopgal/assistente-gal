@@ -187,15 +187,38 @@ export default function FollowUp() {
     setLoading(true);
     try {
       const all = await listarObras();
-      const today = todayStr();
-      const withFollowUp = all
+      const withFollowUp: FollowUpObra[] = all
         .filter((o) => o.proximoContato && parseDate(o.proximoContato))
-        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato) }))
+        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato), ultimaAtividade: null }))
         .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
       setObras(withFollowUp);
+      setLoading(false);
+
+      // Carrega última atividade de cada obra em paralelo (não bloqueia render)
+      const results = await Promise.all(
+        withFollowUp.map(async (o) => {
+          try {
+            const ativs = await listarAtividadesPorObra(o.id!);
+            if (!ativs.length) return { id: o.id!, ultima: null };
+            const sorted = [...ativs].sort((a, b) => {
+              const da = dateToCompare(a.dataAtividade);
+              const db = dateToCompare(b.dataAtividade);
+              return db.localeCompare(da);
+            });
+            return { id: o.id!, ultima: sorted[0] };
+          } catch {
+            return { id: o.id!, ultima: null };
+          }
+        }),
+      );
+      setObras((prev) =>
+        prev.map((o) => {
+          const r = results.find((x) => x.id === o.id);
+          return r ? { ...o, ultimaAtividade: r.ultima } : o;
+        }),
+      );
     } catch {
       toast({ title: "Erro ao carregar follow-ups", variant: "destructive" });
-    } finally {
       setLoading(false);
     }
   };
