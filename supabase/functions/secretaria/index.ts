@@ -381,6 +381,8 @@ async function fetchAtividadesPorObra(idObra: string): Promise<string> {
     return "";
   }
 }
+
+async function fetchObrasSummary(): Promise<string> {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
