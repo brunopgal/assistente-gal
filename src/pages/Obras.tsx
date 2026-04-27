@@ -166,6 +166,23 @@ export default function Obras() {
                         )}
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
+                        {temBotaoOrcamento(o.statusProspeccao) && (() => {
+                          const orc = getOrcamentoLink(o);
+                          if (!orc) return null;
+                          return (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 mr-1"
+                              onClick={() => openFileSafe(orc.url)}
+                              title={`Abrir orçamento ${orc.label}`}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1" />
+                              Orçamento
+                            </Button>
+                          );
+                        })()}
                         <Button asChild variant="ghost" size="sm" className="h-8">
                           <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                             <Pencil className="h-3.5 w-3.5 mr-1" />
