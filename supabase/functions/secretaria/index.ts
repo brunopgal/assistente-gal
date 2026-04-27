@@ -467,7 +467,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ action }), {
+    if (action.modo === "atividade-listar" && action.atividade?.idObra) {
+      const idObra = action.atividade.idObra;
+      const ativs = await fetchAtividadesPorObra(idObra);
+      const followup: AiMessage[] = [
+        ...messages,
+        {
+          role: "system",
+          content: `DADOS_ATIVIDADES da obra ${idObra} (JSON):\n${ativs}\n\nResponda em modo "conversa" (texto natural em português) listando as atividades em ordem cronológica decrescente. Cada item: data, tipo, status (se houver), comentário curto, e se houver próximo contato. Se vazio, diga "nenhuma atividade registrada". Se o usuário pediu para identificar/editar uma atividade específica (ex: "última"), inclua o idAtividade dela ao final em parênteses para o usuário confirmar.`,
+        },
+      ];
+      try {
+        action = await callAI(followup, LOVABLE_API_KEY);
+      } catch (e) {
+        const err = e as Error;
+        action = { modo: "conversa", mensagem: `Não consegui listar agora: ${err.message}` };
+      }
+    }
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
