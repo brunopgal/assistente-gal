@@ -194,14 +194,40 @@ async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
   }
 }
 
-async function fetchAllRows(sheetId: string, accessToken: string): Promise<string[][]> {
-  const res = await fetch(
-    `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(RANGE)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-  return data.values || [];
+// Cache em memória (Sheets API: 60 leituras/min)
+let rowsCache: { key: string; rows: string[][]; ts: number } | null = null;
+const CACHE_TTL_MS = 10_000;
+
+function invalidateRowsCache() { rowsCache = null; }
+
+async function fetchAllRows(sheetId: string, accessToken: string, useCache = true): Promise<string[][]> {
+  const now = Date.now();
+  if (useCache && rowsCache && rowsCache.key === sheetId && (now - rowsCache.ts) < CACHE_TTL_MS) {
+    return rowsCache.rows;
+  }
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(
+      `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(RANGE)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const rows = data.values || [];
+      rowsCache = { key: sheetId, rows, ts: Date.now() };
+      return rows;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 429 || res.status >= 500) {
+      lastErr = new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      if (rowsCache && rowsCache.key === sheetId) return rowsCache.rows;
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+  }
+  throw lastErr ?? new Error('Sheets API error: rate limit');
 }
 
 function findRowIndexByAtividadeId(rows: string[][], idAtividade: string): number {
