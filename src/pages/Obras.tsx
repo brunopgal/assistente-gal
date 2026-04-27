@@ -157,6 +157,23 @@ export default function Obras() {
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {o.cidade || "—"}
                       </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {o.produtoOferecido ? (
+                          <div className="flex flex-wrap gap-1">
+                            {o.produtoOferecido
+                              .split(",")
+                              .map((p) => p.trim())
+                              .filter(Boolean)
+                              .map((p) => (
+                                <Badge key={p} variant="outline" className="text-xs">
+                                  {p}
+                                </Badge>
+                              ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {o.statusProspeccao ? (
                           <Badge variant={statusVariant(o.statusProspeccao)} className="text-xs">
