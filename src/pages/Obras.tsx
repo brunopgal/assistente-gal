@@ -20,8 +20,10 @@ import {
   ExternalLink,
   ListChecks,
   Pencil,
+  FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { openFileSafe } from "@/lib/openFile";
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
