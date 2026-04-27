@@ -3,6 +3,7 @@ import { Upload, FileText, ExternalLink, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { openFileSafe } from "@/lib/openFile";
 
 interface FileUploadFieldProps {
   label: string;
@@ -41,14 +42,13 @@ export default function FileUploadField({ label, value, onChange }: FileUploadFi
       {value ? (
         <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
           <FileText className="h-4 w-4 text-primary shrink-0" />
-          <a
-            href={value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary underline truncate flex-1"
+          <button
+            type="button"
+            onClick={() => openFileSafe(value)}
+            className="text-sm text-primary underline truncate flex-1 text-left hover:opacity-80"
           >
             Ver arquivo
-          </a>
+          </button>
           <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
           <Button
             type="button"

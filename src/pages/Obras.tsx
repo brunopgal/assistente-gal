@@ -20,8 +20,10 @@ import {
   ExternalLink,
   ListChecks,
   Pencil,
+  FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { openFileSafe } from "@/lib/openFile";
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
@@ -32,6 +34,18 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   if (s.includes("perdido")) return "destructive";
   if (s.includes("negocia")) return "secondary";
   return "outline";
+}
+
+function getOrcamentoLink(o: Obra): { url: string; label: string } | null {
+  if (o.linkOrcamentoPrado) return { url: o.linkOrcamentoPrado, label: "Prado" };
+  if (o.linkOrcamentoImab) return { url: o.linkOrcamentoImab, label: "Imab" };
+  if (o.linkOrcamentoRhoden) return { url: o.linkOrcamentoRhoden, label: "Rhoden" };
+  return null;
+}
+
+function temBotaoOrcamento(status: string): boolean {
+  const s = (status || "").toLowerCase();
+  return s.includes("orçamento enviado") || s.includes("orcamento enviado") || s.includes("fechado");
 }
 
 export default function Obras() {
@@ -152,6 +166,23 @@ export default function Obras() {
                         )}
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
+                        {temBotaoOrcamento(o.statusProspeccao) && (() => {
+                          const orc = getOrcamentoLink(o);
+                          if (!orc) return null;
+                          return (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 mr-1"
+                              onClick={() => openFileSafe(orc.url)}
+                              title={`Abrir orçamento ${orc.label}`}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1" />
+                              Orçamento
+                            </Button>
+                          );
+                        })()}
                         <Button asChild variant="ghost" size="sm" className="h-8">
                           <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                             <Pencil className="h-3.5 w-3.5 mr-1" />
