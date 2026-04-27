@@ -191,6 +191,9 @@ interface SecretariaAction {
   mensagem?: string;
   salvarDica?: string;
   limparDicas?: boolean;
+  // ===== Atividades =====
+  idAtividade?: string;
+  atividade?: Record<string, string>;
 }
 
 // ===== Server-side normalization (defense in depth) =====
