@@ -79,18 +79,33 @@ export default function Mapa() {
     async function load() {
       try {
         const allObras = await listarObras();
-        const withLocation = allObras.filter((o) => o.cidade || o.localizacao);
+        const isUrl = (s: string) => /^https?:\/\//i.test((s || "").trim());
+
+        // Para geocodificar, usamos somente texto válido (nunca URLs)
+        const withLocation = allObras
+          .map((o) => {
+            const locTxt = isUrl(o.localizacao) ? "" : (o.localizacao || "").trim();
+            const cidade = (o.cidade || "").trim();
+            const query = [locTxt, cidade].filter(Boolean).join(", ");
+            return { obra: o, query };
+          })
+          .filter((x) => x.query.length > 0);
+
         setProgress({ done: 0, total: withLocation.length });
 
         const geoObras: GeoObra[] = [];
 
         for (let i = 0; i < withLocation.length; i++) {
           if (cancelled) return;
-          const o = withLocation[i];
-          const query = [o.localizacao, o.cidade].filter(Boolean).join(", ");
-          const coords = await geocode(query);
+          const { obra, query } = withLocation[i];
+          let coords = await geocode(query);
+          // fallback: tenta só pela cidade se a query completa falhou
+          if (!coords && obra.cidade) {
+            await new Promise((r) => setTimeout(r, 1100));
+            coords = await geocode(obra.cidade);
+          }
           if (coords) {
-            geoObras.push({ ...o, ...coords });
+            geoObras.push({ ...obra, ...coords });
           }
           setProgress({ done: i + 1, total: withLocation.length });
           if (i < withLocation.length - 1) {
@@ -121,19 +136,21 @@ export default function Mapa() {
     obras.forEach((obra) => {
       const phone = obra.telefone?.replace(/\D/g, "") || "";
       const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-      const mapsQuery = [obra.localizacao, obra.cidade].filter(Boolean).join(", ");
-      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
+      const isUrl = /^https?:\/\//i.test((obra.localizacao || "").trim());
+      const mapsUrl = isUrl
+        ? obra.localizacao
+        : `https://www.google.com/maps/search/${encodeURIComponent([obra.localizacao, obra.cidade].filter(Boolean).join(", "))}`;
 
       const popupContent = `
         <div style="min-width:200px">
           <h3 style="font-weight:bold;font-size:14px;margin:0 0 4px">${obra.nome || "Sem nome"}</h3>
           <p style="font-size:12px;color:#888;margin:0">${obra.construtora || "—"}</p>
-          <p style="font-size:12px;margin:4px 0">${[obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
+          <p style="font-size:12px;margin:4px 0">${[isUrl ? "" : obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
           ${obra.statusProspeccao ? `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
-          <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <a href="${mapsUrl}" target="_blank" style="font-size:12px;color:#2563eb">📍 Maps</a>
             ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:12px;color:#16a34a">💬 WhatsApp</a>` : ""}
-            <a href="/nova-obra?id=${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
+            <a href="/atividades/${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
           </div>
         </div>
       `;

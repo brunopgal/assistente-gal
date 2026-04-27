@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
+import { listarAtividadesPorObra, type Atividade } from "@/services/atividadesService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ function dateToCompare(str: string): string {
 
 interface FollowUpObra extends Obra {
   followUpDate: string; // comparable yyyy-mm-dd
+  ultimaAtividade?: Atividade | null;
 }
 
 function statusColor(status: string) {
@@ -113,7 +115,23 @@ function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling }: { o
           </Popover>
         </div>
 
-        {obra.observacoes && (
+        {obra.ultimaAtividade && (obra.ultimaAtividade.comentario || obra.ultimaAtividade.status) && (
+          <div className="text-sm bg-muted/50 rounded p-2 space-y-1">
+            {obra.ultimaAtividade.comentario && (
+              <p className="text-foreground/90 line-clamp-3">{obra.ultimaAtividade.comentario}</p>
+            )}
+            {obra.ultimaAtividade.status && (
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Status:</span>
+                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                  {obra.ultimaAtividade.status}
+                </Badge>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!obra.ultimaAtividade?.comentario && obra.observacoes && (
           <p className="text-sm text-muted-foreground bg-muted/50 rounded p-2 line-clamp-2">
             {obra.observacoes}
           </p>
@@ -137,7 +155,7 @@ function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling }: { o
             </Button>
           )}
           <Button variant="outline" size="sm" asChild className="h-8 text-xs">
-            <a href={`/nova-obra?id=${obra.id}`}>
+            <a href={`/atividades/${obra.id}`}>
               <ExternalLink className="h-3.5 w-3.5 mr-1" />
               Detalhes
             </a>
@@ -169,15 +187,38 @@ export default function FollowUp() {
     setLoading(true);
     try {
       const all = await listarObras();
-      const today = todayStr();
-      const withFollowUp = all
+      const withFollowUp: FollowUpObra[] = all
         .filter((o) => o.proximoContato && parseDate(o.proximoContato))
-        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato) }))
+        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato), ultimaAtividade: null }))
         .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
       setObras(withFollowUp);
+      setLoading(false);
+
+      // Carrega última atividade de cada obra em paralelo (não bloqueia render)
+      const results = await Promise.all(
+        withFollowUp.map(async (o) => {
+          try {
+            const ativs = await listarAtividadesPorObra(o.id!);
+            if (!ativs.length) return { id: o.id!, ultima: null };
+            const sorted = [...ativs].sort((a, b) => {
+              const da = dateToCompare(a.dataAtividade);
+              const db = dateToCompare(b.dataAtividade);
+              return db.localeCompare(da);
+            });
+            return { id: o.id!, ultima: sorted[0] };
+          } catch {
+            return { id: o.id!, ultima: null };
+          }
+        }),
+      );
+      setObras((prev) =>
+        prev.map((o) => {
+          const r = results.find((x) => x.id === o.id);
+          return r ? { ...o, ultimaAtividade: r.ultima } : o;
+        }),
+      );
     } catch {
       toast({ title: "Erro ao carregar follow-ups", variant: "destructive" });
-    } finally {
       setLoading(false);
     }
   };
