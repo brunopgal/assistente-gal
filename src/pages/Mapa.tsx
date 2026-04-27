@@ -79,18 +79,33 @@ export default function Mapa() {
     async function load() {
       try {
         const allObras = await listarObras();
-        const withLocation = allObras.filter((o) => o.cidade || o.localizacao);
+        const isUrl = (s: string) => /^https?:\/\//i.test((s || "").trim());
+
+        // Para geocodificar, usamos somente texto válido (nunca URLs)
+        const withLocation = allObras
+          .map((o) => {
+            const locTxt = isUrl(o.localizacao) ? "" : (o.localizacao || "").trim();
+            const cidade = (o.cidade || "").trim();
+            const query = [locTxt, cidade].filter(Boolean).join(", ");
+            return { obra: o, query };
+          })
+          .filter((x) => x.query.length > 0);
+
         setProgress({ done: 0, total: withLocation.length });
 
         const geoObras: GeoObra[] = [];
 
         for (let i = 0; i < withLocation.length; i++) {
           if (cancelled) return;
-          const o = withLocation[i];
-          const query = [o.localizacao, o.cidade].filter(Boolean).join(", ");
-          const coords = await geocode(query);
+          const { obra, query } = withLocation[i];
+          let coords = await geocode(query);
+          // fallback: tenta só pela cidade se a query completa falhou
+          if (!coords && obra.cidade) {
+            await new Promise((r) => setTimeout(r, 1100));
+            coords = await geocode(obra.cidade);
+          }
           if (coords) {
-            geoObras.push({ ...o, ...coords });
+            geoObras.push({ ...obra, ...coords });
           }
           setProgress({ done: i + 1, total: withLocation.length });
           if (i < withLocation.length - 1) {
