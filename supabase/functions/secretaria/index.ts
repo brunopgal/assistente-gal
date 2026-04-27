@@ -486,6 +486,8 @@ Deno.serve(async (req) => {
         action = { modo: "conversa", mensagem: `Não consegui listar agora: ${err.message}` };
       }
     }
+
+    return new Response(JSON.stringify({ action }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
