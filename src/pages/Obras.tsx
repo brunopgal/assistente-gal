@@ -36,6 +36,18 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
+function getOrcamentoLink(o: Obra): { url: string; label: string } | null {
+  if (o.linkOrcamentoPrado) return { url: o.linkOrcamentoPrado, label: "Prado" };
+  if (o.linkOrcamentoImab) return { url: o.linkOrcamentoImab, label: "Imab" };
+  if (o.linkOrcamentoRhoden) return { url: o.linkOrcamentoRhoden, label: "Rhoden" };
+  return null;
+}
+
+function temBotaoOrcamento(status: string): boolean {
+  const s = (status || "").toLowerCase();
+  return s.includes("orçamento enviado") || s.includes("orcamento enviado") || s.includes("fechado");
+}
+
 export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
