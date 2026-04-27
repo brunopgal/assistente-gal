@@ -298,13 +298,31 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="localizacao" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Localização/Bairro Obra</FormLabel>
-                <FormControl><Input placeholder="Ex: Centro, Zona Norte" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
+            <FormField control={form.control} name="localizacao" render={({ field }) => {
+              const v = (field.value || "").trim();
+              const isUrl = /^https?:\/\//i.test(v);
+              return (
+                <FormItem>
+                  <FormLabel>Localização/Bairro Obra</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input placeholder="Ex: Centro, Zona Norte ou link do Maps" {...field} />
+                    </FormControl>
+                    {isUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(v, "_blank", "noopener,noreferrer")}
+                      >
+                        Abrir mapa
+                      </Button>
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              );
+            }} />
           </div>
         </div>
 
