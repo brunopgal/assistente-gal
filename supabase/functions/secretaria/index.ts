@@ -135,7 +135,46 @@ Conversa:
 {"modo":"conversa","mensagem":"Posso criar, editar, salvar direto ou analisar obras pra você."}
 
 Conversa salvando dica:
-{"modo":"conversa","salvarDica":"Toda obra MRV é classificação Alto e produto IMAB.","mensagem":"Anotado!"}`;
+{"modo":"conversa","salvarDica":"Toda obra MRV é classificação Alto e produto IMAB.","mensagem":"Anotado!"}
+
+============================================================
+ABA "ATIVIDADES" (CRM por obra) — controle de histórico de contatos
+============================================================
+
+CAMPOS DE ATIVIDADE (use exatamente estes nomes em "atividade"):
+- "idObra": ID da obra (OBRA + 9 dígitos). OBRIGATÓRIO em criar.
+- "tipoContato": "ligação" | "whatsapp" | "email" | "visita" (minúsculo)
+- "status": texto livre curto (ex: "sem retorno", "interessado", "aguardando aprovação")
+- "comentario": texto livre — o que foi conversado/registrado
+- "proximoContato": data DD/MM/AAAA (opcional — pode ficar vazio)
+- "dataAtividade": DD/MM/AAAA (opcional — se omitido vira hoje)
+
+QUANDO USAR CADA MODO DE ATIVIDADE:
+- "atividade-nova" → registrar nova atividade na obra. Forneça "atividade" com idObra + campos.
+  Ex de gatilhos: "registra uma ligação na obra 12", "anota visita feita ontem na obra Aurora", "adiciona atividade".
+  ⚠️ Se a atividade tiver "proximoContato", o sistema automaticamente atualiza o follow-up da obra.
+- "atividade-editar" → alterar atividade existente. Forneça "idAtividade" (formato ATIV000001) e "atividade" com os campos a alterar.
+  Ex: "edita a última atividade da obra 5 e muda o status para fechado".
+  Se o usuário se referir à "última atividade" sem dar o ID, use modo "analisar" com "consulta": "ultima atividade da obra <id>" para o sistema te trazer os dados, depois confirme com "atividade-editar".
+- "atividade-excluir" → remover atividade. Forneça "idAtividade".
+- "atividade-listar" → mostrar histórico. Forneça "idObra" em "atividade".
+
+EXEMPLOS DE ATIVIDADES:
+
+Criar atividade simples:
+{"modo":"atividade-nova","atividade":{"idObra":"OBRA000000012","tipoContato":"ligação","status":"sem retorno","comentario":"Liguei e caiu na caixa postal"},"mensagem":"Registrei a ligação na obra 12."}
+
+Criar atividade com follow-up:
+{"modo":"atividade-nova","atividade":{"idObra":"OBRA000000003","tipoContato":"whatsapp","status":"interessado","comentario":"Mandei orçamento, vai analisar","proximoContato":"05/05/2026"},"mensagem":"Atividade registrada e follow-up agendado pra 05/05/2026."}
+
+Editar atividade conhecida:
+{"modo":"atividade-editar","idAtividade":"ATIV000005","atividade":{"status":"fechado","comentario":"Aprovou o orçamento"},"mensagem":"Atividade ATIV000005 atualizada."}
+
+Excluir atividade:
+{"modo":"atividade-excluir","idAtividade":"ATIV000007","mensagem":"Atividade ATIV000007 excluída."}
+
+Listar atividades de uma obra:
+{"modo":"atividade-listar","atividade":{"idObra":"OBRA000000003"},"mensagem":"Buscando o histórico da obra 3."}`;
 }
 
 interface AiMessage {
