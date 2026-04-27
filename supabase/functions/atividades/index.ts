@@ -106,6 +106,42 @@ function generateNextId(rows: string[][]): string {
   return `ATIV${String(maxNum + 1).padStart(6, '0')}`;
 }
 
+async function applyStandardFormatting(sheetId: string, accessToken: string, gid: number, startRowIndex?: number, endRowIndex?: number) {
+  // Aplica fundo branco e texto preto. Se start/end não informados, formata a aba inteira.
+  const range: any = { sheetId: gid, startColumnIndex: 0, endColumnIndex: SHEET_HEADERS.length };
+  if (typeof startRowIndex === 'number') range.startRowIndex = startRowIndex;
+  if (typeof endRowIndex === 'number') range.endRowIndex = endRowIndex;
+
+  const res = await fetch(
+    `${SHEETS_BASE}/${sheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          repeatCell: {
+            range,
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 1, blue: 1 },
+                textFormat: {
+                  foregroundColor: { red: 0, green: 0, blue: 0 },
+                  bold: false,
+                },
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat.foregroundColor,textFormat.bold)',
+          },
+        }],
+      }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json();
+    console.error('Formatting error:', JSON.stringify(data));
+  }
+}
+
 async function getSheetGid(sheetId: string, accessToken: string): Promise<number> {
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
