@@ -280,6 +280,17 @@ const DATE_FIELDS = new Set([
   "Próximo contato/Follow up",
 ]);
 
+function normalizeAtivId(raw: string): string {
+  const cleaned = raw.trim().toUpperCase();
+  const m = cleaned.match(/^ATIV0*(\d+)$/);
+  if (m) return `ATIV${m[1].padStart(6, "0")}`;
+  const digits = cleaned.match(/\d+/);
+  if (digits && cleaned.includes("ATIV")) {
+    return `ATIV${digits[0].padStart(6, "0")}`;
+  }
+  return raw;
+}
+
 function sanitizeAction(action: SecretariaAction): SecretariaAction {
   if (action.id) action.id = normalizeId(action.id);
   if (action.campos && typeof action.campos === "object") {
@@ -296,6 +307,19 @@ function sanitizeAction(action: SecretariaAction): SecretariaAction {
       out[k] = val;
     }
     action.campos = out;
+  }
+  if (action.idAtividade) action.idAtividade = normalizeAtivId(action.idAtividade);
+  if (action.atividade && typeof action.atividade === "object") {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(action.atividade)) {
+      if (v == null) continue;
+      let val = String(v);
+      if (k === "idObra") val = normalizeId(val);
+      else if (k === "tipoContato") val = val.trim().toLowerCase();
+      else if (k === "proximoContato" || k === "dataAtividade") val = normalizeDateBR(val);
+      out[k] = val;
+    }
+    action.atividade = out;
   }
   return action;
 }
