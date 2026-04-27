@@ -138,17 +138,21 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
   const produtoValue = form.watch("produtoOferecido");
   const produtoSelected = (produtoValue || "")
     .split(",")
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
 
   const toggleProduto = (option: string, checked: boolean) => {
+    const optUpper = option.toUpperCase();
     let next: string[];
-    if (option === "nenhum") {
-      next = checked ? ["nenhum"] : [];
+    if (optUpper === "NENHUM") {
+      next = checked ? ["NENHUM"] : [];
     } else {
-      next = produtoSelected.filter((p) => p !== "nenhum");
-      if (checked) next = [...next, option];
-      else next = next.filter((p) => p !== option);
+      next = produtoSelected.filter((p) => p !== "NENHUM");
+      if (checked) {
+        if (!next.includes(optUpper)) next = [...next, optUpper];
+      } else {
+        next = next.filter((p) => p !== optUpper);
+      }
     }
     form.setValue("produtoOferecido", next.join(", "), { shouldDirty: true });
   };
@@ -313,14 +317,14 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
             <FormLabel>Produto Oferecido</FormLabel>
             <div className="flex flex-wrap gap-4 mt-2">
               {PRODUTO_OPTIONS.map((opt) => {
-                const checked = produtoSelected.includes(opt);
+                const checked = produtoSelected.includes(opt.toUpperCase());
                 return (
-                  <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm select-none">
                     <Checkbox
                       checked={checked}
                       onCheckedChange={(c) => toggleProduto(opt, !!c)}
                     />
-                    <span className="capitalize">{opt}</span>
+                    <span>{opt}</span>
                   </label>
                 );
               })}
