@@ -363,7 +363,24 @@ async function callAI(messages: AiMessage[], apiKey: string): Promise<Secretaria
   return sanitizeAction(parsed);
 }
 
-async function fetchObrasSummary(): Promise<string> {
+async function fetchAtividadesPorObra(idObra: string): Promise<string> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !anonKey) return "";
+    const r = await fetch(
+      `${supabaseUrl}/functions/v1/atividades?idObra=${encodeURIComponent(idObra)}`,
+      { headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey } },
+    );
+    if (!r.ok) return "";
+    const list = await r.json();
+    if (!Array.isArray(list)) return "";
+    return JSON.stringify(list);
+  } catch (e) {
+    console.error("fetchAtividadesPorObra error", e);
+    return "";
+  }
+}
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
