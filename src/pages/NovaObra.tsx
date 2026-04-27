@@ -10,7 +10,10 @@ import { criarObra, atualizarObra, buscarObra } from "@/services/obrasService";
 
 export default function NovaObra() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const editId = searchParams.get("id") || "";
+  const rawId = searchParams.get("id") || "";
+  // Aceita apenas IDs válidos (OBRA + 9 dígitos, e diferente do placeholder zerado)
+  const isValidId = /^OBRA\d{9}$/i.test(rawId) && !/^OBRA0+$/i.test(rawId);
+  const editId = isValidId ? rawId.toUpperCase() : "";
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [defaultValues, setDefaultValues] = useState<Partial<ObraFormValues>>();
@@ -18,6 +21,11 @@ export default function NovaObra() {
   const [searchInput, setSearchInput] = useState(editId);
 
   useEffect(() => {
+    // Se URL trouxe id inválido (ex: OBRA000000000), limpa para evitar 404
+    if (rawId && !isValidId) {
+      setSearchParams({});
+      return;
+    }
     setSearchInput(editId);
 
     // Read optional prefill from Secretária chat
