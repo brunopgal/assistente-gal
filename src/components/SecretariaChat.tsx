@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { mapFieldsToForm, type SecretariaAction } from "@/lib/secretariaFields";
-import { atualizarObra, criarObra, buscarObra, type Obra } from "@/services/obrasService";
+import { atualizarObra, criarObra, buscarObra, atualizarFollowUp, type Obra } from "@/services/obrasService";
+import {
+  criarAtividade,
+  atualizarAtividade,
+  excluirAtividade,
+  type Atividade,
+} from "@/services/atividadesService";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AttachedFile {
