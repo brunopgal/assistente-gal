@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { listarObras, type Obra } from "@/services/obrasService";
-import { Loader2, Map } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 
 interface GeoObra extends Obra {
   lat: number;
@@ -180,8 +180,9 @@ export default function Mapa() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Mapa de Obras
+        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          <MapPin className="h-6 w-6 text-[#EA4335] fill-[#EA4335]" />
+          Maps de Obras
         </h1>
         <p className="text-muted-foreground mt-1">
           Visualize todas as obras cadastradas no mapa
