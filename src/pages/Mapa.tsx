@@ -136,19 +136,21 @@ export default function Mapa() {
     obras.forEach((obra) => {
       const phone = obra.telefone?.replace(/\D/g, "") || "";
       const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-      const mapsQuery = [obra.localizacao, obra.cidade].filter(Boolean).join(", ");
-      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
+      const isUrl = /^https?:\/\//i.test((obra.localizacao || "").trim());
+      const mapsUrl = isUrl
+        ? obra.localizacao
+        : `https://www.google.com/maps/search/${encodeURIComponent([obra.localizacao, obra.cidade].filter(Boolean).join(", "))}`;
 
       const popupContent = `
         <div style="min-width:200px">
           <h3 style="font-weight:bold;font-size:14px;margin:0 0 4px">${obra.nome || "Sem nome"}</h3>
           <p style="font-size:12px;color:#888;margin:0">${obra.construtora || "—"}</p>
-          <p style="font-size:12px;margin:4px 0">${[obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
+          <p style="font-size:12px;margin:4px 0">${[isUrl ? "" : obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
           ${obra.statusProspeccao ? `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
-          <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <a href="${mapsUrl}" target="_blank" style="font-size:12px;color:#2563eb">📍 Maps</a>
             ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:12px;color:#16a34a">💬 WhatsApp</a>` : ""}
-            <a href="/nova-obra?id=${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
+            <a href="/atividades/${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
           </div>
         </div>
       `;
