@@ -136,19 +136,24 @@ export default function Mapa() {
     obras.forEach((obra) => {
       const phone = obra.telefone?.replace(/\D/g, "") || "";
       const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-      const isUrl = /^https?:\/\//i.test((obra.localizacao || "").trim());
+      const locRaw = (obra.localizacao || "").trim();
+      const isUrl = /^https?:\/\//i.test(locRaw);
+      // Regra: se já é link, usa direto. Se é texto, monta com ?q=
+      const mapsQuery = [locRaw, obra.cidade].filter(Boolean).join(", ");
       const mapsUrl = isUrl
-        ? obra.localizacao
-        : `https://www.google.com/maps/search/${encodeURIComponent([obra.localizacao, obra.cidade].filter(Boolean).join(", "))}`;
+        ? locRaw
+        : mapsQuery
+          ? `https://www.google.com/maps?q=${encodeURIComponent(mapsQuery)}`
+          : "";
 
       const popupContent = `
         <div style="min-width:200px">
           <h3 style="font-weight:bold;font-size:14px;margin:0 0 4px">${obra.nome || "Sem nome"}</h3>
           <p style="font-size:12px;color:#888;margin:0">${obra.construtora || "—"}</p>
-          <p style="font-size:12px;margin:4px 0">${[isUrl ? "" : obra.localizacao, obra.cidade].filter(Boolean).join(", ")}</p>
+          <p style="font-size:12px;margin:4px 0">${[isUrl ? "" : locRaw, obra.cidade].filter(Boolean).join(", ")}</p>
           ${obra.statusProspeccao ? `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <a href="${mapsUrl}" target="_blank" style="font-size:12px;color:#2563eb">📍 Maps</a>
+            ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#2563eb">📍 Maps</a>` : ""}
             ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:12px;color:#16a34a">💬 WhatsApp</a>` : ""}
             <a href="/atividades/${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
           </div>
