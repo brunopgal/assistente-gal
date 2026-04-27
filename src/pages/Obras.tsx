@@ -137,6 +137,7 @@ export default function Obras() {
                     <TableHead>Nome da obra</TableHead>
                     <TableHead className="hidden md:table-cell">Construtora</TableHead>
                     <TableHead className="hidden lg:table-cell">Cidade</TableHead>
+                    <TableHead className="hidden lg:table-cell">Produtos oferecidos</TableHead>
                     <TableHead className="hidden md:table-cell">Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
