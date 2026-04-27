@@ -206,7 +206,7 @@ export default function Mapa() {
         {!loading && obras.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
             <div className="text-center space-y-2">
-              <Map className="h-12 w-12 text-muted-foreground/50 mx-auto" />
+              <MapPin className="h-12 w-12 text-muted-foreground/50 mx-auto" />
               <p className="text-muted-foreground">Nenhuma obra com localização encontrada</p>
               <p className="text-sm text-muted-foreground/70">Preencha os campos Cidade e Localização nas obras</p>
             </div>
