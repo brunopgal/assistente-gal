@@ -37,8 +37,27 @@ export function mapFieldsToForm(
   return out;
 }
 
+export interface AtividadeCampos {
+  idObra?: string;
+  tipoContato?: string;
+  status?: string;
+  comentario?: string;
+  proximoContato?: string;
+  dataAtividade?: string;
+}
+
 export interface SecretariaAction {
-  modo: "nova" | "editar" | "executar" | "analisar" | "perguntar" | "conversa";
+  modo:
+    | "nova"
+    | "editar"
+    | "executar"
+    | "analisar"
+    | "perguntar"
+    | "conversa"
+    | "atividade-nova"
+    | "atividade-editar"
+    | "atividade-excluir"
+    | "atividade-listar";
   id?: string;
   campos?: Record<string, string>;
   criar?: boolean;
@@ -46,4 +65,7 @@ export interface SecretariaAction {
   mensagem?: string;
   salvarDica?: string;
   limparDicas?: boolean;
+  // Atividades
+  idAtividade?: string;
+  atividade?: AtividadeCampos;
 }
