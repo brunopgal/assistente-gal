@@ -9,6 +9,7 @@ import Agenda from "./pages/Agenda";
 import Mapa from "./pages/Mapa";
 import NovaObra from "./pages/NovaObra";
 import FollowUp from "./pages/FollowUp";
+import Atividades from "./pages/Atividades";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/agenda" element={<Agenda />} />
             <Route path="/mapa" element={<Mapa />} />
             <Route path="/follow-up" element={<FollowUp />} />
+            <Route path="/atividades/:id" element={<Atividades />} />
             <Route path="/nova-obra" element={<NovaObra />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
