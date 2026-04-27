@@ -313,6 +313,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache();
 
       return new Response(JSON.stringify({ success: true, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -340,6 +341,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache();
 
       return new Response(JSON.stringify({ success: true, ...merged }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -374,6 +376,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache();
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -387,8 +390,13 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const isRateLimit = /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED/i.test(message);
+    return new Response(
+      JSON.stringify({ error: message, rateLimited: isRateLimit }),
+      {
+        status: isRateLimit ? 503 : 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
