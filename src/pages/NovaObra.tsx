@@ -21,6 +21,11 @@ export default function NovaObra() {
   const [searchInput, setSearchInput] = useState(editId);
 
   useEffect(() => {
+    // Se URL trouxe id inválido (ex: OBRA000000000), limpa para evitar 404
+    if (rawId && !isValidId) {
+      setSearchParams({});
+      return;
+    }
     setSearchInput(editId);
 
     // Read optional prefill from Secretária chat
