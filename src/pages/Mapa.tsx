@@ -136,10 +136,15 @@ export default function Mapa() {
     obras.forEach((obra) => {
       const phone = obra.telefone?.replace(/\D/g, "") || "";
       const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
-      const isUrl = /^https?:\/\//i.test((obra.localizacao || "").trim());
+      const locRaw = (obra.localizacao || "").trim();
+      const isUrl = /^https?:\/\//i.test(locRaw);
+      // Regra: se já é link, usa direto. Se é texto, monta com ?q=
+      const mapsQuery = [locRaw, obra.cidade].filter(Boolean).join(", ");
       const mapsUrl = isUrl
-        ? obra.localizacao
-        : `https://www.google.com/maps/search/${encodeURIComponent([obra.localizacao, obra.cidade].filter(Boolean).join(", "))}`;
+        ? locRaw
+        : mapsQuery
+          ? `https://www.google.com/maps?q=${encodeURIComponent(mapsQuery)}`
+          : "";
 
       const popupContent = `
         <div style="min-width:200px">
