@@ -2,7 +2,7 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -106,8 +106,19 @@ function generateNextId(rows: string[][]): string {
   return `ATIV${String(maxNum + 1).padStart(6, '0')}`;
 }
 
+async function getSheetGid(sheetId: string, accessToken: string): Promise<number> {
+  const metaRes = await fetch(
+    `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const meta = await metaRes.json();
+  if (!metaRes.ok) throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  const sheet = (meta.sheets || []).find((s: any) => s.properties?.title === SHEET_NAME);
+  if (!sheet) throw new Error('Aba Atividades não encontrada');
+  return sheet.properties.sheetId;
+}
+
 async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
-  // Check if "Atividades" sheet exists; create if missing.
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -130,7 +141,6 @@ async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
     if (!addRes.ok) throw new Error(`Add sheet error: ${JSON.stringify(addData)}`);
   }
 
-  // Ensure header row
   const checkRes = await fetch(
     `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`${SHEET_NAME}!A1:${LAST_COL}1`)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -158,6 +168,16 @@ async function fetchAllRows(sheetId: string, accessToken: string): Promise<strin
   return data.values || [];
 }
 
+function findRowIndexByAtividadeId(rows: string[][], idAtividade: string): number {
+  // returns 1-based row index in the sheet (row 1 is header)
+  const target = idAtividade.trim().toUpperCase();
+  for (let i = 1; i < rows.length; i++) {
+    const id = (rows[i]?.[0] || '').trim().toUpperCase();
+    if (id === target) return i + 1; // sheet rows are 1-based
+  }
+  return -1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -169,6 +189,14 @@ Deno.serve(async (req) => {
 
     const accessToken = await getAccessToken();
     const url = new URL(req.url);
+
+    // Path: /functions/v1/atividades OR /functions/v1/atividades/<idAtividade>
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    const idxAtividades = pathParts.findIndex((p) => p === 'atividades');
+    const pathId = idxAtividades >= 0 && pathParts[idxAtividades + 1]
+      ? decodeURIComponent(pathParts[idxAtividades + 1])
+      : '';
+
     const obraIdFilter = url.searchParams.get('idObra');
 
     await ensureSheetAndHeader(sheetId, accessToken);
@@ -197,7 +225,6 @@ Deno.serve(async (req) => {
         : generateNextId(rows);
       body.idAtividade = newId;
 
-      // Default data da atividade = hoje (DD/MM/AAAA) se não informado
       if (!body.dataAtividade) {
         const d = new Date();
         body.dataAtividade = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
@@ -216,6 +243,67 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
 
       return new Response(JSON.stringify({ success: true, ...body }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (req.method === 'PUT') {
+      if (!pathId) throw new Error('ID da atividade obrigatório no path');
+      const body = await req.json();
+      const rows = await fetchAllRows(sheetId, accessToken);
+      const rowIdx = findRowIndexByAtividadeId(rows, pathId);
+      if (rowIdx < 0) throw new Error(`Atividade ${pathId} não encontrada`);
+
+      const existing = rowToAtividade(rows[rowIdx - 1]);
+      const merged: Record<string, string> = { ...existing, ...body, idAtividade: pathId };
+
+      const range = `${SHEET_NAME}!A${rowIdx}:${LAST_COL}${rowIdx}`;
+      const res = await fetch(
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [bodyToRow(merged)] }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+
+      return new Response(JSON.stringify({ success: true, ...merged }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (req.method === 'DELETE') {
+      if (!pathId) throw new Error('ID da atividade obrigatório no path');
+      const rows = await fetchAllRows(sheetId, accessToken);
+      const rowIdx = findRowIndexByAtividadeId(rows, pathId);
+      if (rowIdx < 0) throw new Error(`Atividade ${pathId} não encontrada`);
+
+      const gid = await getSheetGid(sheetId, accessToken);
+      const res = await fetch(
+        `${SHEETS_BASE}/${sheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: gid,
+                  dimension: 'ROWS',
+                  startIndex: rowIdx - 1, // 0-based inclusive
+                  endIndex: rowIdx,       // exclusive
+                },
+              },
+            }],
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+
+      return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

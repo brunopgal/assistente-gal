@@ -10,11 +10,12 @@ export interface Atividade {
   comentario: string;
 }
 
-function buildUrl(qs?: string) {
+function buildUrl(opts: { id?: string; qs?: string } = {}) {
   const base = import.meta.env.VITE_SUPABASE_URL;
-  return qs
-    ? `${base}/functions/v1/atividades?${qs}`
-    : `${base}/functions/v1/atividades`;
+  let url = `${base}/functions/v1/atividades`;
+  if (opts.id) url += `/${encodeURIComponent(opts.id)}`;
+  if (opts.qs) url += `?${opts.qs}`;
+  return url;
 }
 
 function buildHeaders() {
@@ -26,8 +27,8 @@ function buildHeaders() {
   } as Record<string, string>;
 }
 
-async function request(method: string, body?: unknown, qs?: string) {
-  const res = await fetch(buildUrl(qs), {
+async function request(method: string, body?: unknown, opts: { id?: string; qs?: string } = {}) {
+  const res = await fetch(buildUrl(opts), {
     method,
     headers: buildHeaders(),
     body: body ? JSON.stringify(body) : undefined,
@@ -40,9 +41,20 @@ async function request(method: string, body?: unknown, qs?: string) {
 }
 
 export async function listarAtividadesPorObra(idObra: string): Promise<Atividade[]> {
-  return request("GET", undefined, `idObra=${encodeURIComponent(idObra)}`);
+  return request("GET", undefined, { qs: `idObra=${encodeURIComponent(idObra)}` });
 }
 
 export async function criarAtividade(atividade: Atividade): Promise<Atividade> {
   return request("POST", atividade);
+}
+
+export async function atualizarAtividade(
+  idAtividade: string,
+  patch: Partial<Atividade>,
+): Promise<Atividade> {
+  return request("PUT", patch, { id: idAtividade });
+}
+
+export async function excluirAtividade(idAtividade: string): Promise<void> {
+  await request("DELETE", undefined, { id: idAtividade });
 }
