@@ -416,6 +416,8 @@ export default function SecretariaChat() {
         }
       }
 
+      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+
       if (action.modo === "nova" || action.modo === "editar") {
         applyAction(action);
       }
