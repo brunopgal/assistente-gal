@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
+import { listarAtividadesPorObra, type Atividade } from "@/services/atividadesService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ function dateToCompare(str: string): string {
 
 interface FollowUpObra extends Obra {
   followUpDate: string; // comparable yyyy-mm-dd
+  ultimaAtividade?: Atividade | null;
 }
 
 function statusColor(status: string) {
