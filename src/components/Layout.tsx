@@ -1,14 +1,14 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Calendar, Map, Menu, X, PlusCircle, PhoneForwarded } from "lucide-react";
+import { Building2, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
 
 const navItems = [
-  { title: "Obras", path: "/", icon: Building2 },
-  { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded },
-  { title: "Agenda", path: "/agenda", icon: Calendar },
-  { title: "Mapa", path: "/mapa", icon: Map },
-  { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle },
+  { title: "Obras", path: "/", icon: Building2, iconClassName: "" },
+  { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded, iconClassName: "" },
+  { title: "Agenda", path: "/agenda", icon: Calendar, iconClassName: "" },
+  { title: "Maps", path: "/mapa", icon: MapPin, iconClassName: "text-[#EA4335] fill-[#EA4335]" },
+  { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle, iconClassName: "" },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -42,7 +42,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   }`
                 }
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className={`h-4 w-4 ${item.iconClassName}`} />
+
                 {item.title}
               </NavLink>
             ))}
@@ -74,7 +75,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   }`
                 }
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className={`h-4 w-4 ${item.iconClassName}`} />
                 {item.title}
               </NavLink>
             ))}
