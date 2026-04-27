@@ -265,7 +265,68 @@ export default function SecretariaChat() {
     return `✅ Obra ${normalizedId} atualizada.`;
   };
 
-  const send = async () => {
+  // Executa ações sobre a aba ATIVIDADES (CRM por obra)
+  const executarAtividade = async (action: SecretariaAction): Promise<string> => {
+    if (action.modo === "atividade-nova") {
+      const at = action.atividade || {};
+      if (!at.idObra) throw new Error("ID da obra obrigatório para registrar atividade.");
+      const idObra = normalizeObraId(at.idObra) || at.idObra;
+      if (!at.tipoContato) throw new Error("Tipo de contato obrigatório (ligação/whatsapp/email/visita).");
+      const nova: Atividade = {
+        idObra,
+        dataAtividade: at.dataAtividade || todayBR(),
+        tipoContato: at.tipoContato.toLowerCase(),
+        status: at.status || "",
+        proximoContato: at.proximoContato || "",
+        comentario: at.comentario || "",
+      };
+      const salva = await criarAtividade(nova);
+      // Se houver próximo contato, atualiza follow-up da obra automaticamente
+      if (nova.proximoContato) {
+        try {
+          await atualizarFollowUp(idObra, nova.proximoContato);
+        } catch {
+          // silencioso — atividade já está salva
+        }
+        return `✅ Atividade ${salva.idAtividade} registrada na ${idObra} · follow-up ${nova.proximoContato}.`;
+      }
+      return `✅ Atividade ${salva.idAtividade} registrada na ${idObra}.`;
+    }
+
+    if (action.modo === "atividade-editar") {
+      if (!action.idAtividade) throw new Error("ID da atividade obrigatório.");
+      const at = action.atividade || {};
+      const patch: Partial<Atividade> = {};
+      if (at.tipoContato !== undefined) patch.tipoContato = at.tipoContato.toLowerCase();
+      if (at.status !== undefined) patch.status = at.status;
+      if (at.comentario !== undefined) patch.comentario = at.comentario;
+      if (at.proximoContato !== undefined) patch.proximoContato = at.proximoContato;
+      if (at.dataAtividade !== undefined) patch.dataAtividade = at.dataAtividade;
+      const upd = await atualizarAtividade(action.idAtividade, patch);
+      // Se mexeu em proximoContato, sincroniza follow-up da obra
+      if (patch.proximoContato && upd.idObra) {
+        try {
+          await atualizarFollowUp(upd.idObra, patch.proximoContato);
+        } catch {
+          // silencioso
+        }
+      }
+      return `✅ Atividade ${action.idAtividade} atualizada.`;
+    }
+
+    if (action.modo === "atividade-excluir") {
+      if (!action.idAtividade) throw new Error("ID da atividade obrigatório.");
+      await excluirAtividade(action.idAtividade);
+      return `🗑️ Atividade ${action.idAtividade} excluída.`;
+    }
+
+    return "";
+  };
+
+  const todayBR = (): string => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  };
     const text = input.trim();
     if ((!text && attachments.length === 0) || loading) return;
 
