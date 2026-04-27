@@ -400,7 +400,21 @@ export default function SecretariaChat() {
         }
       }
 
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      if (
+        action.modo === "atividade-nova" ||
+        action.modo === "atividade-editar" ||
+        action.modo === "atividade-excluir"
+      ) {
+        try {
+          const result = await executarAtividade(action);
+          reply = `${reply}\n${result}`.trim();
+          toast({ title: "Atividade", description: result });
+        } catch (e) {
+          const m = e instanceof Error ? e.message : "Falha na atividade";
+          reply = `${reply}\n⚠️ ${m}`.trim();
+          toast({ title: "Erro na atividade", description: m, variant: "destructive" });
+        }
+      }
 
       if (action.modo === "nova" || action.modo === "editar") {
         applyAction(action);
