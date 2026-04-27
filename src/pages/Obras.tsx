@@ -137,6 +137,7 @@ export default function Obras() {
                     <TableHead>Nome da obra</TableHead>
                     <TableHead className="hidden md:table-cell">Construtora</TableHead>
                     <TableHead className="hidden lg:table-cell">Cidade</TableHead>
+                    <TableHead className="hidden lg:table-cell">Produtos oferecidos</TableHead>
                     <TableHead className="hidden md:table-cell">Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -155,6 +156,23 @@ export default function Obras() {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {o.cidade || "—"}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {o.produtoOferecido ? (
+                          <div className="flex flex-wrap gap-1">
+                            {o.produtoOferecido
+                              .split(",")
+                              .map((p) => p.trim())
+                              .filter(Boolean)
+                              .map((p) => (
+                                <Badge key={p} variant="outline" className="text-xs">
+                                  {p}
+                                </Badge>
+                              ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {o.statusProspeccao ? (
