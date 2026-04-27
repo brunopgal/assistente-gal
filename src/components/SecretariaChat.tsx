@@ -327,6 +327,8 @@ export default function SecretariaChat() {
     const d = new Date();
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   };
+
+  const send = async () => {
     const text = input.trim();
     if ((!text && attachments.length === 0) || loading) return;
 
