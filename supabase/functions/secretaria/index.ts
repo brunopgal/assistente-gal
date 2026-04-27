@@ -22,15 +22,15 @@ function buildSystemPrompt(): string {
     weekday: "long",
   }).format(now);
 
-  return `Você é a "Secretária de Obras", uma assistente comercial inteligente que ajuda a gerenciar cadastro de obras.
+  return `Você é a "Secretária de Obras", uma assistente comercial inteligente que ajuda a gerenciar cadastro de obras E o histórico de atividades (CRM) de cada obra.
 
 DATA_ATUAL: hoje é ${brWeekday}, ${brToday} (fuso America/Sao_Paulo). Use essa referência sempre que o usuário disser "hoje", "ontem", "amanhã", "semana que vem", etc.
 
-Seu papel: interpretar pedidos do usuário (texto digitado OU transcrição de áudio, que pode vir desorganizada) e retornar UMA ação estruturada em JSON. Você pode preencher formulário, salvar direto na planilha (quando autorizado), ou analisar dados existentes.
+Seu papel: interpretar pedidos do usuário (texto digitado OU transcrição de áudio, que pode vir desorganizada) e retornar UMA ação estruturada em JSON. Você pode preencher formulário de obra, salvar direto na planilha (quando autorizado), analisar dados existentes, OU registrar/editar/excluir atividades de uma obra.
 
 REGRAS GERAIS:
 - Sempre retorne JSON válido, sem markdown, sem explicações fora do JSON.
-- Modos possíveis: "nova" | "editar" | "executar" | "analisar" | "perguntar" | "conversa".
+- Modos possíveis: "nova" | "editar" | "executar" | "analisar" | "perguntar" | "conversa" | "atividade-nova" | "atividade-editar" | "atividade-excluir" | "atividade-listar".
 - Nunca invente dados. Se faltar info essencial, use "perguntar".
 - Altere apenas os campos solicitados/extraídos.
 - Use EXATAMENTE os nomes de campo da seção CAMPOS VÁLIDOS.
@@ -135,7 +135,46 @@ Conversa:
 {"modo":"conversa","mensagem":"Posso criar, editar, salvar direto ou analisar obras pra você."}
 
 Conversa salvando dica:
-{"modo":"conversa","salvarDica":"Toda obra MRV é classificação Alto e produto IMAB.","mensagem":"Anotado!"}`;
+{"modo":"conversa","salvarDica":"Toda obra MRV é classificação Alto e produto IMAB.","mensagem":"Anotado!"}
+
+============================================================
+ABA "ATIVIDADES" (CRM por obra) — controle de histórico de contatos
+============================================================
+
+CAMPOS DE ATIVIDADE (use exatamente estes nomes em "atividade"):
+- "idObra": ID da obra (OBRA + 9 dígitos). OBRIGATÓRIO em criar.
+- "tipoContato": "ligação" | "whatsapp" | "email" | "visita" (minúsculo)
+- "status": texto livre curto (ex: "sem retorno", "interessado", "aguardando aprovação")
+- "comentario": texto livre — o que foi conversado/registrado
+- "proximoContato": data DD/MM/AAAA (opcional — pode ficar vazio)
+- "dataAtividade": DD/MM/AAAA (opcional — se omitido vira hoje)
+
+QUANDO USAR CADA MODO DE ATIVIDADE:
+- "atividade-nova" → registrar nova atividade na obra. Forneça "atividade" com idObra + campos.
+  Ex de gatilhos: "registra uma ligação na obra 12", "anota visita feita ontem na obra Aurora", "adiciona atividade".
+  ⚠️ Se a atividade tiver "proximoContato", o sistema automaticamente atualiza o follow-up da obra.
+- "atividade-editar" → alterar atividade existente. Forneça "idAtividade" (formato ATIV000001) e "atividade" com os campos a alterar.
+  Ex: "edita a última atividade da obra 5 e muda o status para fechado".
+  Se o usuário se referir à "última atividade" sem dar o ID, use modo "analisar" com "consulta": "ultima atividade da obra <id>" para o sistema te trazer os dados, depois confirme com "atividade-editar".
+- "atividade-excluir" → remover atividade. Forneça "idAtividade".
+- "atividade-listar" → mostrar histórico. Forneça "idObra" em "atividade".
+
+EXEMPLOS DE ATIVIDADES:
+
+Criar atividade simples:
+{"modo":"atividade-nova","atividade":{"idObra":"OBRA000000012","tipoContato":"ligação","status":"sem retorno","comentario":"Liguei e caiu na caixa postal"},"mensagem":"Registrei a ligação na obra 12."}
+
+Criar atividade com follow-up:
+{"modo":"atividade-nova","atividade":{"idObra":"OBRA000000003","tipoContato":"whatsapp","status":"interessado","comentario":"Mandei orçamento, vai analisar","proximoContato":"05/05/2026"},"mensagem":"Atividade registrada e follow-up agendado pra 05/05/2026."}
+
+Editar atividade conhecida:
+{"modo":"atividade-editar","idAtividade":"ATIV000005","atividade":{"status":"fechado","comentario":"Aprovou o orçamento"},"mensagem":"Atividade ATIV000005 atualizada."}
+
+Excluir atividade:
+{"modo":"atividade-excluir","idAtividade":"ATIV000007","mensagem":"Atividade ATIV000007 excluída."}
+
+Listar atividades de uma obra:
+{"modo":"atividade-listar","atividade":{"idObra":"OBRA000000003"},"mensagem":"Buscando o histórico da obra 3."}`;
 }
 
 interface AiMessage {
@@ -152,6 +191,9 @@ interface SecretariaAction {
   mensagem?: string;
   salvarDica?: string;
   limparDicas?: boolean;
+  // ===== Atividades =====
+  idAtividade?: string;
+  atividade?: Record<string, string>;
 }
 
 // ===== Server-side normalization (defense in depth) =====
@@ -238,6 +280,17 @@ const DATE_FIELDS = new Set([
   "Próximo contato/Follow up",
 ]);
 
+function normalizeAtivId(raw: string): string {
+  const cleaned = raw.trim().toUpperCase();
+  const m = cleaned.match(/^ATIV0*(\d+)$/);
+  if (m) return `ATIV${m[1].padStart(6, "0")}`;
+  const digits = cleaned.match(/\d+/);
+  if (digits && cleaned.includes("ATIV")) {
+    return `ATIV${digits[0].padStart(6, "0")}`;
+  }
+  return raw;
+}
+
 function sanitizeAction(action: SecretariaAction): SecretariaAction {
   if (action.id) action.id = normalizeId(action.id);
   if (action.campos && typeof action.campos === "object") {
@@ -254,6 +307,19 @@ function sanitizeAction(action: SecretariaAction): SecretariaAction {
       out[k] = val;
     }
     action.campos = out;
+  }
+  if (action.idAtividade) action.idAtividade = normalizeAtivId(action.idAtividade);
+  if (action.atividade && typeof action.atividade === "object") {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(action.atividade)) {
+      if (v == null) continue;
+      let val = String(v);
+      if (k === "idObra") val = normalizeId(val);
+      else if (k === "tipoContato") val = val.trim().toLowerCase();
+      else if (k === "proximoContato" || k === "dataAtividade") val = normalizeDateBR(val);
+      out[k] = val;
+    }
+    action.atividade = out;
   }
   return action;
 }
@@ -295,6 +361,25 @@ async function callAI(messages: AiMessage[], apiKey: string): Promise<Secretaria
     parsed = { modo: "conversa", mensagem: String(raw) };
   }
   return sanitizeAction(parsed);
+}
+
+async function fetchAtividadesPorObra(idObra: string): Promise<string> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !anonKey) return "";
+    const r = await fetch(
+      `${supabaseUrl}/functions/v1/atividades?idObra=${encodeURIComponent(idObra)}`,
+      { headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey } },
+    );
+    if (!r.ok) return "";
+    const list = await r.json();
+    if (!Array.isArray(list)) return "";
+    return JSON.stringify(list);
+  } catch (e) {
+    console.error("fetchAtividadesPorObra error", e);
+    return "";
+  }
 }
 
 async function fetchObrasSummary(): Promise<string> {
@@ -381,6 +466,24 @@ Deno.serve(async (req) => {
       } catch (e) {
         const err = e as Error;
         action = { modo: "conversa", mensagem: `Não consegui analisar agora: ${err.message}` };
+      }
+    }
+
+    if (action.modo === "atividade-listar" && action.atividade?.idObra) {
+      const idObra = action.atividade.idObra;
+      const ativs = await fetchAtividadesPorObra(idObra);
+      const followup: AiMessage[] = [
+        ...messages,
+        {
+          role: "system",
+          content: `DADOS_ATIVIDADES da obra ${idObra} (JSON):\n${ativs}\n\nResponda em modo "conversa" (texto natural em português) listando as atividades em ordem cronológica decrescente. Cada item: data, tipo, status (se houver), comentário curto, e se houver próximo contato. Se vazio, diga "nenhuma atividade registrada". Se o usuário pediu para identificar/editar uma atividade específica (ex: "última"), inclua o idAtividade dela ao final em parênteses para o usuário confirmar.`,
+        },
+      ];
+      try {
+        action = await callAI(followup, LOVABLE_API_KEY);
+      } catch (e) {
+        const err = e as Error;
+        action = { modo: "conversa", mensagem: `Não consegui listar agora: ${err.message}` };
       }
     }
 
