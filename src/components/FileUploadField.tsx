@@ -3,6 +3,7 @@ import { Upload, FileText, ExternalLink, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { openFileSafe } from "@/lib/openFile";
 
 interface FileUploadFieldProps {
   label: string;
