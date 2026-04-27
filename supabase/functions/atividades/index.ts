@@ -237,6 +237,16 @@ Deno.serve(async (req) => {
 
     await ensureSheetAndHeader(sheetId, accessToken);
 
+    // Padroniza visual: fundo branco, texto preto em toda a aba (idempotente, barato)
+    if (req.method !== 'GET' && req.method !== 'OPTIONS') {
+      try {
+        const gid = await getSheetGid(sheetId, accessToken);
+        await applyStandardFormatting(sheetId, accessToken, gid);
+      } catch (e) {
+        console.warn('Skip standard formatting:', e);
+      }
+    }
+
     if (req.method === 'GET') {
       const rows = await fetchAllRows(sheetId, accessToken);
       let atividades = rows.slice(1).map(rowToAtividade).filter(a => a.idAtividade);
