@@ -209,18 +209,6 @@ Deno.serve(async (req) => {
     const isIdAction = action !== 'obras' && action !== '' && action !== undefined;
 
     if (req.method === 'GET') {
-      // Debug route: returns raw rows from Sheets without filtering or caching
-      if (isIdAction && action === '__debug') {
-        const res = await fetch(
-          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:X40')}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const data = await res.json();
-        return new Response(JSON.stringify(data, null, 2), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
       const rows = await fetchAllRows(sheetId, accessToken);
 
       if (isIdAction) {
