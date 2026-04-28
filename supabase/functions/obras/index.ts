@@ -221,6 +221,20 @@ Deno.serve(async (req) => {
         });
       }
 
+      // One-shot cleanup: clears Obras!A25:X27 (rows wrongly written by old append bug)
+      if (isIdAction && action === '__cleanup') {
+        const cRes = await fetch(
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A25:X27')}:clear`,
+          { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        const cData = await cRes.json();
+        invalidateRowsCache();
+        return new Response(JSON.stringify(cData, null, 2), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: cRes.ok ? 200 : 500,
+        });
+      }
+
       const rows = await fetchAllRows(sheetId, accessToken);
 
       if (isIdAction) {
