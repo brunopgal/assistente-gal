@@ -209,6 +209,18 @@ Deno.serve(async (req) => {
     const isIdAction = action !== 'obras' && action !== '' && action !== undefined;
 
     if (req.method === 'GET') {
+      // Debug route: returns raw rows from Sheets without filtering or caching
+      if (isIdAction && action === '__debug') {
+        const res = await fetch(
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A1:X40')}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        const data = await res.json();
+        return new Response(JSON.stringify(data, null, 2), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const rows = await fetchAllRows(sheetId, accessToken);
 
       if (isIdAction) {
@@ -234,7 +246,7 @@ Deno.serve(async (req) => {
       await ensureHeader(sheetId, accessToken);
 
       // Generate next ID if not provided
-      const rows = await fetchAllRows(sheetId, accessToken);
+      const rows = await fetchAllRows(sheetId, accessToken, false);
       const newId = body.codigoObra && String(body.codigoObra).trim()
         ? String(body.codigoObra).trim()
         : generateNextId(rows);
@@ -242,10 +254,15 @@ Deno.serve(async (req) => {
 
       const values = [bodyToRow(body)];
 
+      // Write to the explicit next row instead of relying on :append
+      // (append's table-detection can silently skip rows when sheet has gaps).
+      const targetRow = rows.length + 1; // rows is 0-indexed array of sheet rows
+      const writeRange = `Obras!A${targetRow}:${LAST_COL}${targetRow}`;
+
       const res = await fetch(
-        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(RANGE)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
         {
-          method: 'POST',
+          method: 'PUT',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ values }),
         }
