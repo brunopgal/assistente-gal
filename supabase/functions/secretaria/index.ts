@@ -111,6 +111,26 @@ EXTRAÇÃO INTELIGENTE:
 - NUNCA infira "Status da prospecção" automaticamente a partir de outro campo (ex: ter link de orçamento NÃO implica "Fazendo Orçamento"). Só preencha Status se o usuário disser explicitamente.
 - Mensagens caóticas / transcrição de áudio com correção ("amanhã não, ontem", "coloca X, na verdade Y"): sempre use o ÚLTIMO valor mencionado pelo usuário (a correção).
 
+COLAGENS DE PLANILHA EXTERNA (lead sheets tipo Construnívell, SindusCon, ITC, etc):
+- Quando o usuário colar um bloco com várias colunas separadas por TAB ou múltiplos espaços (com códigos tipo "RE042432", CEPs "00000-000", CNPJs "00.000.000/0000-00", cargos em CAIXA ALTA tipo "CONTATO", "COMPRADOR(A) GERAL", "ENGENHEIRO(A) RESPONSÁVEL", "ORÇAMENTISTA"), trate como FICHA DE LEAD e EXTRAIA com inteligência:
+  - Primeira data DD/MM/AAAA encontrada → "Data de cadastro".
+  - Texto em CAIXA ALTA descritivo de empreendimento (ex: "EDIFÍCIO RESIDENCIAL / LOUVEIRA", "RESIDENCIAL AURORA") → "Nome da obra".
+  - Palavras "Baixo"/"Médio"/"Médio/Alto"/"Alto" isoladas → "Classificação da obra" (use VALORES PADRONIZADOS).
+  - Nome de cidade brasileira + UF de 2 letras adjacentes → "Cidade Obra" (só a cidade, sem UF). Gere o link Maps em "Localização/Bairro Obra".
+  - CEP (formato 00000-000) é informação de bairro/endereço — pode entrar no link Maps ou ignorar se já houver cidade.
+  - "PROJETO"/"OBRA"/"FUNDAÇÃO"/"ESTRUTURA"/"ACABAMENTO"/"Fase 1"/"Fase 2" → "Estágio da obra" (junte: ex "PROJETO - Fase 1").
+  - CNPJ + nome em CAIXA ALTA logo antes/depois (ex "FREIRE & OLIVEIRA  31.014.922/0001-81") → "Construtora/Cliente" (use o nome, não o CNPJ).
+  - Nome próprio + cargo CONTATO/COMPRADOR(A)/ORÇAMENTISTA/ENGENHEIRO(A) → candidato a "Responsável/Contato". PRIORIZE nessa ordem: COMPRADOR(A) > CONTATO > ORÇAMENTISTA > ENGENHEIRO(A). Use o NOME da pessoa (não o cargo).
+  - Email (texto com "@") próximo ao responsável escolhido → "Email".
+  - Telefone (formato "(00)00000-0000" ou similar) próximo ao responsável escolhido → "Telefone/Whastapp" (limpe espaços e barras supérfluas, mantenha apenas o número).
+  - Texto longo descritivo (frases completas, normalmente após os contatos) → "Observação". Concatene tudo que não couber em outro campo aqui (incluindo "código externo: RE042432", produtos/serviços citados como "Gesso e pintura").
+  - "Concorrentes": só preencha se o usuário citar EXPLICITAMENTE marcas concorrentes.
+  - ❌ NUNCA coloque CNPJ, cargo, email ou telefone no campo "Nome da obra".
+  - ❌ NUNCA coloque "PROJETO" ou "Fase 1" como Status da prospecção (Status fica vazio nesses casos).
+  - ❌ NUNCA coloque CAIXA ALTA crua tipo "CONTATO"/"COMPRADOR(A) GERAL" no campo "Responsável/Contato" — esses são CARGOS, não nomes.
+  - Se faltar a marca do produto (IMAB/RHODEN/PRADO), deixe "Produto Oferecido" VAZIO — não invente.
+- Padrão pra colagens: modo "nova" abrindo o formulário pra revisão (NUNCA "executar" automaticamente em cima de colagem caótica).
+
 FORMATOS DE RESPOSTA (escolha UM):
 
 Editar:
