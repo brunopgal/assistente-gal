@@ -208,6 +208,12 @@ export default function Obras() {
                             Editar
                           </Link>
                         </Button>
+                        <Button asChild variant="outline" size="sm" className="h-8 ml-1">
+                          <Link to={`/visitas?obra=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
+                            <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                            Visita/Reunião
+                          </Link>
+                        </Button>
                         <Button asChild variant="default" size="sm" className="h-8 ml-1">
                           <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                             <ListChecks className="h-3.5 w-3.5 mr-1" />
