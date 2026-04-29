@@ -105,9 +105,12 @@ export default function Visitas() {
   };
 
   const today = todayISO();
-  const atrasados = visitas.filter((v) => v.data < today);
-  const hoje = visitas.filter((v) => v.data === today);
-  const proximos = visitas.filter((v) => v.data > today);
+  const visitasFiltradas = filtroObra
+    ? visitas.filter((v) => v.idObra === filtroObra)
+    : visitas;
+  const atrasados = visitasFiltradas.filter((v) => v.data < today);
+  const hoje = visitasFiltradas.filter((v) => v.data === today);
+  const proximos = visitasFiltradas.filter((v) => v.data > today);
 
   const Section = ({ title, items, icon: Icon, color }: { title: string; items: Visita[]; icon: typeof AlertTriangle; color: string }) => {
     if (items.length === 0) return null;
