@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, Link } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { listarVisitas, criarVisita, excluirVisita, type Visita, type TipoEvento } from "@/services/visitasService";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarClock, Plus, Trash2, ExternalLink, Loader2, Check, ChevronsUpDown, Building2, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
+import { CalendarClock, Plus, Trash2, ExternalLink, Loader2, Check, ChevronsUpDown, Building2, Clock, AlertTriangle, CalendarCheck, X, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
