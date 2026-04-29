@@ -21,6 +21,7 @@ import {
   ListChecks,
   Pencil,
   FileText,
+  CalendarClock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
