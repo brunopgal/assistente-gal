@@ -28,6 +28,9 @@ function todayISO() {
 }
 
 export default function Visitas() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtroObra = searchParams.get("obra") || "";
+
   const [obras, setObras] = useState<Obra[]>([]);
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [loadingObras, setLoadingObras] = useState(true);
@@ -49,6 +52,16 @@ export default function Visitas() {
       .catch(() => toast({ title: "Erro ao carregar obras", variant: "destructive" }))
       .finally(() => setLoadingObras(false));
   }, []);
+
+  // Pré-seleciona a obra no formulário quando vem da página Obras
+  useEffect(() => {
+    if (filtroObra && !obraId) setObraId(filtroObra);
+  }, [filtroObra]);
+
+  const obraFiltrada = useMemo(
+    () => obras.find((o) => o.id === filtroObra || o.codigoObra === filtroObra),
+    [obras, filtroObra],
+  );
 
   const obraSelecionada = useMemo(() => obras.find((o) => o.id === obraId), [obras, obraId]);
 
