@@ -313,11 +313,39 @@ export default function Visitas() {
         </Dialog>
       </div>
 
-      {visitas.length === 0 ? (
+      {filtroObra && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+            <Filter className="h-4 w-4 text-primary shrink-0" />
+            <div className="text-sm min-w-0 flex-1">
+              <span className="text-muted-foreground">Filtrando por obra:</span>{" "}
+              <span className="font-medium text-foreground">
+                {obraFiltrada?.nome || filtroObra}
+              </span>
+              {obraFiltrada?.construtora && (
+                <span className="text-muted-foreground"> — {obraFiltrada.construtora}</span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={() => setSearchParams({})}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Limpar filtro
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {visitasFiltradas.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <CalendarCheck className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">Nenhuma visita ou reunião agendada</p>
+            <p className="text-muted-foreground">
+              {filtroObra ? "Nenhuma visita ou reunião para esta obra" : "Nenhuma visita ou reunião agendada"}
+            </p>
             <p className="text-sm text-muted-foreground/70 mt-1">Clique em "Nova Visita/Reunião" para começar</p>
           </CardContent>
         </Card>
