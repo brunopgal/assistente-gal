@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, Link } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { listarVisitas, criarVisita, excluirVisita, type Visita, type TipoEvento } from "@/services/visitasService";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarClock, Plus, Trash2, ExternalLink, Loader2, Check, ChevronsUpDown, Building2, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
+import { CalendarClock, Plus, Trash2, ExternalLink, Loader2, Check, ChevronsUpDown, Building2, Clock, AlertTriangle, CalendarCheck, X, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,9 @@ function todayISO() {
 }
 
 export default function Visitas() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtroObra = searchParams.get("obra") || "";
+
   const [obras, setObras] = useState<Obra[]>([]);
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [loadingObras, setLoadingObras] = useState(true);
@@ -48,6 +52,16 @@ export default function Visitas() {
       .catch(() => toast({ title: "Erro ao carregar obras", variant: "destructive" }))
       .finally(() => setLoadingObras(false));
   }, []);
+
+  // Pré-seleciona a obra no formulário quando vem da página Obras
+  useEffect(() => {
+    if (filtroObra && !obraId) setObraId(filtroObra);
+  }, [filtroObra]);
+
+  const obraFiltrada = useMemo(
+    () => obras.find((o) => o.id === filtroObra || o.codigoObra === filtroObra),
+    [obras, filtroObra],
+  );
 
   const obraSelecionada = useMemo(() => obras.find((o) => o.id === obraId), [obras, obraId]);
 
@@ -91,9 +105,12 @@ export default function Visitas() {
   };
 
   const today = todayISO();
-  const atrasados = visitas.filter((v) => v.data < today);
-  const hoje = visitas.filter((v) => v.data === today);
-  const proximos = visitas.filter((v) => v.data > today);
+  const visitasFiltradas = filtroObra
+    ? visitas.filter((v) => v.idObra === filtroObra)
+    : visitas;
+  const atrasados = visitasFiltradas.filter((v) => v.data < today);
+  const hoje = visitasFiltradas.filter((v) => v.data === today);
+  const proximos = visitasFiltradas.filter((v) => v.data > today);
 
   const Section = ({ title, items, icon: Icon, color }: { title: string; items: Visita[]; icon: typeof AlertTriangle; color: string }) => {
     if (items.length === 0) return null;
@@ -296,11 +313,39 @@ export default function Visitas() {
         </Dialog>
       </div>
 
-      {visitas.length === 0 ? (
+      {filtroObra && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+            <Filter className="h-4 w-4 text-primary shrink-0" />
+            <div className="text-sm min-w-0 flex-1">
+              <span className="text-muted-foreground">Filtrando por obra:</span>{" "}
+              <span className="font-medium text-foreground">
+                {obraFiltrada?.nome || filtroObra}
+              </span>
+              {obraFiltrada?.construtora && (
+                <span className="text-muted-foreground"> — {obraFiltrada.construtora}</span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={() => setSearchParams({})}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Limpar filtro
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {visitasFiltradas.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <CalendarCheck className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">Nenhuma visita ou reunião agendada</p>
+            <p className="text-muted-foreground">
+              {filtroObra ? "Nenhuma visita ou reunião para esta obra" : "Nenhuma visita ou reunião agendada"}
+            </p>
             <p className="text-sm text-muted-foreground/70 mt-1">Clique em "Nova Visita/Reunião" para começar</p>
           </CardContent>
         </Card>
