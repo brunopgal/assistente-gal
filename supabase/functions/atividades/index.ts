@@ -196,9 +196,17 @@ async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
 
 // Cache em memória (Sheets API: 60 leituras/min)
 let rowsCache: { key: string; rows: string[][]; ts: number } | null = null;
-const CACHE_TTL_MS = 10_000;
+let ensureCache: { key: string; ts: number } | null = null;
+let gidCache: { key: string; gid: number; ts: number } | null = null;
+const CACHE_TTL_MS = 60_000;
+const METADATA_CACHE_TTL_MS = 10 * 60_000;
 
 function invalidateRowsCache() { rowsCache = null; }
+
+function shouldEnsureSheet(sheetId: string): boolean {
+  const now = Date.now();
+  return !ensureCache || ensureCache.key !== sheetId || (now - ensureCache.ts) > METADATA_CACHE_TTL_MS;
+}
 
 async function fetchAllRows(sheetId: string, accessToken: string, useCache = true): Promise<string[][]> {
   const now = Date.now();
