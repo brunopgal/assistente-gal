@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
-import { listarAtividadesPorObra, type Atividade } from "@/services/atividadesService";
+import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -194,23 +194,18 @@ export default function FollowUp() {
       setObras(withFollowUp);
       setLoading(false);
 
-      // Carrega última atividade de cada obra em paralelo (não bloqueia render)
-      const results = await Promise.all(
-        withFollowUp.map(async (o) => {
-          try {
-            const ativs = await listarAtividadesPorObra(o.id!);
-            if (!ativs.length) return { id: o.id!, ultima: null };
-            const sorted = [...ativs].sort((a, b) => {
-              const da = dateToCompare(a.dataAtividade);
-              const db = dateToCompare(b.dataAtividade);
-              return db.localeCompare(da);
-            });
-            return { id: o.id!, ultima: sorted[0] };
-          } catch {
-            return { id: o.id!, ultima: null };
-          }
-        }),
-      );
+      // Carrega todas as atividades em uma única leitura e agrupa por obra.
+      const todasAtividades = await listarTodasAtividades().catch(() => []);
+      const ultimaPorObra = new Map<string, Atividade>();
+      for (const atividade of todasAtividades) {
+        const idObra = (atividade.idObra || "").trim();
+        if (!idObra) continue;
+        const atual = ultimaPorObra.get(idObra);
+        if (!atual || dateToCompare(atividade.dataAtividade) > dateToCompare(atual.dataAtividade)) {
+          ultimaPorObra.set(idObra, atividade);
+        }
+      }
+      const results = withFollowUp.map((o) => ({ id: o.id!, ultima: ultimaPorObra.get(o.id!) || null }));
       setObras((prev) =>
         prev.map((o) => {
           const r = results.find((x) => x.id === o.id);

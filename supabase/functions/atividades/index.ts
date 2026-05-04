@@ -143,6 +143,11 @@ async function applyStandardFormatting(sheetId: string, accessToken: string, gid
 }
 
 async function getSheetGid(sheetId: string, accessToken: string): Promise<number> {
+  const now = Date.now();
+  if (gidCache && gidCache.key === sheetId && (now - gidCache.ts) < METADATA_CACHE_TTL_MS) {
+    return gidCache.gid;
+  }
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -151,6 +156,7 @@ async function getSheetGid(sheetId: string, accessToken: string): Promise<number
   if (!metaRes.ok) throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
   const sheet = (meta.sheets || []).find((s: any) => s.properties?.title === SHEET_NAME);
   if (!sheet) throw new Error('Aba Atividades não encontrada');
+  gidCache = { key: sheetId, gid: sheet.properties.sheetId, ts: Date.now() };
   return sheet.properties.sheetId;
 }
 
@@ -192,13 +198,22 @@ async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
       }
     );
   }
+  ensureCache = { key: sheetId, ts: Date.now() };
 }
 
 // Cache em memória (Sheets API: 60 leituras/min)
 let rowsCache: { key: string; rows: string[][]; ts: number } | null = null;
-const CACHE_TTL_MS = 10_000;
+let ensureCache: { key: string; ts: number } | null = null;
+let gidCache: { key: string; gid: number; ts: number } | null = null;
+const CACHE_TTL_MS = 60_000;
+const METADATA_CACHE_TTL_MS = 10 * 60_000;
 
 function invalidateRowsCache() { rowsCache = null; }
+
+function shouldEnsureSheet(sheetId: string): boolean {
+  const now = Date.now();
+  return !ensureCache || ensureCache.key !== sheetId || (now - ensureCache.ts) > METADATA_CACHE_TTL_MS;
+}
 
 async function fetchAllRows(sheetId: string, accessToken: string, useCache = true): Promise<string[][]> {
   const now = Date.now();
@@ -261,7 +276,9 @@ Deno.serve(async (req) => {
 
     const obraIdFilter = url.searchParams.get('idObra');
 
-    await ensureSheetAndHeader(sheetId, accessToken);
+    if (req.method !== 'GET' || shouldEnsureSheet(sheetId)) {
+      await ensureSheetAndHeader(sheetId, accessToken);
+    }
 
     // Padroniza visual: fundo branco, texto preto em toda a aba (idempotente, barato)
     if (req.method !== 'GET' && req.method !== 'OPTIONS') {
