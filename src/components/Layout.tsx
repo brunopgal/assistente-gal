@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock } from "lucide-react";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
 
 const navItems = [
   { title: "Obras", path: "/", icon: Building2, iconClassName: "" },
+  { title: "Construtoras", path: "/construtoras", icon: Building, iconClassName: "" },
   { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded, iconClassName: "" },
   { title: "Visita/Reunião", path: "/visitas", icon: CalendarClock, iconClassName: "" },
   { title: "Agenda", path: "/agenda", icon: Calendar, iconClassName: "" },
