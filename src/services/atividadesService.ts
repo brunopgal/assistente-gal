@@ -44,6 +44,10 @@ export async function listarAtividadesPorObra(idObra: string): Promise<Atividade
   return request("GET", undefined, { qs: `idObra=${encodeURIComponent(idObra)}` });
 }
 
+export async function listarTodasAtividades(): Promise<Atividade[]> {
+  return request("GET");
+}
+
 export async function criarAtividade(atividade: Atividade): Promise<Atividade> {
   return request("POST", atividade);
 }
