@@ -143,6 +143,11 @@ async function applyStandardFormatting(sheetId: string, accessToken: string, gid
 }
 
 async function getSheetGid(sheetId: string, accessToken: string): Promise<number> {
+  const now = Date.now();
+  if (gidCache && gidCache.key === sheetId && (now - gidCache.ts) < METADATA_CACHE_TTL_MS) {
+    return gidCache.gid;
+  }
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -151,6 +156,7 @@ async function getSheetGid(sheetId: string, accessToken: string): Promise<number
   if (!metaRes.ok) throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
   const sheet = (meta.sheets || []).find((s: any) => s.properties?.title === SHEET_NAME);
   if (!sheet) throw new Error('Aba Atividades não encontrada');
+  gidCache = { key: sheetId, gid: sheet.properties.sheetId, ts: Date.now() };
   return sheet.properties.sheetId;
 }
 
@@ -192,6 +198,7 @@ async function ensureSheetAndHeader(sheetId: string, accessToken: string) {
       }
     );
   }
+  ensureCache = { key: sheetId, ts: Date.now() };
 }
 
 // Cache em memória (Sheets API: 60 leituras/min)
