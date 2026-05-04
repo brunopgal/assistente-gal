@@ -276,7 +276,9 @@ Deno.serve(async (req) => {
 
     const obraIdFilter = url.searchParams.get('idObra');
 
-    await ensureSheetAndHeader(sheetId, accessToken);
+    if (req.method !== 'GET' || shouldEnsureSheet(sheetId)) {
+      await ensureSheetAndHeader(sheetId, accessToken);
+    }
 
     // Padroniza visual: fundo branco, texto preto em toda a aba (idempotente, barato)
     if (req.method !== 'GET' && req.method !== 'OPTIONS') {
