@@ -177,7 +177,11 @@ export default function Obras() {
                               .map((p) => p.trim())
                               .filter(Boolean)
                               .map((p) => (
-                                <Badge key={p} variant="outline" className="text-xs">
+                                <Badge
+                                  key={p}
+                                  variant="outline"
+                                  className={`text-xs ${produtoColor(p)}`}
+                                >
                                   {p}
                                 </Badge>
                               ))}
