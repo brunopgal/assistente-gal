@@ -63,6 +63,7 @@ export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
