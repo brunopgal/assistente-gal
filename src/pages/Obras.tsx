@@ -51,6 +51,14 @@ function temBotaoOrcamento(status: string): boolean {
   return s.includes("orçamento enviado") || s.includes("orcamento enviado") || s.includes("fechado");
 }
 
+function produtoColor(p: string): string {
+  const s = p.toLowerCase();
+  if (s.includes("prado")) return "text-orange-500 font-semibold";
+  if (s.includes("imab")) return "text-foreground font-semibold";
+  if (s.includes("rhoden") || s.includes("holding")) return "text-blue-500 font-semibold";
+  return "";
+}
+
 export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
