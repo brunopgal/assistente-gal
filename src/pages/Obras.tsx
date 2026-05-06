@@ -254,6 +254,13 @@ export default function Obras() {
           )}
         </CardContent>
       </Card>
+
+      <PautaReuniaoDialog
+        open={!!pautaObra}
+        onOpenChange={(o) => !o && setPautaObra(null)}
+        obraId={pautaObra?.id || pautaObra?.codigoObra || ""}
+        obraNome={pautaObra?.nome}
+      />
     </div>
   );
 }
