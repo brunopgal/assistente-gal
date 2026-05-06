@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
+import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import {
   Pencil,
   FileText,
   CalendarClock,
+  ClipboardList,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
@@ -49,10 +51,19 @@ function temBotaoOrcamento(status: string): boolean {
   return s.includes("orçamento enviado") || s.includes("orcamento enviado") || s.includes("fechado");
 }
 
+function produtoColor(p: string): string {
+  const s = p.toLowerCase();
+  if (s.includes("prado")) return "text-orange-500 font-semibold";
+  if (s.includes("imab")) return "text-foreground font-semibold";
+  if (s.includes("rhoden") || s.includes("holding")) return "text-blue-500 font-semibold";
+  return "";
+}
+
 export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -166,7 +177,11 @@ export default function Obras() {
                               .map((p) => p.trim())
                               .filter(Boolean)
                               .map((p) => (
-                                <Badge key={p} variant="outline" className="text-xs">
+                                <Badge
+                                  key={p}
+                                  variant="outline"
+                                  className={`text-xs ${produtoColor(p)}`}
+                                >
                                   {p}
                                 </Badge>
                               ))}
@@ -214,6 +229,16 @@ export default function Obras() {
                             Visita/Reunião
                           </Link>
                         </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 ml-1"
+                          onClick={() => setPautaObra(o)}
+                        >
+                          <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                          Pauta Reunião
+                        </Button>
                         <Button asChild variant="default" size="sm" className="h-8 ml-1">
                           <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                             <ListChecks className="h-3.5 w-3.5 mr-1" />
@@ -229,6 +254,13 @@ export default function Obras() {
           )}
         </CardContent>
       </Card>
+
+      <PautaReuniaoDialog
+        open={!!pautaObra}
+        onOpenChange={(o) => !o && setPautaObra(null)}
+        obraId={pautaObra?.id || pautaObra?.codigoObra || ""}
+        obraNome={pautaObra?.nome}
+      />
     </div>
   );
 }
