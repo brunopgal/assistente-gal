@@ -229,6 +229,16 @@ export default function Obras() {
                             Visita/Reunião
                           </Link>
                         </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 ml-1"
+                          onClick={() => setPautaObra(o)}
+                        >
+                          <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                          Pauta Reunião
+                        </Button>
                         <Button asChild variant="default" size="sm" className="h-8 ml-1">
                           <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                             <ListChecks className="h-3.5 w-3.5 mr-1" />
