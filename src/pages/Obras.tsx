@@ -23,6 +23,7 @@ import {
   Pencil,
   FileText,
   CalendarClock,
+  ClipboardList,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
