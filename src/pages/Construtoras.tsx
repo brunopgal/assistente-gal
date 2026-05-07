@@ -562,6 +562,21 @@ export default function Construtoras() {
                   rows={2}
                 />
               </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <Checkbox
+                  checked={atvForm.criarFollowUp === "sim"}
+                  onCheckedChange={(checked) =>
+                    setAtvForm({ ...atvForm, criarFollowUp: checked ? "sim" : "" })
+                  }
+                  disabled={!atvForm.proximoContato}
+                />
+                <span>
+                  Criar follow-up{" "}
+                  <span className="text-xs text-muted-foreground">
+                    (mostrar no painel Follow-up — requer Próximo contato)
+                  </span>
+                </span>
+              </label>
               <div className="flex justify-end">
                 <Button onClick={salvarAtividade} disabled={savingAtv}>
                   {savingAtv ? <Loader2 className="h-4 w-4 animate-spin" /> : (
