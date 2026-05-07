@@ -475,6 +475,76 @@ export default function Construtoras() {
         </CardContent>
       </Card>
 
+      {/* Dialog de Edição de Construtora */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Construtora {editForm?.codigo ? `(${editForm.codigo})` : ""}</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <div className="space-y-3">
+              <div>
+                <Label>Nome *</Label>
+                <Input
+                  value={editForm.nome}
+                  onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>CNPJ</Label>
+                <Input
+                  value={editForm.cnpj}
+                  onChange={(e) => setEditForm({ ...editForm, cnpj: e.target.value })}
+                  placeholder="00.000.000/0000-00"
+                />
+              </div>
+              <div>
+                <Label>Produto(s) oferecido(s)</Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {PRODUTOS.map((p) => (
+                    <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={editProdutosSel.includes(p)}
+                        onCheckedChange={() => toggleEditProduto(p)}
+                      />
+                      {p}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(v) => setEditForm({ ...editForm, status: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPCOES.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Textarea
+                  value={editForm.observacoes || ""}
+                  onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenEdit(false)}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={savingEdit}>
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de Atividades / Visitas / Reuniões */}
       <Dialog open={openAtv} onOpenChange={setOpenAtv}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
