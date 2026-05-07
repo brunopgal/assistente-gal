@@ -222,11 +222,48 @@ export default function FollowUp() {
           return r ? { ...o, ultimaAtividade: r.ultima } : o;
         }),
       );
+
+      // Construtoras: atividades marcadas com criarFollowUp = "sim" e proximoContato preenchido
+      try {
+        const [cts, atvsCt] = await Promise.all([
+          listarConstrutoras(),
+          listarTodasAtividadesConstrutoras(),
+        ]);
+        const ctMap = new Map(cts.map((c) => [(c.codigo || "").toUpperCase(), c]));
+        const items = atvsCt
+          .filter((a) =>
+            (a.criarFollowUp || "").toLowerCase() === "sim" &&
+            a.proximoContato && parseDate(a.proximoContato),
+          )
+          .map((a) => {
+            const c = ctMap.get((a.codigoConstrutora || "").toUpperCase());
+            return c ? { atv: a, construtora: c, followUpDate: dateToCompare(a.proximoContato || "") } : null;
+          })
+          .filter((x): x is { atv: AtividadeConstrutora; construtora: Construtora; followUpDate: string } => !!x)
+          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+        setCtFollowUps(items);
+      } catch (e) {
+        console.warn("Erro ao carregar follow-ups de construtoras:", e);
+      }
     } catch {
       toast({ title: "Erro ao carregar follow-ups", variant: "destructive" });
       setLoading(false);
     }
   };
+
+  const handleDoneCt = async (atvId: string) => {
+    setDoneCtId(atvId);
+    try {
+      await atualizarAtividadeConstrutora(atvId, { criarFollowUp: "" });
+      setCtFollowUps((prev) => prev.filter((x) => x.atv.idAtividade !== atvId));
+      toast({ title: "Follow-up concluído" });
+    } catch {
+      toast({ title: "Erro ao concluir", variant: "destructive" });
+    } finally {
+      setDoneCtId(null);
+    }
+  };
+
 
   useEffect(() => {
     fetchData();
