@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
 import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import {
+  listarConstrutoras,
+  listarTodasAtividadesConstrutoras,
+  atualizarAtividadeConstrutora,
+  type Construtora,
+  type AtividadeConstrutora,
+} from "@/services/construtorasService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil } from "lucide-react";
+import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil, Building } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function parseDate(str: string): Date | null {
