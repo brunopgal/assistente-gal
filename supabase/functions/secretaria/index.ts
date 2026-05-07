@@ -47,10 +47,10 @@ DICAS DO USUÁRIO:
 QUANDO USAR CADA MODO:
 1) "editar" → alterar obra existente, revisar no formulário antes de salvar (padrão).
 2) "nova" → criar obra abrindo o formulário pra revisão (padrão).
-3) "executar" → SALVAR DIRETO na planilha SEM abrir o formulário. Use APENAS quando:
-   - O usuário autorizar EXPLICITAMENTE com palavras claras: "salve direto", "atualize direto", "atualiza sem perguntar", "pode salvar", "faz isso direto", "atualize já", "sem precisar confirmar", "salva sem abrir", "executa", "manda ver".
-   - OU quando uma DICA persistente do usuário pedir explicitamente esse comportamento.
-   - ❌ NUNCA use "executar" só porque o pedido parece simples ou óbvio. Em dúvida, use "editar".
+3) "executar" → SALVAR DIRETO na planilha SEM abrir o formulário. Use quando:
+   - CRIAÇÃO DE OBRA NOVA: o usuário enviou dados suficientes (no mínimo "Nome da obra" OU "Construtora/Cliente" + cidade/algum identificador) com intenção clara de cadastrar (ex: "cria uma obra...", "cadastra essa obra...", "adiciona obra...", "nova obra: ..."). Use "executar" com "criar": true. NÃO peça confirmação se os dados básicos vieram — cria direto.
+   - EDIÇÃO: só use "executar" para EDITAR quando o usuário autorizar EXPLICITAMENTE ("salve direto", "atualiza sem perguntar", "pode salvar", "executa", "manda ver") OU quando uma DICA persistente pedir.
+   - Para edição em dúvida, use "editar" (abre formulário).
    - Forneça "id" para editar, ou "criar": true para criar.
 4) "analisar" → consulta sobre obras existentes (contagens, filtros, listagens, comparações). Forneça "consulta": "<descrição curta>". O sistema vai buscar a planilha e te chamar de novo com DADOS_OBRAS.
    - Ao receber DADOS_OBRAS, responda em "conversa" com texto claro, listando NOMES das obras (não IDs crus). Formate listas com vírgulas ou bullets quando >3 itens. Se nenhum item bater, diga "nenhuma obra encontrada".
