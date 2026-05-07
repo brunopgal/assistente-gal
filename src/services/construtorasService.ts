@@ -26,6 +26,7 @@ export interface AtividadeConstrutora {
   status?: string;
   proximoContato?: string;       // DD/MM/AAAA
   comentario?: string;
+  criarFollowUp?: string;        // "sim" / ""
 }
 
 function buildHeaders() {

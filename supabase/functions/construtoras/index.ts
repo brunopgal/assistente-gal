@@ -25,14 +25,14 @@ const CT_LAST_COL = 'F';
 const AT_SHEET = 'Atividades Construtoras';
 const AT_HEADERS = [
   'idAtividade', 'codigoConstrutora', 'tipoRegistro',
-  'data', 'horario', 'tipoContato', 'status', 'proximoContato', 'comentario',
+  'data', 'horario', 'tipoContato', 'status', 'proximoContato', 'comentario', 'criarFollowUp',
 ];
 const AT_HEADER_ROW = [
   'ID Atividade', 'Codigo Construtora', 'Tipo Registro',
-  'Data', 'Horário', 'Tipo de contato', 'Status', 'Próximo contato', 'Comentário',
+  'Data', 'Horário', 'Tipo de contato', 'Status', 'Próximo contato', 'Comentário', 'Criar Follow-up',
 ];
-const AT_RANGE = `${AT_SHEET}!A:I`;
-const AT_LAST_COL = 'I';
+const AT_RANGE = `${AT_SHEET}!A:J`;
+const AT_LAST_COL = 'J';
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;

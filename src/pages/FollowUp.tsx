@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
 import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import {
+  listarConstrutoras,
+  listarTodasAtividadesConstrutoras,
+  atualizarAtividadeConstrutora,
+  type Construtora,
+  type AtividadeConstrutora,
+} from "@/services/construtorasService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil } from "lucide-react";
+import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil, Building } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function parseDate(str: string): Date | null {
@@ -183,6 +190,9 @@ export default function FollowUp() {
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const [ctFollowUps, setCtFollowUps] = useState<Array<{ atv: AtividadeConstrutora; construtora: Construtora; followUpDate: string }>>([]);
+  const [doneCtId, setDoneCtId] = useState<string | null>(null);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -212,11 +222,48 @@ export default function FollowUp() {
           return r ? { ...o, ultimaAtividade: r.ultima } : o;
         }),
       );
+
+      // Construtoras: atividades marcadas com criarFollowUp = "sim" e proximoContato preenchido
+      try {
+        const [cts, atvsCt] = await Promise.all([
+          listarConstrutoras(),
+          listarTodasAtividadesConstrutoras(),
+        ]);
+        const ctMap = new Map(cts.map((c) => [(c.codigo || "").toUpperCase(), c]));
+        const items = atvsCt
+          .filter((a) =>
+            (a.criarFollowUp || "").toLowerCase() === "sim" &&
+            a.proximoContato && parseDate(a.proximoContato),
+          )
+          .map((a) => {
+            const c = ctMap.get((a.codigoConstrutora || "").toUpperCase());
+            return c ? { atv: a, construtora: c, followUpDate: dateToCompare(a.proximoContato || "") } : null;
+          })
+          .filter((x): x is { atv: AtividadeConstrutora; construtora: Construtora; followUpDate: string } => !!x)
+          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+        setCtFollowUps(items);
+      } catch (e) {
+        console.warn("Erro ao carregar follow-ups de construtoras:", e);
+      }
     } catch {
       toast({ title: "Erro ao carregar follow-ups", variant: "destructive" });
       setLoading(false);
     }
   };
+
+  const handleDoneCt = async (atvId: string) => {
+    setDoneCtId(atvId);
+    try {
+      await atualizarAtividadeConstrutora(atvId, { criarFollowUp: "" });
+      setCtFollowUps((prev) => prev.filter((x) => x.atv.idAtividade !== atvId));
+      toast({ title: "Follow-up concluído" });
+    } catch {
+      toast({ title: "Erro ao concluir", variant: "destructive" });
+    } finally {
+      setDoneCtId(null);
+    }
+  };
+
 
   useEffect(() => {
     fetchData();
@@ -301,7 +348,7 @@ export default function FollowUp() {
     );
   };
 
-  const isEmpty = obras.length === 0;
+  const isEmpty = obras.length === 0 && ctFollowUps.length === 0;
 
   return (
     <div className="space-y-8">
@@ -309,7 +356,7 @@ export default function FollowUp() {
         <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           Follow-up
         </h1>
-        <p className="text-muted-foreground mt-1">Acompanhe os próximos contatos das suas obras</p>
+        <p className="text-muted-foreground mt-1">Acompanhe os próximos contatos das suas obras e construtoras</p>
       </div>
 
       {isEmpty ? (
@@ -325,6 +372,49 @@ export default function FollowUp() {
           <Section title="Atrasados" items={atrasados} icon={AlertTriangle} color="text-destructive" />
           <Section title="Hoje" items={hoje} icon={CalendarClock} color="text-primary" />
           <Section title="Próximos" items={proximos} icon={CalendarCheck} color="text-muted-foreground" />
+
+          {ctFollowUps.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Building className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Construtoras</h2>
+                <Badge variant="secondary" className="text-xs">{ctFollowUps.length}</Badge>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {ctFollowUps.map(({ atv, construtora }) => (
+                  <Card key={atv.idAtividade} className="border-border/50 bg-card">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold truncate">{construtora.nome}</h3>
+                          <p className="text-xs text-muted-foreground">{construtora.codigo}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] uppercase">{atv.tipoRegistro}</Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        <span>Follow-up: <span className="text-foreground font-medium">{formatDate(atv.proximoContato || "")}</span></span>
+                      </div>
+                      {atv.comentario && (
+                        <p className="text-sm bg-muted/50 rounded p-2 line-clamp-3">{atv.comentario}</p>
+                      )}
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => handleDoneCt(atv.idAtividade!)}
+                          disabled={doneCtId === atv.idAtividade}
+                        >
+                          {doneCtId === atv.idAtividade ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
+                          Feito
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listarConstrutoras,
   criarConstrutora,
+  atualizarConstrutora,
   excluirConstrutora,
   listarAtividadesConstrutora,
   criarAtividadeConstrutora,
@@ -29,7 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -67,6 +68,12 @@ export default function Construtoras() {
   });
   const [produtosSel, setProdutosSel] = useState<string[]>([]);
 
+  // Form editar construtora
+  const [openEdit, setOpenEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Construtora | null>(null);
+  const [editProdutosSel, setEditProdutosSel] = useState<string[]>([]);
+
   // Atividades dialog
   const [openAtv, setOpenAtv] = useState(false);
   const [construtoraSel, setConstrutoraSel] = useState<Construtora | null>(null);
@@ -81,6 +88,7 @@ export default function Construtoras() {
     status: "",
     proximoContato: "",
     comentario: "",
+    criarFollowUp: "",
   });
   const [savingAtv, setSavingAtv] = useState(false);
 
@@ -171,6 +179,47 @@ export default function Construtoras() {
     }
   }
 
+  function abrirEditar(c: Construtora) {
+    setEditForm({ ...c });
+    setEditProdutosSel(
+      (c.produto || "").split(",").map((p) => p.trim()).filter(Boolean),
+    );
+    setOpenEdit(true);
+  }
+
+  async function salvarEdicao() {
+    if (!editForm?.codigo) return;
+    setSavingEdit(true);
+    try {
+      const payload: Partial<Construtora> = {
+        nome: editForm.nome,
+        cnpj: editForm.cnpj,
+        produto: editProdutosSel.join(", "),
+        status: editForm.status,
+        observacoes: editForm.observacoes,
+      };
+      await atualizarConstrutora(editForm.codigo, payload);
+      toast({ title: "Construtora atualizada" });
+      setOpenEdit(false);
+      setEditForm(null);
+      carregar();
+    } catch (e) {
+      toast({
+        title: "Erro ao atualizar",
+        description: e instanceof Error ? e.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  function toggleEditProduto(p: string) {
+    setEditProdutosSel((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    );
+  }
+
   async function abrirAtividades(c: Construtora) {
     setConstrutoraSel(c);
     setOpenAtv(true);
@@ -183,6 +232,7 @@ export default function Construtoras() {
       status: "",
       proximoContato: "",
       comentario: "",
+      criarFollowUp: "",
     });
     setLoadingAtv(true);
     try {
@@ -214,6 +264,7 @@ export default function Construtoras() {
         status: "",
         proximoContato: "",
         comentario: "",
+        criarFollowUp: "",
       });
     } catch (e) {
       toast({
@@ -398,6 +449,15 @@ export default function Construtoras() {
                           Atividades
                         </Button>
                         <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 ml-1"
+                          onClick={() => abrirEditar(c)}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
+                          Editar
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 ml-1 text-destructive hover:text-destructive"
@@ -414,6 +474,76 @@ export default function Construtoras() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de Edição de Construtora */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Construtora {editForm?.codigo ? `(${editForm.codigo})` : ""}</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <div className="space-y-3">
+              <div>
+                <Label>Nome *</Label>
+                <Input
+                  value={editForm.nome}
+                  onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>CNPJ</Label>
+                <Input
+                  value={editForm.cnpj}
+                  onChange={(e) => setEditForm({ ...editForm, cnpj: e.target.value })}
+                  placeholder="00.000.000/0000-00"
+                />
+              </div>
+              <div>
+                <Label>Produto(s) oferecido(s)</Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {PRODUTOS.map((p) => (
+                    <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={editProdutosSel.includes(p)}
+                        onCheckedChange={() => toggleEditProduto(p)}
+                      />
+                      {p}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(v) => setEditForm({ ...editForm, status: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPCOES.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Textarea
+                  value={editForm.observacoes || ""}
+                  onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenEdit(false)}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={savingEdit}>
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de Atividades / Visitas / Reuniões */}
       <Dialog open={openAtv} onOpenChange={setOpenAtv}>
@@ -502,6 +632,21 @@ export default function Construtoras() {
                   rows={2}
                 />
               </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <Checkbox
+                  checked={atvForm.criarFollowUp === "sim"}
+                  onCheckedChange={(checked) =>
+                    setAtvForm({ ...atvForm, criarFollowUp: checked ? "sim" : "" })
+                  }
+                  disabled={!atvForm.proximoContato}
+                />
+                <span>
+                  Criar follow-up{" "}
+                  <span className="text-xs text-muted-foreground">
+                    (mostrar no painel Follow-up — requer Próximo contato)
+                  </span>
+                </span>
+              </label>
               <div className="flex justify-end">
                 <Button onClick={salvarAtividade} disabled={savingAtv}>
                   {savingAtv ? <Loader2 className="h-4 w-4 animate-spin" /> : (
