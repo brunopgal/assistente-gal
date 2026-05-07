@@ -179,6 +179,47 @@ export default function Construtoras() {
     }
   }
 
+  function abrirEditar(c: Construtora) {
+    setEditForm({ ...c });
+    setEditProdutosSel(
+      (c.produto || "").split(",").map((p) => p.trim()).filter(Boolean),
+    );
+    setOpenEdit(true);
+  }
+
+  async function salvarEdicao() {
+    if (!editForm?.codigo) return;
+    setSavingEdit(true);
+    try {
+      const payload: Partial<Construtora> = {
+        nome: editForm.nome,
+        cnpj: editForm.cnpj,
+        produto: editProdutosSel.join(", "),
+        status: editForm.status,
+        observacoes: editForm.observacoes,
+      };
+      await atualizarConstrutora(editForm.codigo, payload);
+      toast({ title: "Construtora atualizada" });
+      setOpenEdit(false);
+      setEditForm(null);
+      carregar();
+    } catch (e) {
+      toast({
+        title: "Erro ao atualizar",
+        description: e instanceof Error ? e.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  function toggleEditProduto(p: string) {
+    setEditProdutosSel((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    );
+  }
+
   async function abrirAtividades(c: Construtora) {
     setConstrutoraSel(c);
     setOpenAtv(true);
@@ -191,6 +232,7 @@ export default function Construtoras() {
       status: "",
       proximoContato: "",
       comentario: "",
+      criarFollowUp: "",
     });
     setLoadingAtv(true);
     try {
@@ -222,6 +264,7 @@ export default function Construtoras() {
         status: "",
         proximoContato: "",
         comentario: "",
+        criarFollowUp: "",
       });
     } catch (e) {
       toast({
