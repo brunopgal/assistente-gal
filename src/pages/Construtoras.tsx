@@ -6,6 +6,8 @@ import {
   listarAtividadesConstrutora,
   criarAtividadeConstrutora,
   excluirAtividadeConstrutora,
+  sincronizarConstrutoras,
+  sincronizarAtividadesConstrutoras,
   type Construtora,
   type AtividadeConstrutora,
   type TipoRegistroAtividade,
@@ -98,7 +100,17 @@ export default function Construtoras() {
     }
   }
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        await sincronizarConstrutoras();
+        await sincronizarAtividadesConstrutoras();
+      } catch (e) {
+        console.warn("Sync construtoras falhou:", e);
+      }
+      carregar();
+    })();
+  }, []);
 
   const filtradas = useMemo(() => {
     const q = query.trim().toLowerCase();

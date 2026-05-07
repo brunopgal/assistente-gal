@@ -332,6 +332,45 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
 
+      // Espelhar para Atividades Construtoras (não bloqueia em caso de erro)
+      try {
+        const supaUrl = Deno.env.get('SUPABASE_URL');
+        const supaKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+        if (supaUrl && supaKey) {
+          // Buscar nome obra + construtora
+          const obraRes = await fetch(
+            `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent('Obras!A:X')}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          const obraData = await obraRes.json();
+          const obraRows: string[][] = obraData.values || [];
+          let nomeObra = '', construtora = '';
+          const target = String(body.idObra).trim().toUpperCase();
+          for (let i = 1; i < obraRows.length; i++) {
+            if ((obraRows[i]?.[0] || '').trim().toUpperCase() === target) {
+              nomeObra = obraRows[i][3] || '';
+              construtora = obraRows[i][5] || '';
+              break;
+            }
+          }
+          if (construtora.trim()) {
+            await fetch(`${supaUrl}/functions/v1/construtoras/mirror-atividade`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${supaKey}`, apikey: supaKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                idAtividade: body.idAtividade,
+                nomeObra, construtora,
+                dataAtividade: body.dataAtividade,
+                tipoContato: body.tipoContato,
+                status: body.status,
+                proximoContato: body.proximoContato,
+                comentario: body.comentario,
+              }),
+            });
+          }
+        }
+      } catch (e) { console.warn('mirror atividade falhou:', e); }
+
       return new Response(JSON.stringify({ success: true, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
