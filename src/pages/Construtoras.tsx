@@ -68,6 +68,12 @@ export default function Construtoras() {
   });
   const [produtosSel, setProdutosSel] = useState<string[]>([]);
 
+  // Form editar construtora
+  const [openEdit, setOpenEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Construtora | null>(null);
+  const [editProdutosSel, setEditProdutosSel] = useState<string[]>([]);
+
   // Atividades dialog
   const [openAtv, setOpenAtv] = useState(false);
   const [construtoraSel, setConstrutoraSel] = useState<Construtora | null>(null);
@@ -82,6 +88,7 @@ export default function Construtoras() {
     status: "",
     proximoContato: "",
     comentario: "",
+    criarFollowUp: "",
   });
   const [savingAtv, setSavingAtv] = useState(false);
 
