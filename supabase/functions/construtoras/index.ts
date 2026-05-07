@@ -172,6 +172,44 @@ async function getSheetGid(sheetId: string, accessToken: string, name: string): 
   return sheet.properties.sheetId;
 }
 
+// ===== Helpers compartilhados (usados por sync) =====
+const OBRAS_RANGE = 'Obras!A:X';
+const ATIVIDADES_RANGE = 'Atividades!A:G';
+
+function normalizeName(s: string): string {
+  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function findOrCreateConstrutoraByName(
+  sheetId: string,
+  accessToken: string,
+  nome: string,
+  ctRows: string[][],
+): Promise<{ codigo: string; rows: string[][] }> {
+  const target = normalizeName(nome);
+  if (!target) return { codigo: '', rows: ctRows };
+  for (let i = 1; i < ctRows.length; i++) {
+    const r = ctRows[i];
+    if (normalizeName(r?.[1] || '') === target) {
+      return { codigo: (r?.[0] || '').trim(), rows: ctRows };
+    }
+  }
+  const codigo = generateNextId(ctRows, 'CT', 9);
+  const newRow = [codigo, nome.trim(), '', '', 'Prospecção', ''];
+  const targetRow = ctRows.length + 1;
+  const writeRange = `${CT_SHEET}!A${targetRow}:${CT_LAST_COL}${targetRow}`;
+  await fetch(
+    `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [newRow] }),
+    }
+  );
+  const updated = [...ctRows, newRow];
+  return { codigo, rows: updated };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -182,11 +220,170 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
 
     // path: /functions/v1/construtoras[/<resource>[/<id>]]
-    // resource: "" (default = construtoras root) | "atividades" | "<codigo>"
     const parts = url.pathname.split('/').filter(Boolean);
     const idx = parts.findIndex(p => p === 'construtoras');
     const seg1 = idx >= 0 && parts[idx + 1] ? decodeURIComponent(parts[idx + 1]) : '';
     const seg2 = idx >= 0 && parts[idx + 2] ? decodeURIComponent(parts[idx + 2]) : '';
+
+    // ============ ROTA: /construtoras/sync-construtoras ============
+    if (seg1 === 'sync-construtoras' && req.method === 'POST') {
+      await ensureSheet(sheetId, accessToken, CT_SHEET, CT_LAST_COL, CT_HEADER_ROW);
+      const obrasRows = await fetchRows(sheetId, accessToken, OBRAS_RANGE);
+      let ctRows = await fetchRows(sheetId, accessToken, CT_RANGE);
+      // unique constructor names from Obras (column F = index 5)
+      const seen = new Set<string>();
+      const nomes: string[] = [];
+      for (let i = 1; i < obrasRows.length; i++) {
+        const nome = (obrasRows[i]?.[5] || '').trim();
+        if (!nome) continue;
+        const k = normalizeName(nome);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        nomes.push(nome);
+      }
+      let criadas = 0;
+      for (const nome of nomes) {
+        const before = ctRows.length;
+        const r = await findOrCreateConstrutoraByName(sheetId, accessToken, nome, ctRows);
+        ctRows = r.rows;
+        if (ctRows.length > before) criadas++;
+      }
+      return new Response(JSON.stringify({ success: true, criadas, total: nomes.length }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============ ROTA: /construtoras/sync-atividades ============
+    if (seg1 === 'sync-atividades' && req.method === 'POST') {
+      await ensureSheet(sheetId, accessToken, CT_SHEET, CT_LAST_COL, CT_HEADER_ROW);
+      await ensureSheet(sheetId, accessToken, AT_SHEET, AT_LAST_COL, AT_HEADER_ROW);
+
+      const obrasRows = await fetchRows(sheetId, accessToken, OBRAS_RANGE);
+      const atvRows = await fetchRows(sheetId, accessToken, ATIVIDADES_RANGE);
+      let ctRows = await fetchRows(sheetId, accessToken, CT_RANGE);
+      let atcRows = await fetchRows(sheetId, accessToken, AT_RANGE);
+
+      // Map obra ID -> { nome, construtora }
+      const obraMap = new Map<string, { nome: string; construtora: string }>();
+      for (let i = 1; i < obrasRows.length; i++) {
+        const r = obrasRows[i] || [];
+        const id = (r[0] || '').trim().toUpperCase();
+        if (!id) continue;
+        obraMap.set(id, { nome: (r[3] || '').trim(), construtora: (r[5] || '').trim() });
+      }
+
+      // Already mirrored: detect [ORIG:<idAtividade>] in column I (comentario, index 8)
+      const mirrored = new Set<string>();
+      for (let i = 1; i < atcRows.length; i++) {
+        const c = atcRows[i]?.[8] || '';
+        const m = c.match(/\[ORIG:([A-Z0-9]+)\]/i);
+        if (m) mirrored.add(m[1].toUpperCase());
+      }
+
+      let espelhadas = 0;
+      const novasLinhas: string[][] = [];
+      for (let i = 1; i < atvRows.length; i++) {
+        const r = atvRows[i] || [];
+        const idAtv = (r[0] || '').trim();
+        if (!idAtv) continue;
+        if (mirrored.has(idAtv.toUpperCase())) continue;
+        const idObra = (r[1] || '').trim().toUpperCase();
+        const meta = obraMap.get(idObra);
+        if (!meta || !meta.construtora) continue;
+
+        const found = await findOrCreateConstrutoraByName(sheetId, accessToken, meta.construtora, ctRows);
+        ctRows = found.rows;
+        const codigoCT = found.codigo;
+        if (!codigoCT) continue;
+
+        const novoId = generateNextId([...atcRows, ...novasLinhas], 'ATC', 6);
+        const comentarioOrig = r[6] || '';
+        const novoComentario = `[ORIG:${idAtv}] Obra: ${meta.nome} — ${comentarioOrig}`;
+        const novaLinha = [
+          novoId, codigoCT, 'atividade',
+          r[2] || '', '', r[3] || '', r[4] || '', r[5] || '', novoComentario,
+        ];
+        novasLinhas.push(novaLinha);
+        mirrored.add(idAtv.toUpperCase());
+        espelhadas++;
+      }
+
+      if (novasLinhas.length > 0) {
+        // Append in batch
+        const startRow = atcRows.length + 1;
+        const endRow = startRow + novasLinhas.length - 1;
+        const writeRange = `${AT_SHEET}!A${startRow}:${AT_LAST_COL}${endRow}`;
+        const res = await fetch(
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
+          {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: novasLinhas }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      }
+
+      return new Response(JSON.stringify({ success: true, espelhadas }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============ ROTA: /construtoras/ensure (interna) — garante construtora por nome ============
+    if (seg1 === 'ensure' && req.method === 'POST') {
+      await ensureSheet(sheetId, accessToken, CT_SHEET, CT_LAST_COL, CT_HEADER_ROW);
+      const body = await req.json();
+      const nome = String(body?.nome || '').trim();
+      if (!nome) throw new Error('nome obrigatório');
+      const ctRows = await fetchRows(sheetId, accessToken, CT_RANGE);
+      const r = await findOrCreateConstrutoraByName(sheetId, accessToken, nome, ctRows);
+      return new Response(JSON.stringify({ success: true, codigo: r.codigo }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============ ROTA: /construtoras/mirror-atividade (interna) — espelha 1 atividade ============
+    if (seg1 === 'mirror-atividade' && req.method === 'POST') {
+      await ensureSheet(sheetId, accessToken, CT_SHEET, CT_LAST_COL, CT_HEADER_ROW);
+      await ensureSheet(sheetId, accessToken, AT_SHEET, AT_LAST_COL, AT_HEADER_ROW);
+      const body = await req.json();
+      const { idAtividade, nomeObra, construtora, dataAtividade, tipoContato, status, proximoContato, comentario } = body || {};
+      if (!idAtividade || !construtora) throw new Error('idAtividade e construtora obrigatórios');
+
+      let ctRows = await fetchRows(sheetId, accessToken, CT_RANGE);
+      const found = await findOrCreateConstrutoraByName(sheetId, accessToken, construtora, ctRows);
+      const codigoCT = found.codigo;
+      if (!codigoCT) throw new Error('falha ao obter código da construtora');
+
+      const atcRows = await fetchRows(sheetId, accessToken, AT_RANGE);
+      // dedupe
+      for (let i = 1; i < atcRows.length; i++) {
+        const c = atcRows[i]?.[8] || '';
+        if (c.includes(`[ORIG:${idAtividade}]`)) {
+          return new Response(JSON.stringify({ success: true, skipped: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      const novoId = generateNextId(atcRows, 'ATC', 6);
+      const novoComentario = `[ORIG:${idAtividade}] Obra: ${nomeObra || ''} — ${comentario || ''}`;
+      const targetRow = atcRows.length + 1;
+      const writeRange = `${AT_SHEET}!A${targetRow}:${AT_LAST_COL}${targetRow}`;
+      await fetch(
+        `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            values: [[novoId, codigoCT, 'atividade', dataAtividade || '', '', tipoContato || '', status || '', proximoContato || '', novoComentario]],
+          }),
+        }
+      );
+      return new Response(JSON.stringify({ success: true, idAtividade: novoId, codigoCT }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // ============ ROTA: /construtoras/atividades ============
     if (seg1 === 'atividades') {
