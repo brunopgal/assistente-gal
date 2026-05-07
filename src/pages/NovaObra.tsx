@@ -150,7 +150,7 @@ export default function NovaObra() {
             </div>
           ) : (
             <ObraForm
-              key={editId || "new"}
+              key={(editId || "new") + ":" + (defaultValues ? Object.keys(defaultValues).length + ":" + (defaultValues.nome || "") : "empty")}
               defaultValues={defaultValues}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
