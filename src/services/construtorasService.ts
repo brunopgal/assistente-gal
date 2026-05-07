@@ -72,6 +72,13 @@ export async function excluirConstrutora(codigo: string): Promise<void> {
   await request("DELETE", `/${encodeURIComponent(codigo)}`);
 }
 
+export async function sincronizarConstrutoras(): Promise<{ criadas: number; total: number }> {
+  return request("POST", "/sync-construtoras", {});
+}
+export async function sincronizarAtividadesConstrutoras(): Promise<{ espelhadas: number }> {
+  return request("POST", "/sync-atividades", {});
+}
+
 // ===== Atividades Construtoras =====
 export async function listarAtividadesConstrutora(codigo: string): Promise<AtividadeConstrutora[]> {
   return request("GET", `/atividades?codigo=${encodeURIComponent(codigo)}`);
