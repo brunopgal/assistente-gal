@@ -190,6 +190,9 @@ export default function FollowUp() {
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const [ctFollowUps, setCtFollowUps] = useState<Array<{ atv: AtividadeConstrutora; construtora: Construtora; followUpDate: string }>>([]);
+  const [doneCtId, setDoneCtId] = useState<string | null>(null);
+
   const fetchData = async () => {
     setLoading(true);
     try {
