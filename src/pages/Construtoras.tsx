@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listarConstrutoras,
   criarConstrutora,
+  atualizarConstrutora,
   excluirConstrutora,
   listarAtividadesConstrutora,
   criarAtividadeConstrutora,
@@ -29,7 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
