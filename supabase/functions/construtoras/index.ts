@@ -230,17 +230,23 @@ Deno.serve(async (req) => {
       await ensureSheet(sheetId, accessToken, CT_SHEET, CT_LAST_COL, CT_HEADER_ROW);
       const obrasRows = await fetchRows(sheetId, accessToken, OBRAS_RANGE);
       let ctRows = await fetchRows(sheetId, accessToken, CT_RANGE);
-      // unique constructor names from Obras (column F = index 5)
+
+      // Map nome (normalizado) -> Set de produtos oferecidos nas obras (col M = index 12)
+      const produtosPorNome = new Map<string, Set<string>>();
       const seen = new Set<string>();
       const nomes: string[] = [];
       for (let i = 1; i < obrasRows.length; i++) {
         const nome = (obrasRows[i]?.[5] || '').trim();
         if (!nome) continue;
         const k = normalizeName(nome);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        nomes.push(nome);
+        if (!seen.has(k)) { seen.add(k); nomes.push(nome); }
+        const prods = (obrasRows[i]?.[12] || '').split(',').map(s => s.trim()).filter(Boolean);
+        if (!produtosPorNome.has(k)) produtosPorNome.set(k, new Set());
+        const set = produtosPorNome.get(k)!;
+        for (const p of prods) set.add(p);
       }
+
+      // 1) Cria construtoras faltantes
       let criadas = 0;
       for (const nome of nomes) {
         const before = ctRows.length;
@@ -248,7 +254,39 @@ Deno.serve(async (req) => {
         ctRows = r.rows;
         if (ctRows.length > before) criadas++;
       }
-      return new Response(JSON.stringify({ success: true, criadas, total: nomes.length }), {
+
+      // 2) Atualiza coluna D (produto) mesclando produtos já oferecidos.
+      // NÃO toca CNPJ (col C), status, observações.
+      let produtosAtualizados = 0;
+      for (let i = 1; i < ctRows.length; i++) {
+        const row = ctRows[i] || [];
+        const nome = (row[1] || '').trim();
+        if (!nome) continue;
+        const k = normalizeName(nome);
+        const oferecidos = produtosPorNome.get(k);
+        if (!oferecidos || oferecidos.size === 0) continue;
+        const atuais = new Set(
+          (row[3] || '').split(',').map(s => s.trim()).filter(Boolean)
+        );
+        let mudou = false;
+        for (const p of oferecidos) {
+          if (!atuais.has(p)) { atuais.add(p); mudou = true; }
+        }
+        if (!mudou) continue;
+        const novoValor = Array.from(atuais).join(', ');
+        const linhaPlanilha = i + 1; // header é linha 1
+        await fetch(
+          `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`${CT_SHEET}!D${linhaPlanilha}`)}?valueInputOption=RAW`,
+          {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: [[novoValor]] }),
+          }
+        );
+        produtosAtualizados++;
+      }
+
+      return new Response(JSON.stringify({ success: true, criadas, total: nomes.length, produtosAtualizados }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
