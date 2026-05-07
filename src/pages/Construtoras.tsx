@@ -449,6 +449,15 @@ export default function Construtoras() {
                           Atividades
                         </Button>
                         <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 ml-1"
+                          onClick={() => abrirEditar(c)}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
+                          Editar
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 ml-1 text-destructive hover:text-destructive"
