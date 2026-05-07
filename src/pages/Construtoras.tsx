@@ -6,6 +6,8 @@ import {
   listarAtividadesConstrutora,
   criarAtividadeConstrutora,
   excluirAtividadeConstrutora,
+  sincronizarConstrutoras,
+  sincronizarAtividadesConstrutoras,
   type Construtora,
   type AtividadeConstrutora,
   type TipoRegistroAtividade,
