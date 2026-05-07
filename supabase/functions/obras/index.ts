@@ -259,6 +259,21 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
 
+      // Garante construtora correspondente (não bloqueia em caso de erro)
+      if (body.construtora && String(body.construtora).trim()) {
+        try {
+          const supaUrl = Deno.env.get('SUPABASE_URL');
+          const supaKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+          if (supaUrl && supaKey) {
+            await fetch(`${supaUrl}/functions/v1/construtoras/ensure`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${supaKey}`, apikey: supaKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nome: String(body.construtora).trim() }),
+            });
+          }
+        } catch (e) { console.warn('ensure construtora falhou:', e); }
+      }
+
       return new Response(JSON.stringify({ success: true, id: newId, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
