@@ -348,7 +348,7 @@ export default function FollowUp() {
     );
   };
 
-  const isEmpty = obras.length === 0;
+  const isEmpty = obras.length === 0 && ctFollowUps.length === 0;
 
   return (
     <div className="space-y-8">
@@ -356,7 +356,7 @@ export default function FollowUp() {
         <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           Follow-up
         </h1>
-        <p className="text-muted-foreground mt-1">Acompanhe os próximos contatos das suas obras</p>
+        <p className="text-muted-foreground mt-1">Acompanhe os próximos contatos das suas obras e construtoras</p>
       </div>
 
       {isEmpty ? (
@@ -372,6 +372,49 @@ export default function FollowUp() {
           <Section title="Atrasados" items={atrasados} icon={AlertTriangle} color="text-destructive" />
           <Section title="Hoje" items={hoje} icon={CalendarClock} color="text-primary" />
           <Section title="Próximos" items={proximos} icon={CalendarCheck} color="text-muted-foreground" />
+
+          {ctFollowUps.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Building className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Construtoras</h2>
+                <Badge variant="secondary" className="text-xs">{ctFollowUps.length}</Badge>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {ctFollowUps.map(({ atv, construtora }) => (
+                  <Card key={atv.idAtividade} className="border-border/50 bg-card">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold truncate">{construtora.nome}</h3>
+                          <p className="text-xs text-muted-foreground">{construtora.codigo}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] uppercase">{atv.tipoRegistro}</Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        <span>Follow-up: <span className="text-foreground font-medium">{formatDate(atv.proximoContato || "")}</span></span>
+                      </div>
+                      {atv.comentario && (
+                        <p className="text-sm bg-muted/50 rounded p-2 line-clamp-3">{atv.comentario}</p>
+                      )}
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => handleDoneCt(atv.idAtividade!)}
+                          disabled={doneCtId === atv.idAtividade}
+                        >
+                          {doneCtId === atv.idAtividade ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
+                          Feito
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
