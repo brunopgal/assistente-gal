@@ -1,7 +1,9 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const navItems = [
   { title: "Obras", path: "/", icon: Building2, iconClassName: "" },
