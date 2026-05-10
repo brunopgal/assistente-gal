@@ -13,6 +13,7 @@ import {
   type Atividade,
 } from "@/services/atividadesService";
 import { supabase } from "@/integrations/supabase/client";
+import { buildAuthHeaders } from "@/lib/authFetch";
 
 interface AttachedFile {
   name: string;
@@ -126,10 +127,7 @@ export default function SecretariaChat() {
           const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`;
           const res = await fetch(url, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
+            headers: await buildAuthHeaders(),
             body: JSON.stringify({ audio: base64, mime: "audio/webm" }),
           });
           if (!res.ok) {
@@ -359,10 +357,7 @@ export default function SecretariaChat() {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/secretaria`;
       const res = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+        headers: await buildAuthHeaders(),
         body: JSON.stringify({
           messages: [...dicasMsg, ...next].map((m) => ({ role: m.role, content: m.content })),
         }),
