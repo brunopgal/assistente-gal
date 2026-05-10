@@ -29,14 +29,7 @@ export interface AtividadeConstrutora {
   criarFollowUp?: string;        // "sim" / ""
 }
 
-function buildHeaders() {
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  return {
-    Authorization: `Bearer ${key}`,
-    apikey: key,
-    "Content-Type": "application/json",
-  } as Record<string, string>;
-}
+import { buildAuthHeaders } from "@/lib/authFetch";
 
 function buildUrl(path: string = "") {
   const base = import.meta.env.VITE_SUPABASE_URL;
@@ -44,9 +37,10 @@ function buildUrl(path: string = "") {
 }
 
 async function request(method: string, path: string = "", body?: unknown) {
+  const headers = await buildAuthHeaders();
   const res = await fetch(buildUrl(path), {
     method,
-    headers: buildHeaders(),
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
