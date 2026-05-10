@@ -433,10 +433,15 @@ async function fetchObrasSummary(): Promise<string> {
   }
 }
 
+import { requireAuth } from '../_shared/auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const authErr = await requireAuth(req, corsHeaders);
+  if (authErr) return authErr;
 
   try {
     const { messages } = (await req.json()) as { messages: AiMessage[] };

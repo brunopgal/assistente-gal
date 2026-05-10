@@ -210,8 +210,13 @@ async function findOrCreateConstrutoraByName(
   return { codigo, rows: updated };
 }
 
+import { requireAuth } from '../_shared/auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const authErr = await requireAuth(req, corsHeaders);
+  if (authErr) return authErr;
 
   try {
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID');
