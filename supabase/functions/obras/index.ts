@@ -193,10 +193,41 @@ function findRowNumberById(rows: string[][], id: string): number {
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+async function requireAuth(req: Request): Promise<Response | null> {
+  const auth = req.headers.get('Authorization');
+  if (!auth?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const token = auth.slice(7);
+  try {
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.74.0');
+    const sb = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+    );
+    const { data, error } = await sb.auth.getUser(token);
+    if (error || !data?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  } catch {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const authErr = await requireAuth(req);
+  if (authErr) return authErr;
 
   try {
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID');
