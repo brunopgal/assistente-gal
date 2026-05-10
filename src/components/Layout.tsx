@@ -60,6 +60,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-nav-foreground hover:bg-nav-active/10 transition"
+              title="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </div>
+
           {/* Mobile toggle */}
           <button
             className="md:hidden p-2 rounded-lg hover:bg-nav-active/10 transition"
@@ -90,6 +101,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {item.title}
               </NavLink>
             ))}
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                handleLogout();
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-nav-foreground hover:bg-nav-active/10 transition text-left"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
           </nav>
         )}
       </header>
