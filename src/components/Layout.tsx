@@ -1,7 +1,9 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const navItems = [
   { title: "Obras", path: "/", icon: Building2, iconClassName: "" },
@@ -16,6 +18,13 @@ const navItems = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    toast.success("Sessão encerrada");
+    navigate("/auth", { replace: true });
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -51,6 +60,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-nav-foreground hover:bg-nav-active/10 transition"
+              title="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </div>
+
           {/* Mobile toggle */}
           <button
             className="md:hidden p-2 rounded-lg hover:bg-nav-active/10 transition"
@@ -81,6 +101,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {item.title}
               </NavLink>
             ))}
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                handleLogout();
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-nav-foreground hover:bg-nav-active/10 transition text-left"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
           </nav>
         )}
       </header>

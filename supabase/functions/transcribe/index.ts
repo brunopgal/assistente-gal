@@ -8,10 +8,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+import { requireAuth } from '../_shared/auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const authErr = await requireAuth(req, corsHeaders);
+  if (authErr) return authErr;
 
   try {
     const { audio, mime } = (await req.json()) as { audio?: string; mime?: string };

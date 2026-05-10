@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { buildAuthHeaders } from "@/lib/authFetch";
 
 export interface Atividade {
   idAtividade?: string;

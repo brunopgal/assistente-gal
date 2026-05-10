@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { buildAuthHeaders } from "@/lib/authFetch";
 
 export interface Obra {
   id?: string;            // logical ID = codigoObra (e.g. OBRA000000001)
@@ -34,19 +35,11 @@ function buildUrl(id?: string) {
     : `${base}/functions/v1/obras`;
 }
 
-function buildHeaders() {
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  return {
-    Authorization: `Bearer ${key}`,
-    apikey: key,
-    "Content-Type": "application/json",
-  } as Record<string, string>;
-}
-
 async function request(method: string, body?: unknown, id?: string) {
+  const headers = await buildAuthHeaders();
   const res = await fetch(buildUrl(id), {
     method,
-    headers: buildHeaders(),
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
