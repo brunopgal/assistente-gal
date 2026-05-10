@@ -18,6 +18,13 @@ const navItems = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    toast.success("Sessão encerrada");
+    navigate("/auth", { replace: true });
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
