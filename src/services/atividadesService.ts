@@ -19,19 +19,11 @@ function buildUrl(opts: { id?: string; qs?: string } = {}) {
   return url;
 }
 
-function buildHeaders() {
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  return {
-    Authorization: `Bearer ${key}`,
-    apikey: key,
-    "Content-Type": "application/json",
-  } as Record<string, string>;
-}
-
 async function request(method: string, body?: unknown, opts: { id?: string; qs?: string } = {}) {
+  const headers = await buildAuthHeaders();
   const res = await fetch(buildUrl(opts), {
     method,
-    headers: buildHeaders(),
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
