@@ -210,6 +210,18 @@ const METADATA_CACHE_TTL_MS = 10 * 60_000;
 
 function invalidateRowsCache() { rowsCache = null; }
 
+function isRateLimitError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|quota/i.test(message);
+}
+
+function rateLimitPayload() {
+  return {
+    error: 'A planilha atingiu o limite temporário de leituras. Aguarde alguns instantes e tente novamente.',
+    fallback: true,
+    rateLimited: true,
+  };
+}
+
 function shouldEnsureSheet(sheetId: string): boolean {
   const now = Date.now();
   return !ensureCache || ensureCache.key !== sheetId || (now - ensureCache.ts) > METADATA_CACHE_TTL_MS;
@@ -281,19 +293,11 @@ Deno.serve(async (req) => {
 
     const obraIdFilter = url.searchParams.get('idObra');
 
-    if (req.method !== 'GET' || shouldEnsureSheet(sheetId)) {
+    if (req.method === 'GET' && shouldEnsureSheet(sheetId)) {
       await ensureSheetAndHeader(sheetId, accessToken);
     }
 
-    // Padroniza visual: fundo branco, texto preto em toda a aba (idempotente, barato)
-    if (req.method !== 'GET' && req.method !== 'OPTIONS') {
-      try {
-        const gid = await getSheetGid(sheetId, accessToken);
-        await applyStandardFormatting(sheetId, accessToken, gid);
-      } catch (e) {
-        console.warn('Skip standard formatting:', e);
-      }
-    }
+    // Evita leituras extras de metadados em cada gravação para não estourar a quota do Sheets.
 
     if (req.method === 'GET') {
       const rows = await fetchAllRows(sheetId, accessToken);
@@ -451,11 +455,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    const isRateLimit = /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED/i.test(message);
+    const isRateLimit = isRateLimitError(message);
     return new Response(
-      JSON.stringify({ error: message, rateLimited: isRateLimit }),
+      JSON.stringify(isRateLimit ? rateLimitPayload() : { error: message }),
       {
-        status: isRateLimit ? 503 : 500,
+        status: isRateLimit ? 200 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
