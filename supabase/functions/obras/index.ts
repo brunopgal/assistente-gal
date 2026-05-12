@@ -142,13 +142,33 @@ async function ensureHeader(sheetId: string, accessToken: string) {
       }
     );
   }
+  headerEnsureCache = { key: sheetId, ts: Date.now() };
 }
 
 // Cache em memória para reduzir chamadas à Sheets API (quota 60/min)
 let rowsCache: { key: string; rows: string[][]; ts: number } | null = null;
-const CACHE_TTL_MS = 10_000;
+let headerEnsureCache: { key: string; ts: number } | null = null;
+const CACHE_TTL_MS = 60_000;
+const HEADER_CACHE_TTL_MS = 10 * 60_000;
 
 function invalidateRowsCache() { rowsCache = null; }
+
+function shouldEnsureHeader(sheetId: string): boolean {
+  const now = Date.now();
+  return !headerEnsureCache || headerEnsureCache.key !== sheetId || (now - headerEnsureCache.ts) > HEADER_CACHE_TTL_MS;
+}
+
+function isRateLimitError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|quota/i.test(message);
+}
+
+function rateLimitPayload() {
+  return {
+    error: 'A planilha atingiu o limite temporário de leituras. Aguarde alguns instantes e tente novamente.',
+    fallback: true,
+    rateLimited: true,
+  };
+}
 
 async function fetchAllRows(sheetId: string, accessToken: string, useCache = true): Promise<string[][]> {
   const now = Date.now();
