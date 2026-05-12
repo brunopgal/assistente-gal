@@ -428,7 +428,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-        invalidateRowsCache(`${sheetId}:${AT_RANGE}`);
+        invalidateRowsCache(AT_RANGE);
       }
 
       return new Response(JSON.stringify({ success: true, espelhadas }), {
@@ -531,7 +531,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-        invalidateRowsCache(`${sheetId}:${AT_RANGE}`);
+        invalidateRowsCache(AT_RANGE);
         return new Response(JSON.stringify({ success: true, ...body }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
