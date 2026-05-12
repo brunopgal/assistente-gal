@@ -266,6 +266,7 @@ async function findOrCreateConstrutoraByName(
       body: JSON.stringify({ values: [newRow] }),
     }
   );
+  invalidateRowsCache(CT_RANGE);
   const updated = [...ctRows, newRow];
   return { codigo, rows: updated };
 }
@@ -348,6 +349,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ values: [[novoValor]] }),
           }
         );
+        invalidateRowsCache(CT_RANGE);
         produtosAtualizados++;
       }
 
