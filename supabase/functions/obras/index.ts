@@ -132,6 +132,10 @@ async function ensureHeader(sheetId: string, accessToken: string) {
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const checkData = await checkRes.json();
+  if (!checkRes.ok) {
+    if (isRateLimitError(JSON.stringify(checkData))) return;
+    throw new Error(`Sheets API error: ${JSON.stringify(checkData)}`);
+  }
   if (!checkData.values || checkData.values.length === 0) {
     await fetch(
       `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`Obras!A1:${LAST_COL}1`)}?valueInputOption=RAW`,
@@ -142,13 +146,33 @@ async function ensureHeader(sheetId: string, accessToken: string) {
       }
     );
   }
+  headerEnsureCache = { key: sheetId, ts: Date.now() };
 }
 
 // Cache em memória para reduzir chamadas à Sheets API (quota 60/min)
 let rowsCache: { key: string; rows: string[][]; ts: number } | null = null;
-const CACHE_TTL_MS = 10_000;
+let headerEnsureCache: { key: string; ts: number } | null = null;
+const CACHE_TTL_MS = 60_000;
+const HEADER_CACHE_TTL_MS = 10 * 60_000;
 
 function invalidateRowsCache() { rowsCache = null; }
+
+function shouldEnsureHeader(sheetId: string): boolean {
+  const now = Date.now();
+  return !headerEnsureCache || headerEnsureCache.key !== sheetId || (now - headerEnsureCache.ts) > HEADER_CACHE_TTL_MS;
+}
+
+function isRateLimitError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|quota/i.test(message);
+}
+
+function rateLimitPayload() {
+  return {
+    error: 'A planilha atingiu o limite temporário de leituras. Aguarde alguns instantes e tente novamente.',
+    fallback: true,
+    rateLimited: true,
+  };
+}
 
 async function fetchAllRows(sheetId: string, accessToken: string, useCache = true): Promise<string[][]> {
   const now = Date.now();
@@ -236,7 +260,7 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
-      await ensureHeader(sheetId, accessToken);
+      if (shouldEnsureHeader(sheetId)) await ensureHeader(sheetId, accessToken);
 
       // Generate next ID if not provided
       const rows = await fetchAllRows(sheetId, accessToken, false);
@@ -354,11 +378,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    const isRateLimit = /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED/i.test(message);
+    const isRateLimit = isRateLimitError(message);
     return new Response(
-      JSON.stringify({ error: message, rateLimited: isRateLimit }),
+      JSON.stringify(isRateLimit ? rateLimitPayload() : { error: message }),
       {
-        status: isRateLimit ? 503 : 500,
+        status: isRateLimit ? 200 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

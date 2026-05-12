@@ -42,11 +42,11 @@ async function request(method: string, body?: unknown, id?: string) {
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Erro na operação (${res.status})`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.fallback) {
+    throw new Error(data?.error || `Erro na operação (${res.status})`);
   }
-  return res.json();
+  return data;
 }
 
 export async function criarObra(obra: Obra): Promise<Obra> {

@@ -96,12 +96,17 @@ function bodyToRow(body: Record<string, string>, headers: string[]): string[] {
 }
 
 async function ensureSheet(sheetId: string, accessToken: string, name: string, lastCol: string, headerRow: string[]) {
+  if (!shouldEnsureSheet(sheetId, name)) return;
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const meta = await metaRes.json();
-  if (!metaRes.ok) throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  if (!metaRes.ok) {
+    if (isRateLimitError(JSON.stringify(meta))) return;
+    throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  }
   const exists = (meta.sheets || []).some((s: any) => s.properties?.title === name);
   if (!exists) {
     const addRes = await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
@@ -117,6 +122,10 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const checkData = await checkRes.json();
+  if (!checkRes.ok) {
+    if (isRateLimitError(JSON.stringify(checkData))) return;
+    throw new Error(`Sheets API error: ${JSON.stringify(checkData)}`);
+  }
   if (!checkData.values || checkData.values.length === 0) {
     await fetch(
       `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`${name}!A1:${lastCol}1`)}?valueInputOption=RAW`,
@@ -127,16 +136,58 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
       }
     );
   }
+  ensureCache.set(`${sheetId}:${name}`, Date.now());
+}
+
+let rowsCache = new Map<string, { rows: string[][]; ts: number }>();
+let ensureCache = new Map<string, number>();
+let gidCache = new Map<string, { gid: number; ts: number }>();
+const CACHE_TTL_MS = 60_000;
+const METADATA_CACHE_TTL_MS = 10 * 60_000;
+
+function shouldEnsureSheet(sheetId: string, name: string): boolean {
+  const ts = ensureCache.get(`${sheetId}:${name}`);
+  return !ts || Date.now() - ts > METADATA_CACHE_TTL_MS;
+}
+
+function invalidateRowsCache(range?: string) {
+  if (range) {
+    for (const key of rowsCache.keys()) {
+      if (key === range || key.endsWith(`:${range}`)) rowsCache.delete(key);
+    }
+  }
+  else rowsCache.clear();
+}
+
+function isRateLimitError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|quota/i.test(message);
+}
+
+function rateLimitPayload() {
+  return {
+    error: 'A planilha atingiu o limite temporário de leituras. Aguarde alguns instantes e tente novamente.',
+    fallback: true,
+    rateLimited: true,
+  };
 }
 
 async function fetchRows(sheetId: string, accessToken: string, range: string): Promise<string[][]> {
+  const cacheKey = `${sheetId}:${range}`;
+  const cached = rowsCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.rows;
+
   const res = await fetch(
     `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();
-  if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-  return data.values || [];
+  if (!res.ok) {
+    if ((res.status === 429 || res.status >= 500) && cached) return cached.rows;
+    throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+  }
+  const rows = data.values || [];
+  rowsCache.set(cacheKey, { rows, ts: Date.now() });
+  return rows;
 }
 
 function generateNextId(rows: string[][], prefix: string, padLen: number): string {
@@ -162,13 +213,22 @@ function findRowByFirstCol(rows: string[][], id: string): number {
 }
 
 async function getSheetGid(sheetId: string, accessToken: string, name: string): Promise<number> {
+  const cacheKey = `${sheetId}:${name}`;
+  const cached = gidCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < METADATA_CACHE_TTL_MS) return cached.gid;
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const meta = await metaRes.json();
+  if (!metaRes.ok) {
+    if (cached) return cached.gid;
+    throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  }
   const sheet = (meta.sheets || []).find((s: any) => s.properties?.title === name);
   if (!sheet) throw new Error(`Aba ${name} não encontrada`);
+  gidCache.set(cacheKey, { gid: sheet.properties.sheetId, ts: Date.now() });
   return sheet.properties.sheetId;
 }
 
@@ -206,6 +266,7 @@ async function findOrCreateConstrutoraByName(
       body: JSON.stringify({ values: [newRow] }),
     }
   );
+  invalidateRowsCache(CT_RANGE);
   const updated = [...ctRows, newRow];
   return { codigo, rows: updated };
 }
@@ -288,6 +349,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ values: [[novoValor]] }),
           }
         );
+        invalidateRowsCache(CT_RANGE);
         produtosAtualizados++;
       }
 
@@ -366,6 +428,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+        invalidateRowsCache(AT_RANGE);
       }
 
       return new Response(JSON.stringify({ success: true, espelhadas }), {
@@ -423,6 +486,7 @@ Deno.serve(async (req) => {
           }),
         }
       );
+      invalidateRowsCache();
       return new Response(JSON.stringify({ success: true, idAtividade: novoId, codigoCT }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -467,6 +531,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+        invalidateRowsCache(AT_RANGE);
         return new Response(JSON.stringify({ success: true, ...body }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -489,6 +554,7 @@ Deno.serve(async (req) => {
             }],
           }),
         });
+        invalidateRowsCache(AT_RANGE);
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -513,6 +579,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+        invalidateRowsCache(AT_RANGE);
         return new Response(JSON.stringify({ success: true, ...merged }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -559,6 +626,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache(CT_RANGE);
       return new Response(JSON.stringify({ success: true, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -582,6 +650,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache(CT_RANGE);
       return new Response(JSON.stringify({ success: true, ...merged }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -603,6 +672,7 @@ Deno.serve(async (req) => {
           }],
         }),
       });
+      invalidateRowsCache(CT_RANGE);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -614,8 +684,9 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const isRateLimit = isRateLimitError(message);
+    return new Response(JSON.stringify(isRateLimit ? rateLimitPayload() : { error: message }), {
+      status: isRateLimit ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
