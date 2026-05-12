@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
-      await ensureHeader(sheetId, accessToken);
+      if (shouldEnsureHeader(sheetId)) await ensureHeader(sheetId, accessToken);
 
       // Generate next ID if not provided
       const rows = await fetchAllRows(sheetId, accessToken, false);
@@ -374,11 +374,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    const isRateLimit = /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED/i.test(message);
+    const isRateLimit = isRateLimitError(message);
     return new Response(
-      JSON.stringify({ error: message, rateLimited: isRateLimit }),
+      JSON.stringify(isRateLimit ? rateLimitPayload() : { error: message }),
       {
-        status: isRateLimit ? 503 : 500,
+        status: isRateLimit ? 200 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
