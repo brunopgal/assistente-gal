@@ -677,8 +677,9 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const isRateLimit = isRateLimitError(message);
+    return new Response(JSON.stringify(isRateLimit ? rateLimitPayload() : { error: message }), {
+      status: isRateLimit ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
