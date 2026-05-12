@@ -132,6 +132,10 @@ async function ensureHeader(sheetId: string, accessToken: string) {
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const checkData = await checkRes.json();
+  if (!checkRes.ok) {
+    if (isRateLimitError(JSON.stringify(checkData))) return;
+    throw new Error(`Sheets API error: ${JSON.stringify(checkData)}`);
+  }
   if (!checkData.values || checkData.values.length === 0) {
     await fetch(
       `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`Obras!A1:${LAST_COL}1`)}?valueInputOption=RAW`,
