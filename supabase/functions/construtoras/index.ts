@@ -650,6 +650,7 @@ Deno.serve(async (req) => {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+      invalidateRowsCache(CT_RANGE);
       return new Response(JSON.stringify({ success: true, ...merged }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -671,6 +672,7 @@ Deno.serve(async (req) => {
           }],
         }),
       });
+      invalidateRowsCache(CT_RANGE);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
