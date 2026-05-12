@@ -202,13 +202,22 @@ function findRowByFirstCol(rows: string[][], id: string): number {
 }
 
 async function getSheetGid(sheetId: string, accessToken: string, name: string): Promise<number> {
+  const cacheKey = `${sheetId}:${name}`;
+  const cached = gidCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < METADATA_CACHE_TTL_MS) return cached.gid;
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const meta = await metaRes.json();
+  if (!metaRes.ok) {
+    if (cached) return cached.gid;
+    throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  }
   const sheet = (meta.sheets || []).find((s: any) => s.properties?.title === name);
   if (!sheet) throw new Error(`Aba ${name} não encontrada`);
+  gidCache.set(cacheKey, { gid: sheet.properties.sheetId, ts: Date.now() });
   return sheet.properties.sheetId;
 }
 
@@ -406,6 +415,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+        invalidateRowsCache(`${sheetId}:${AT_RANGE}`);
       }
 
       return new Response(JSON.stringify({ success: true, espelhadas }), {
@@ -463,6 +473,7 @@ Deno.serve(async (req) => {
           }),
         }
       );
+      invalidateRowsCache();
       return new Response(JSON.stringify({ success: true, idAtividade: novoId, codigoCT }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -507,6 +518,7 @@ Deno.serve(async (req) => {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+        invalidateRowsCache(`${sheetId}:${AT_RANGE}`);
         return new Response(JSON.stringify({ success: true, ...body }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
