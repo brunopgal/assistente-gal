@@ -96,6 +96,8 @@ function bodyToRow(body: Record<string, string>, headers: string[]): string[] {
 }
 
 async function ensureSheet(sheetId: string, accessToken: string, name: string, lastCol: string, headerRow: string[]) {
+  if (!shouldEnsureSheet(sheetId, name)) return;
+
   const metaRes = await fetch(
     `${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title,sheetId)`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -127,16 +129,54 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
       }
     );
   }
+  ensureCache.set(`${sheetId}:${name}`, Date.now());
+}
+
+let rowsCache = new Map<string, { rows: string[][]; ts: number }>();
+let ensureCache = new Map<string, number>();
+let gidCache = new Map<string, { gid: number; ts: number }>();
+const CACHE_TTL_MS = 60_000;
+const METADATA_CACHE_TTL_MS = 10 * 60_000;
+
+function shouldEnsureSheet(sheetId: string, name: string): boolean {
+  const ts = ensureCache.get(`${sheetId}:${name}`);
+  return !ts || Date.now() - ts > METADATA_CACHE_TTL_MS;
+}
+
+function invalidateRowsCache(range?: string) {
+  if (range) rowsCache.delete(range);
+  else rowsCache.clear();
+}
+
+function isRateLimitError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|quota/i.test(message);
+}
+
+function rateLimitPayload() {
+  return {
+    error: 'A planilha atingiu o limite temporário de leituras. Aguarde alguns instantes e tente novamente.',
+    fallback: true,
+    rateLimited: true,
+  };
 }
 
 async function fetchRows(sheetId: string, accessToken: string, range: string): Promise<string[][]> {
+  const cacheKey = `${sheetId}:${range}`;
+  const cached = rowsCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.rows;
+
   const res = await fetch(
     `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();
-  if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-  return data.values || [];
+  if (!res.ok) {
+    if ((res.status === 429 || res.status >= 500) && cached) return cached.rows;
+    throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
+  }
+  const rows = data.values || [];
+  rowsCache.set(cacheKey, { rows, ts: Date.now() });
+  return rows;
 }
 
 function generateNextId(rows: string[][], prefix: string, padLen: number): string {
