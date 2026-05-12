@@ -103,7 +103,10 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const meta = await metaRes.json();
-  if (!metaRes.ok) throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  if (!metaRes.ok) {
+    if (isRateLimitError(JSON.stringify(meta))) return;
+    throw new Error(`Sheets meta error: ${JSON.stringify(meta)}`);
+  }
   const exists = (meta.sheets || []).some((s: any) => s.properties?.title === name);
   if (!exists) {
     const addRes = await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
@@ -119,6 +122,10 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const checkData = await checkRes.json();
+  if (!checkRes.ok) {
+    if (isRateLimitError(JSON.stringify(checkData))) return;
+    throw new Error(`Sheets API error: ${JSON.stringify(checkData)}`);
+  }
   if (!checkData.values || checkData.values.length === 0) {
     await fetch(
       `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(`${name}!A1:${lastCol}1`)}?valueInputOption=RAW`,
@@ -144,7 +151,11 @@ function shouldEnsureSheet(sheetId: string, name: string): boolean {
 }
 
 function invalidateRowsCache(range?: string) {
-  if (range) rowsCache.delete(range);
+  if (range) {
+    for (const key of rowsCache.keys()) {
+      if (key === range || key.endsWith(`:${range}`)) rowsCache.delete(key);
+    }
+  }
   else rowsCache.clear();
 }
 
