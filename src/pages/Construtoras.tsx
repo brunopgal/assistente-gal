@@ -470,6 +470,7 @@ export default function Construtoras() {
                             onClick={() => abrirAtividades(c)}
                           >
                             <ListChecks className="h-3.5 w-3.5 mr-1" />
+                            Atividades
                           </Button>
                           <Button
                             variant="outline"
