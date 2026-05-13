@@ -470,18 +470,7 @@ export default function Construtoras() {
                             onClick={() => abrirAtividades(c)}
                           >
                             <ListChecks className="h-3.5 w-3.5 mr-1" />
-                            Atividades
                           </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 ml-1"
-                          onClick={() => abrirEditar(c)}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" />
-                          Editar
-                        </Button>
-                        <Button
                           <Button
                             variant="outline"
                             size="sm"
