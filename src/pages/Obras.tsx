@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
 import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
@@ -24,7 +24,9 @@ import {
   FileText,
   CalendarClock,
   ClipboardList,
+  Info,
 } from "lucide-react";
+import ObraInfoDialog from "@/components/ObraInfoDialog";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
 
@@ -64,6 +66,7 @@ export default function Obras() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [pautaObra, setPautaObra] = useState<Obra | null>(null);
+  const [infoObra, setInfoObra] = useState<Obra | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -145,108 +148,123 @@ export default function Obras() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[140px]">ID</TableHead>
+                    <TableHead className="w-[120px]">ID</TableHead>
                     <TableHead>Nome da obra</TableHead>
                     <TableHead className="hidden md:table-cell">Construtora</TableHead>
                     <TableHead className="hidden lg:table-cell">Cidade</TableHead>
-                    <TableHead className="hidden lg:table-cell">Produtos oferecidos</TableHead>
+                    <TableHead className="hidden lg:table-cell">Produtos</TableHead>
                     <TableHead className="hidden md:table-cell">Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtradas.map((o) => (
-                    <TableRow key={o.id || o.codigoObra}>
-                      <TableCell className="font-mono text-xs">
-                        {o.codigoObra}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {o.nome || "—"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                        {o.construtora || "—"}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {o.cidade || "—"}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {o.produtoOferecido ? (
-                          <div className="flex flex-wrap gap-1">
-                            {o.produtoOferecido
-                              .split(",")
-                              .map((p) => p.trim())
-                              .filter(Boolean)
-                              .map((p) => (
-                                <Badge
-                                  key={p}
-                                  variant="outline"
-                                  className={`text-xs ${produtoColor(p)}`}
-                                >
-                                  {p}
-                                </Badge>
-                              ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {o.statusProspeccao ? (
-                          <Badge variant={statusVariant(o.statusProspeccao)} className="text-xs">
-                            {o.statusProspeccao}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        {temBotaoOrcamento(o.statusProspeccao) && (() => {
-                          const orc = getOrcamentoLink(o);
-                          if (!orc) return null;
-                          return (
+                    <Fragment key={o.id || o.codigoObra}>
+                      <TableRow className="border-b-0">
+                        <TableCell className="font-mono text-xs">
+                          {o.codigoObra}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {o.nome || "—"}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                          {o.construtora || "—"}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {o.cidade || "—"}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {o.produtoOferecido ? (
+                            <div className="flex flex-wrap gap-1">
+                              {o.produtoOferecido
+                                .split(",")
+                                .map((p) => p.trim())
+                                .filter(Boolean)
+                                .map((p) => (
+                                  <Badge
+                                    key={p}
+                                    variant="outline"
+                                    className={`text-xs ${produtoColor(p)}`}
+                                  >
+                                    {p}
+                                  </Badge>
+                                ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {o.statusProspeccao ? (
+                            <Badge variant={statusVariant(o.statusProspeccao)} className="text-xs">
+                              {o.statusProspeccao}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell colSpan={6} className="pt-0 pb-3">
+                          <div className="flex flex-wrap gap-1.5">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-8 mr-1"
-                              onClick={() => openFileSafe(orc.url)}
-                              title={`Abrir orçamento ${orc.label}`}
+                              className="h-8"
+                              onClick={() => setInfoObra(o)}
                             >
-                              <FileText className="h-3.5 w-3.5 mr-1" />
-                              Orçamento
+                              <Info className="h-3.5 w-3.5 mr-1" />
+                              Informações
                             </Button>
-                          );
-                        })()}
-                        <Button asChild variant="ghost" size="sm" className="h-8">
-                          <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
-                            <Pencil className="h-3.5 w-3.5 mr-1" />
-                            Editar
-                          </Link>
-                        </Button>
-                        <Button asChild variant="outline" size="sm" className="h-8 ml-1">
-                          <Link to={`/visitas?obra=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
-                            <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                            Visita/Reunião
-                          </Link>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 ml-1"
-                          onClick={() => setPautaObra(o)}
-                        >
-                          <ClipboardList className="h-3.5 w-3.5 mr-1" />
-                          Pauta Reunião
-                        </Button>
-                        <Button asChild variant="default" size="sm" className="h-8 ml-1">
-                          <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
-                            <ListChecks className="h-3.5 w-3.5 mr-1" />
-                            Atividades
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                            {temBotaoOrcamento(o.statusProspeccao) && (() => {
+                              const orc = getOrcamentoLink(o);
+                              if (!orc) return null;
+                              return (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8"
+                                  onClick={() => openFileSafe(orc.url)}
+                                  title={`Abrir orçamento ${orc.label}`}
+                                >
+                                  <FileText className="h-3.5 w-3.5 mr-1" />
+                                  Orçamento
+                                </Button>
+                              );
+                            })()}
+                            <Button asChild variant="ghost" size="sm" className="h-8">
+                              <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                Editar
+                              </Link>
+                            </Button>
+                            <Button asChild variant="outline" size="sm" className="h-8">
+                              <Link to={`/visitas?obra=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
+                                <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                                Visita/Reunião
+                              </Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => setPautaObra(o)}
+                            >
+                              <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                              Pauta Reunião
+                            </Button>
+                            <Button asChild variant="default" size="sm" className="h-8">
+                              <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
+                                <ListChecks className="h-3.5 w-3.5 mr-1" />
+                                Atividades
+                              </Link>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -260,6 +278,13 @@ export default function Obras() {
         onOpenChange={(o) => !o && setPautaObra(null)}
         obraId={pautaObra?.id || pautaObra?.codigoObra || ""}
         obraNome={pautaObra?.nome}
+      />
+
+      <ObraInfoDialog
+        open={!!infoObra}
+        onOpenChange={(o) => !o && setInfoObra(null)}
+        obraId={infoObra?.codigoObra || infoObra?.id || ""}
+        obraInicial={infoObra}
       />
     </div>
   );

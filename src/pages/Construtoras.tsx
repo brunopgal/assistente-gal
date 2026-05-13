@@ -30,9 +30,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
 const STATUS_OPCOES = ["Já Cliente", "Prospecção"] as const;
@@ -73,6 +74,9 @@ export default function Construtoras() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState<Construtora | null>(null);
   const [editProdutosSel, setEditProdutosSel] = useState<string[]>([]);
+
+  // Info dialog
+  const [infoConstrutora, setInfoConstrutora] = useState<Construtora | null>(null);
 
   // Atividades dialog
   const [openAtv, setOpenAtv] = useState(false);
@@ -181,9 +185,19 @@ export default function Construtoras() {
 
   function abrirEditar(c: Construtora) {
     setEditForm({ ...c });
-    setEditProdutosSel(
-      (c.produto || "").split(",").map((p) => p.trim()).filter(Boolean),
-    );
+    // Normaliza para a capitalização canônica de PRODUTOS para evitar duplicar
+    // ao re-selecionar (ex.: "PRADO" no banco vs "Prado" no UI).
+    const canonicos = (c.produto || "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => {
+        const match = PRODUTOS.find((x) => x.toLowerCase() === p.toLowerCase());
+        return match || p;
+      });
+    // Remove duplicados preservando ordem
+    const unique = Array.from(new Set(canonicos));
+    setEditProdutosSel(unique);
     setOpenEdit(true);
   }
 
@@ -438,33 +452,44 @@ export default function Construtoras() {
                           <Badge variant={statusBadge(c.status)} className="text-xs">{c.status}</Badge>
                         ) : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => abrirAtividades(c)}
-                        >
-                          <ListChecks className="h-3.5 w-3.5 mr-1" />
-                          Atividades
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 ml-1"
-                          onClick={() => abrirEditar(c)}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" />
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 ml-1 text-destructive hover:text-destructive"
-                          onClick={() => excluir(c.codigo || "")}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => setInfoConstrutora(c)}
+                          >
+                            <Info className="h-3.5 w-3.5 mr-1" />
+                            Informações
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => abrirAtividades(c)}
+                          >
+                            <ListChecks className="h-3.5 w-3.5 mr-1" />
+                            Atividades
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => abrirEditar(c)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-destructive hover:text-destructive"
+                            onClick={() => excluir(c.codigo || "")}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -712,6 +737,12 @@ export default function Construtoras() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConstrutoraInfoDialog
+        open={!!infoConstrutora}
+        onOpenChange={(o) => !o && setInfoConstrutora(null)}
+        construtora={infoConstrutora}
+      />
     </div>
   );
 }
