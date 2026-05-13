@@ -737,6 +737,12 @@ export default function Construtoras() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConstrutoraInfoDialog
+        open={!!infoConstrutora}
+        onOpenChange={(o) => !o && setInfoConstrutora(null)}
+        construtora={infoConstrutora}
+      />
     </div>
   );
 }
