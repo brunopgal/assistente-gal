@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import FileUploadField from "@/components/FileUploadField";
+import ConstrutoraCombobox from "@/components/ConstrutoraCombobox";
 import {
   Form,
   FormControl,
@@ -232,7 +233,16 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
             <FormField control={form.control} name="construtora" render={({ field }) => (
               <FormItem>
                 <FormLabel>Construtora/Cliente *</FormLabel>
-                <FormControl><Input placeholder="Ex: MRV Engenharia" {...field} /></FormControl>
+                <FormControl>
+                  <ConstrutoraCombobox
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Buscar existente ou criar nova"
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pesquise para reutilizar uma construtora existente ou digite um nome novo para criar.
+                </p>
                 <FormMessage />
               </FormItem>
             )} />
