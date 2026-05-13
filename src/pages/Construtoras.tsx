@@ -452,16 +452,26 @@ export default function Construtoras() {
                           <Badge variant={statusBadge(c.status)} className="text-xs">{c.status}</Badge>
                         ) : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => abrirAtividades(c)}
-                        >
-                          <ListChecks className="h-3.5 w-3.5 mr-1" />
-                          Atividades
-                        </Button>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => setInfoConstrutora(c)}
+                          >
+                            <Info className="h-3.5 w-3.5 mr-1" />
+                            Informações
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => abrirAtividades(c)}
+                          >
+                            <ListChecks className="h-3.5 w-3.5 mr-1" />
+                            Atividades
+                          </Button>
                         <Button
                           variant="outline"
                           size="sm"
