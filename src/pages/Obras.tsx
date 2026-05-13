@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
 import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
@@ -158,8 +158,8 @@ export default function Obras() {
                 </TableHeader>
                 <TableBody>
                   {filtradas.map((o) => (
-                    <>
-                      <TableRow key={(o.id || o.codigoObra) + "-data"} className="border-b-0">
+                    <Fragment key={o.id || o.codigoObra}>
+                      <TableRow className="border-b-0">
                         <TableCell className="font-mono text-xs">
                           {o.codigoObra}
                         </TableCell>
@@ -203,7 +203,7 @@ export default function Obras() {
                           )}
                         </TableCell>
                       </TableRow>
-                      <TableRow key={(o.id || o.codigoObra) + "-acoes"}>
+                      <TableRow>
                         <TableCell colSpan={6} className="pt-0 pb-3">
                           <div className="flex flex-wrap gap-1.5">
                             <Button
@@ -264,7 +264,7 @@ export default function Obras() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -278,6 +278,13 @@ export default function Obras() {
         onOpenChange={(o) => !o && setPautaObra(null)}
         obraId={pautaObra?.id || pautaObra?.codigoObra || ""}
         obraNome={pautaObra?.nome}
+      />
+
+      <ObraInfoDialog
+        open={!!infoObra}
+        onOpenChange={(o) => !o && setInfoObra(null)}
+        obraId={infoObra?.codigoObra || infoObra?.id || ""}
+        obraInicial={infoObra}
       />
     </div>
   );
