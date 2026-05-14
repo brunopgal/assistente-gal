@@ -195,9 +195,16 @@ export default function Obras() {
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {o.statusProspeccao ? (
-                            <Badge variant={statusVariant(o.statusProspeccao)} className="text-xs">
-                              {o.statusProspeccao}
-                            </Badge>
+                            <div className="flex flex-col gap-1">
+                              <Badge variant={statusVariant(o.statusProspeccao)} className="text-xs w-fit">
+                                {o.statusProspeccao}
+                              </Badge>
+                              {/orçamento enviado|orcamento enviado/i.test(o.statusProspeccao) && (
+                                <span className={`text-[11px] ${o.dataOrcamentoEnviado ? "text-muted-foreground" : "text-destructive"}`}>
+                                  {o.dataOrcamentoEnviado ? o.dataOrcamentoEnviado : "Sem data — adicionar"}
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
