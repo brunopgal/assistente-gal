@@ -41,11 +41,16 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
-function getOrcamentoLink(o: Obra): { url: string; label: string } | null {
-  if (o.linkOrcamentoPrado) return { url: o.linkOrcamentoPrado, label: "Prado" };
-  if (o.linkOrcamentoImab) return { url: o.linkOrcamentoImab, label: "Imab" };
-  if (o.linkOrcamentoRhoden) return { url: o.linkOrcamentoRhoden, label: "Rhoden" };
-  return null;
+function getOrcamentoLinks(o: Obra): { url: string; label: string }[] {
+  const split = (v: string) => (v || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const out: { url: string; label: string }[] = [];
+  const prado = split(o.linkOrcamentoPrado);
+  const imab = split(o.linkOrcamentoImab);
+  const rhoden = split(o.linkOrcamentoRhoden);
+  prado.forEach((u, i) => out.push({ url: u, label: prado.length > 1 ? `Prado ${i + 1}` : "Prado" }));
+  imab.forEach((u, i) => out.push({ url: u, label: imab.length > 1 ? `Imab ${i + 1}` : "Imab" }));
+  rhoden.forEach((u, i) => out.push({ url: u, label: rhoden.length > 1 ? `Rhoden ${i + 1}` : "Rhoden" }));
+  return out;
 }
 
 function temBotaoOrcamento(status: string): boolean {
