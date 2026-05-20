@@ -41,11 +41,16 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
-function getOrcamentoLink(o: Obra): { url: string; label: string } | null {
-  if (o.linkOrcamentoPrado) return { url: o.linkOrcamentoPrado, label: "Prado" };
-  if (o.linkOrcamentoImab) return { url: o.linkOrcamentoImab, label: "Imab" };
-  if (o.linkOrcamentoRhoden) return { url: o.linkOrcamentoRhoden, label: "Rhoden" };
-  return null;
+function getOrcamentoLinks(o: Obra): { url: string; label: string }[] {
+  const split = (v: string) => (v || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const out: { url: string; label: string }[] = [];
+  const prado = split(o.linkOrcamentoPrado);
+  const imab = split(o.linkOrcamentoImab);
+  const rhoden = split(o.linkOrcamentoRhoden);
+  prado.forEach((u, i) => out.push({ url: u, label: prado.length > 1 ? `Prado ${i + 1}` : "Prado" }));
+  imab.forEach((u, i) => out.push({ url: u, label: imab.length > 1 ? `Imab ${i + 1}` : "Imab" }));
+  rhoden.forEach((u, i) => out.push({ url: u, label: rhoden.length > 1 ? `Rhoden ${i + 1}` : "Rhoden" }));
+  return out;
 }
 
 function temBotaoOrcamento(status: string): boolean {
@@ -223,11 +228,10 @@ export default function Obras() {
                               <Info className="h-3.5 w-3.5 mr-1" />
                               Informações
                             </Button>
-                            {temBotaoOrcamento(o.statusProspeccao) && (() => {
-                              const orc = getOrcamentoLink(o);
-                              if (!orc) return null;
-                              return (
+                            {temBotaoOrcamento(o.statusProspeccao) &&
+                              getOrcamentoLinks(o).map((orc, idx) => (
                                 <Button
+                                  key={`${orc.url}-${idx}`}
                                   type="button"
                                   variant="outline"
                                   size="sm"
@@ -236,10 +240,9 @@ export default function Obras() {
                                   title={`Abrir orçamento ${orc.label}`}
                                 >
                                   <FileText className="h-3.5 w-3.5 mr-1" />
-                                  Orçamento
+                                  {orc.label}
                                 </Button>
-                              );
-                            })()}
+                              ))}
                             <Button asChild variant="ghost" size="sm" className="h-8">
                               <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
                                 <Pencil className="h-3.5 w-3.5 mr-1" />

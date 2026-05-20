@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import FileUploadField from "@/components/FileUploadField";
+import MultiFileUploadField from "@/components/MultiFileUploadField";
 import ConstrutoraCombobox from "@/components/ConstrutoraCombobox";
 import {
   Form,
@@ -453,13 +453,13 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
           <h3 className="text-lg font-semibold text-foreground mb-3">Orçamentos</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={form.control} name="linkOrcamentoRhoden" render={({ field }) => (
-              <FileUploadField label="Link do orçamento/PDF RHODEN" value={field.value} onChange={field.onChange} />
+              <MultiFileUploadField label="Orçamentos/PDFs RHODEN" value={field.value} onChange={field.onChange} />
             )} />
             <FormField control={form.control} name="linkOrcamentoPrado" render={({ field }) => (
-              <FileUploadField label="Link do orçamento/PDF PRADO" value={field.value} onChange={field.onChange} />
+              <MultiFileUploadField label="Orçamentos/PDFs PRADO" value={field.value} onChange={field.onChange} />
             )} />
             <FormField control={form.control} name="linkOrcamentoImab" render={({ field }) => (
-              <FileUploadField label="Link do orçamento/PDF IMAB" value={field.value} onChange={field.onChange} />
+              <MultiFileUploadField label="Orçamentos/PDFs IMAB" value={field.value} onChange={field.onChange} />
             )} />
           </div>
         </div>
