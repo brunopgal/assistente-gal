@@ -86,21 +86,18 @@ export default function ObraInfoDialog({ open, onOpenChange, obraId, obraInicial
             <Linha label="Observações" value={obra.observacoes} />
 
             <div className="flex flex-wrap gap-2 pt-3">
-              {obra.linkOrcamentoPrado && (
-                <Button size="sm" variant="outline" onClick={() => openFileSafe(obra.linkOrcamentoPrado)}>
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Orçamento Prado
-                </Button>
-              )}
-              {obra.linkOrcamentoImab && (
-                <Button size="sm" variant="outline" onClick={() => openFileSafe(obra.linkOrcamentoImab)}>
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Orçamento Imab
-                </Button>
-              )}
-              {obra.linkOrcamentoRhoden && (
-                <Button size="sm" variant="outline" onClick={() => openFileSafe(obra.linkOrcamentoRhoden)}>
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Orçamento Rhoden
-                </Button>
-              )}
+              {([
+                ["Prado", obra.linkOrcamentoPrado],
+                ["Imab", obra.linkOrcamentoImab],
+                ["Rhoden", obra.linkOrcamentoRhoden],
+              ] as const).flatMap(([brand, raw]) => {
+                const urls = (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
+                return urls.map((url, i) => (
+                  <Button key={`${brand}-${i}`} size="sm" variant="outline" onClick={() => openFileSafe(url)}>
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> Orçamento {brand}{urls.length > 1 ? ` ${i + 1}` : ""}
+                  </Button>
+                ));
+              })}
               <Button size="sm" variant="secondary" asChild>
                 <Link to={`/nova-obra?id=${encodeURIComponent(obra.codigoObra || obra.id || "")}`}>
                   <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
