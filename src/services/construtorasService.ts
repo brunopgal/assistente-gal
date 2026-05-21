@@ -14,6 +14,7 @@ export interface Construtora {
   produto: string;       // Pode ter múltiplos: "Prado, Rhoden"
   status: string;        // "Já Cliente" | "Prospecção"
   observacoes?: string;
+  prospeccaoIA?: string;
 }
 
 export interface AtividadeConstrutora {

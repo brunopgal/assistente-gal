@@ -16,10 +16,10 @@ const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 // ===== Construtoras =====
 const CT_SHEET = 'Construtoras';
-const CT_HEADERS = ['codigo', 'nome', 'cnpj', 'produto', 'status', 'observacoes'];
-const CT_HEADER_ROW = ['Codigo Construtora', 'Nome', 'CNPJ', 'Produto', 'Status', 'Observações'];
-const CT_RANGE = `${CT_SHEET}!A:F`;
-const CT_LAST_COL = 'F';
+const CT_HEADERS = ['codigo', 'nome', 'cnpj', 'produto', 'status', 'observacoes', 'prospeccaoIA'];
+const CT_HEADER_ROW = ['Codigo Construtora', 'Nome', 'CNPJ', 'Produto', 'Status', 'Observações', 'Prospecção IA'];
+const CT_RANGE = `${CT_SHEET}!A:G`;
+const CT_LAST_COL = 'G';
 
 // ===== Atividades Construtoras =====
 const AT_SHEET = 'Atividades Construtoras';
@@ -233,7 +233,7 @@ async function getSheetGid(sheetId: string, accessToken: string, name: string): 
 }
 
 // ===== Helpers compartilhados (usados por sync) =====
-const OBRAS_RANGE = 'Obras!A:X';
+const OBRAS_RANGE = 'Obras!A:Y';
 const ATIVIDADES_RANGE = 'Atividades!A:G';
 
 function normalizeName(s: string): string {
@@ -255,7 +255,7 @@ async function findOrCreateConstrutoraByName(
     }
   }
   const codigo = generateNextId(ctRows, 'CT', 9);
-  const newRow = [codigo, nome.trim(), '', '', 'Prospecção', ''];
+  const newRow = [codigo, nome.trim(), '', '', 'Prospecção', '', ''];
   const targetRow = ctRows.length + 1;
   const writeRange = `${CT_SHEET}!A${targetRow}:${CT_LAST_COL}${targetRow}`;
   await fetch(
