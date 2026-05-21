@@ -71,6 +71,7 @@ const obraSchema = z.object({
   linkOrcamentoImab: z.string(),
   observacoes: z.string(),
   concorrentes: z.string(),
+  prospeccaoIA: z.string().optional(),
 });
 
 export type ObraFormValues = z.infer<typeof obraSchema>;
@@ -119,6 +120,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
       linkOrcamentoImab: "",
       observacoes: "",
       concorrentes: "",
+      prospeccaoIA: "",
       ...defaultValues,
     },
   });
@@ -480,6 +482,21 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
               <FormItem>
                 <FormLabel>Observação</FormLabel>
                 <FormControl><Textarea placeholder="Detalhes adicionais..." rows={4} {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="prospeccaoIA" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Prospecção IA</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Cole aqui informações organizadas pelo ChatGPT sobre esta obra (pesquisa, contatos, insights...)"
+                    rows={6}
+                    {...field}
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Texto livre — preenchido pela página Prospecção IA ou manualmente.</p>
                 <FormMessage />
               </FormItem>
             )} />

@@ -14,6 +14,7 @@ import FollowUp from "./pages/FollowUp";
 import Visitas from "./pages/Visitas";
 import Construtoras from "./pages/Construtoras";
 import Atividades from "./pages/Atividades";
+import ProspeccaoIA from "./pages/ProspeccaoIA";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
                     <Route path="/visitas" element={<Visitas />} />
                     <Route path="/construtoras" element={<Construtoras />} />
                     <Route path="/atividades/:id" element={<Atividades />} />
+                    <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>

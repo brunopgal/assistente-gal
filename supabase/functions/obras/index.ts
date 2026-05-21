@@ -8,30 +8,12 @@ const corsHeaders = {
 // EXACT mapping matching the real Google Sheet structure (A..X = 24 columns)
 // IMPORTANT: column J is intentionally empty in the real sheet (gap between Email and Cidade Obra)
 const SHEET_HEADERS = [
-  'codigoObra',          // A - ID
-  'dataCadastro',        // B - Data de cadastro
-  'statusProspeccao',    // C - Status da prospecção
-  'nome',                // D - Nome da obra
-  'classificacao',       // E - Classificação da obra
-  'construtora',         // F - Construtora/Cliente
-  'responsavel',         // G - Responsável/Contato
-  'telefone',            // H - Telefone/Whastapp
-  'email',               // I - Email
-  '_empty',              // J - (empty column in sheet)
-  'cidade',              // K - Cidade Obra
-  'localizacao',         // L - Localização/Bairro Obra
-  'produtoOferecido',    // M - Produto Oferecido
-  'estagioObra',         // N - Estágio da obra
-  'marcouReuniao',       // O - Marcou Reunião?
-  'visita',              // P - Visita
-  'dataUltimaVisita',    // Q - Data da última visita
-  'dataOrcamentoEnviado',// R - Data orçamento enviado
-  'proximoContato',      // S - Próximo contato/Follow up
-  'linkOrcamentoRhoden', // T - Link do orçamento/PDF RHODEN
-  'linkOrcamentoPrado',  // U - Link do orçamento/PDF PRADO
-  'linkOrcamentoImab',   // V - Link do orçamento/PDF IMAB
-  'observacoes',         // W - Observação
-  'concorrentes',        // X - Concorrentes
+  'codigoObra', 'dataCadastro', 'statusProspeccao', 'nome', 'classificacao',
+  'construtora', 'responsavel', 'telefone', 'email', '_empty', 'cidade',
+  'localizacao', 'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita',
+  'dataUltimaVisita', 'dataOrcamentoEnviado', 'proximoContato',
+  'linkOrcamentoRhoden', 'linkOrcamentoPrado', 'linkOrcamentoImab',
+  'observacoes', 'concorrentes', 'prospeccaoIA',
 ];
 
 const SHEET_HEADER_ROW = [
@@ -41,11 +23,11 @@ const SHEET_HEADER_ROW = [
   'Produto Oferecido', 'Estágio da obra', 'Marcou Reunião?', 'Visita',
   'Data da última visita', 'Data orçamento enviado', 'Próximo contato/Follow up',
   'Link do orçamento/PDF  RHODEN', 'Link do orçamento/PDF  PRADO',
-  'Link do orçamento/PDF  IMAB', 'Observação', 'Concorrentes',
+  'Link do orçamento/PDF  IMAB', 'Observação', 'Concorrentes', 'Prospecção IA',
 ];
 
-const RANGE = 'Obras!A:X';
-const LAST_COL = 'X';
+const RANGE = 'Obras!A:Y';
+const LAST_COL = 'Y';
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;

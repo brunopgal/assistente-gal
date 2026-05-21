@@ -65,7 +65,7 @@ export default function Construtoras() {
   const [openNew, setOpenNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Construtora>({
-    nome: "", cnpj: "", produto: "", status: "Prospecção", observacoes: "",
+    nome: "", cnpj: "", produto: "", status: "Prospecção", observacoes: "", prospeccaoIA: "",
   });
   const [produtosSel, setProdutosSel] = useState<string[]>([]);
 
@@ -154,7 +154,7 @@ export default function Construtoras() {
       await criarConstrutora(payload);
       toast({ title: "Construtora criada" });
       setOpenNew(false);
-      setForm({ nome: "", cnpj: "", produto: "", status: "Prospecção", observacoes: "" });
+      setForm({ nome: "", cnpj: "", produto: "", status: "Prospecção", observacoes: "", prospeccaoIA: "" });
       setProdutosSel([]);
       carregar();
     } catch (e) {
@@ -211,6 +211,7 @@ export default function Construtoras() {
         produto: editProdutosSel.join(", "),
         status: editForm.status,
         observacoes: editForm.observacoes,
+        prospeccaoIA: editForm.prospeccaoIA,
       };
       await atualizarConstrutora(editForm.codigo, payload);
       toast({ title: "Construtora atualizada" });
@@ -381,6 +382,15 @@ export default function Construtoras() {
                   value={form.observacoes}
                   onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
                   rows={3}
+                />
+              </div>
+              <div>
+                <Label>Prospecção IA</Label>
+                <Textarea
+                  value={form.prospeccaoIA || ""}
+                  onChange={(e) => setForm({ ...form, prospeccaoIA: e.target.value })}
+                  rows={4}
+                  placeholder="Cole informações organizadas pelo ChatGPT..."
                 />
               </div>
             </div>
@@ -557,6 +567,15 @@ export default function Construtoras() {
                   value={editForm.observacoes || ""}
                   onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })}
                   rows={3}
+                />
+              </div>
+              <div>
+                <Label>Prospecção IA</Label>
+                <Textarea
+                  value={editForm.prospeccaoIA || ""}
+                  onChange={(e) => setEditForm({ ...editForm, prospeccaoIA: e.target.value })}
+                  rows={4}
+                  placeholder="Cole informações organizadas pelo ChatGPT..."
                 />
               </div>
             </div>

@@ -26,6 +26,7 @@ export interface Obra {
   linkOrcamentoImab: string;
   observacoes: string;
   concorrentes: string;
+  prospeccaoIA?: string;
 }
 
 function buildUrl(id?: string) {

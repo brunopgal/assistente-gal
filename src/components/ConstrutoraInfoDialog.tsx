@@ -83,6 +83,12 @@ export default function ConstrutoraInfoDialog({ open, onOpenChange, construtora 
                   <div className="whitespace-pre-wrap">{construtora.observacoes}</div>
                 </div>
               )}
+              {construtora.prospeccaoIA && (
+                <div className="col-span-2">
+                  <div className="text-xs text-muted-foreground">Prospecção IA</div>
+                  <div className="whitespace-pre-wrap">{construtora.prospeccaoIA}</div>
+                </div>
+              )}
             </div>
 
             <div className="pt-2">

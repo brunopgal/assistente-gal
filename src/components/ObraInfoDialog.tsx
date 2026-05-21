@@ -84,6 +84,7 @@ export default function ObraInfoDialog({ open, onOpenChange, obraId, obraInicial
             <Linha label="Data cadastro" value={obra.dataCadastro} />
             <Linha label="Concorrentes" value={obra.concorrentes} />
             <Linha label="Observações" value={obra.observacoes} />
+            <Linha label="Prospecção IA" value={obra.prospeccaoIA} />
 
             <div className="flex flex-wrap gap-2 pt-3">
               {([
