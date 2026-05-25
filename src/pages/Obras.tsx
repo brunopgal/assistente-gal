@@ -77,6 +77,9 @@ export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [filtroCidade, setFiltroCidade] = useState<string>("__all__");
+  const [filtroProduto, setFiltroProduto] = useState<string>("__all__");
+  const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
   const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
   const { toast } = useToast();
