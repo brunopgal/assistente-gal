@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -70,6 +77,9 @@ export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [filtroCidade, setFiltroCidade] = useState<string>("__all__");
+  const [filtroProduto, setFiltroProduto] = useState<string>("__all__");
+  const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
   const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
   const { toast } = useToast();
@@ -92,15 +102,52 @@ export default function Obras() {
     })();
   }, [toast]);
 
+  const cidadesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) => o.cidade && set.add(o.cidade.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
+  const produtosDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) =>
+      (o.produtoOferecido || "")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .forEach((p) => set.add(p)),
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
+  const statusDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) => o.statusProspeccao && set.add(o.statusProspeccao.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
   const filtradas = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return obras;
-    return obras.filter((o) =>
-      [o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
-  }, [obras, query]);
+    return obras.filter((o) => {
+      if (
+        q &&
+        ![o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+        return false;
+      if (filtroCidade !== "__all__" && (o.cidade || "").trim() !== filtroCidade) return false;
+      if (filtroStatus !== "__all__" && (o.statusProspeccao || "").trim() !== filtroStatus) return false;
+      if (filtroProduto !== "__all__") {
+        const prods = (o.produtoOferecido || "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (!prods.includes(filtroProduto)) return false;
+      }
+      return true;
+    });
+  }, [obras, query, filtroCidade, filtroProduto, filtroStatus]);
 
   return (
     <div className="space-y-6">
@@ -138,6 +185,56 @@ export default function Obras() {
             <span className="text-xs text-muted-foreground ml-auto">
               {filtradas.length} de {obras.length}
             </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Select value={filtroCidade} onValueChange={setFiltroCidade}>
+              <SelectTrigger className="h-9 w-[180px]">
+                <SelectValue placeholder="Cidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas as cidades</SelectItem>
+                {cidadesDisponiveis.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroProduto} onValueChange={setFiltroProduto}>
+              <SelectTrigger className="h-9 w-[180px]">
+                <SelectValue placeholder="Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os produtos</SelectItem>
+                {produtosDisponiveis.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os status</SelectItem>
+                {statusDisponiveis.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(filtroCidade !== "__all__" || filtroProduto !== "__all__" || filtroStatus !== "__all__") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9"
+                onClick={() => {
+                  setFiltroCidade("__all__");
+                  setFiltroProduto("__all__");
+                  setFiltroStatus("__all__");
+                }}
+              >
+                Limpar filtros
+              </Button>
+            )}
           </div>
 
           {loading ? (
