@@ -102,15 +102,52 @@ export default function Obras() {
     })();
   }, [toast]);
 
+  const cidadesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) => o.cidade && set.add(o.cidade.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
+  const produtosDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) =>
+      (o.produtoOferecido || "")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .forEach((p) => set.add(p)),
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
+  const statusDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    obras.forEach((o) => o.statusProspeccao && set.add(o.statusProspeccao.trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [obras]);
+
   const filtradas = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return obras;
-    return obras.filter((o) =>
-      [o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
-  }, [obras, query]);
+    return obras.filter((o) => {
+      if (
+        q &&
+        ![o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+        return false;
+      if (filtroCidade !== "__all__" && (o.cidade || "").trim() !== filtroCidade) return false;
+      if (filtroStatus !== "__all__" && (o.statusProspeccao || "").trim() !== filtroStatus) return false;
+      if (filtroProduto !== "__all__") {
+        const prods = (o.produtoOferecido || "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (!prods.includes(filtroProduto)) return false;
+      }
+      return true;
+    });
+  }, [obras, query, filtroCidade, filtroProduto, filtroStatus]);
 
   return (
     <div className="space-y-6">
