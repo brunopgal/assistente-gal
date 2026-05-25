@@ -187,6 +187,56 @@ export default function Obras() {
             </span>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Select value={filtroCidade} onValueChange={setFiltroCidade}>
+              <SelectTrigger className="h-9 w-[180px]">
+                <SelectValue placeholder="Cidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas as cidades</SelectItem>
+                {cidadesDisponiveis.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroProduto} onValueChange={setFiltroProduto}>
+              <SelectTrigger className="h-9 w-[180px]">
+                <SelectValue placeholder="Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os produtos</SelectItem>
+                {produtosDisponiveis.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os status</SelectItem>
+                {statusDisponiveis.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(filtroCidade !== "__all__" || filtroProduto !== "__all__" || filtroStatus !== "__all__") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9"
+                onClick={() => {
+                  setFiltroCidade("__all__");
+                  setFiltroProduto("__all__");
+                  setFiltroStatus("__all__");
+                }}
+              >
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
