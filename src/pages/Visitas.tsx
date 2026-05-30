@@ -230,7 +230,7 @@ export default function Visitas() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0 pointer-events-auto" align="start">
-                    <Command>
+                    <Command filter={(value, search) => (normalizeText(value).includes(normalizeText(search)) ? 1 : 0)}>
                       <CommandInput placeholder="Buscar por nome, ID, cidade ou contato..." />
                       <CommandList>
                         <CommandEmpty>Nenhuma obra encontrada.</CommandEmpty>
