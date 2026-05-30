@@ -125,12 +125,12 @@ export default function Construtoras() {
   }, []);
 
   const filtradas = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizeText(query);
     if (!q) return items;
     return items.filter((c) =>
       [c.codigo, c.nome, c.cnpj, c.produto, c.status]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
+        .some((v) => normalizeText(v).includes(q)),
     );
   }, [items, query]);
 

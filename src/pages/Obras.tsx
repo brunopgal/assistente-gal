@@ -36,6 +36,7 @@ import {
 import ObraInfoDialog from "@/components/ObraInfoDialog";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
+import { normalizeText } from "@/lib/normalize";
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
