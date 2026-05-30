@@ -36,6 +36,7 @@ import {
 import ObraInfoDialog from "@/components/ObraInfoDialog";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
+import { normalizeText } from "@/lib/normalize";
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
@@ -127,23 +128,26 @@ export default function Obras() {
   }, [obras]);
 
   const filtradas = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizeText(query);
+    const nCidade = normalizeText(filtroCidade);
+    const nStatus = normalizeText(filtroStatus);
+    const nProduto = normalizeText(filtroProduto);
     return obras.filter((o) => {
       if (
         q &&
         ![o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
           .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
+          .some((v) => normalizeText(v).includes(q))
       )
         return false;
-      if (filtroCidade !== "__all__" && (o.cidade || "").trim() !== filtroCidade) return false;
-      if (filtroStatus !== "__all__" && (o.statusProspeccao || "").trim() !== filtroStatus) return false;
+      if (filtroCidade !== "__all__" && normalizeText(o.cidade) !== nCidade) return false;
+      if (filtroStatus !== "__all__" && normalizeText(o.statusProspeccao) !== nStatus) return false;
       if (filtroProduto !== "__all__") {
         const prods = (o.produtoOferecido || "")
           .split(",")
-          .map((p) => p.trim())
+          .map((p) => normalizeText(p))
           .filter(Boolean);
-        if (!prods.includes(filtroProduto)) return false;
+        if (!prods.includes(nProduto)) return false;
       }
       return true;
     });

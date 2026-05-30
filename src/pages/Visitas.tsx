@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarClock, Plus, Trash2, ExternalLink, Loader2, Check, ChevronsUpDown, Building2, Clock, AlertTriangle, CalendarCheck, X, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/normalize";
 
 function formatDateBR(iso: string) {
   if (!iso) return "";
@@ -229,13 +230,13 @@ export default function Visitas() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0 pointer-events-auto" align="start">
-                    <Command>
+                    <Command filter={(value, search) => (normalizeText(value).includes(normalizeText(search)) ? 1 : 0)}>
                       <CommandInput placeholder="Buscar por nome, ID, cidade ou contato..." />
                       <CommandList>
                         <CommandEmpty>Nenhuma obra encontrada.</CommandEmpty>
                         <CommandGroup>
                           {obras.map((o) => {
-                            const search = `${o.nome} ${o.id} ${o.cidade} ${o.construtora} ${o.responsavel}`.toLowerCase();
+                            const search = normalizeText(`${o.nome} ${o.id} ${o.cidade} ${o.construtora} ${o.responsavel}`);
                             return (
                               <CommandItem
                                 key={o.id}

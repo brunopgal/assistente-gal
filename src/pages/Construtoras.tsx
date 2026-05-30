@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
+import { normalizeText } from "@/lib/normalize";
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
 const STATUS_OPCOES = ["Já Cliente", "Prospecção"] as const;
@@ -125,12 +126,12 @@ export default function Construtoras() {
   }, []);
 
   const filtradas = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizeText(query);
     if (!q) return items;
     return items.filter((c) =>
       [c.codigo, c.nome, c.cnpj, c.produto, c.status]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
+        .some((v) => normalizeText(v).includes(q)),
     );
   }, [items, query]);
 

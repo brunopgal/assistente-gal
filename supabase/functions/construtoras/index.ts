@@ -237,7 +237,12 @@ const OBRAS_RANGE = 'Obras!A:Y';
 const ATIVIDADES_RANGE = 'Atividades!A:G';
 
 function normalizeName(s: string): string {
-  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 async function findOrCreateConstrutoraByName(
