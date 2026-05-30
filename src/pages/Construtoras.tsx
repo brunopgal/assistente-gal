@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
+import { normalizeText } from "@/lib/normalize";
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
 const STATUS_OPCOES = ["Já Cliente", "Prospecção"] as const;
