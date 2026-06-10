@@ -369,6 +369,7 @@ export default function ProspeccaoIA() {
       setConstrutoras(ctEntries);
       setObras(obrEntries);
       setPessoas(pesEntries);
+      setTodasCtsList(todasCts);
 
       const novasCt = ctEntries.filter((e) => !e.existing).length;
       const reusedCt = ctEntries.filter((e) => e.existing).length;
