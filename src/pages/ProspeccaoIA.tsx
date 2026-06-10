@@ -252,6 +252,7 @@ interface PessoaEntry {
   duplicate?: Pessoa;
   construtoraExistenteNome?: string;
   obraExistenteNome?: string;
+  codigoConstrutoraOverride?: string;
   create: boolean;
 }
 
