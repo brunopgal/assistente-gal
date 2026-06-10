@@ -27,6 +27,7 @@ export interface Obra {
   observacoes: string;
   concorrentes: string;
   prospeccaoIA?: string;
+  codigoConstrutora?: string; // FK -> Construtoras.codigo (dual-write com `construtora` por nome)
 }
 
 function buildUrl(id?: string) {

@@ -10,7 +10,7 @@ import { listarConstrutoras, type Construtora } from "@/services/construtorasSer
 
 interface Props {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, codigo?: string) => void;
   placeholder?: string;
 }
 
@@ -75,7 +75,7 @@ export default function ConstrutoraCombobox({ value, onChange, placeholder }: Pr
                   key={c.codigo || c.nome}
                   value={c.nome}
                   onSelect={() => {
-                    onChange(c.nome);
+                    onChange(c.nome, c.codigo || "");
                     setQuery("");
                     setOpen(false);
                   }}
@@ -100,7 +100,7 @@ export default function ConstrutoraCombobox({ value, onChange, placeholder }: Pr
                 <CommandItem
                   value={`__new__${query}`}
                   onSelect={() => {
-                    onChange(query.trim());
+                    onChange(query.trim(), "");
                     setQuery("");
                     setOpen(false);
                   }}

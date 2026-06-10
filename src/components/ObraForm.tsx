@@ -72,6 +72,7 @@ const obraSchema = z.object({
   observacoes: z.string(),
   concorrentes: z.string(),
   prospeccaoIA: z.string().optional(),
+  codigoConstrutora: z.string().optional(),
 });
 
 export type ObraFormValues = z.infer<typeof obraSchema>;
@@ -121,6 +122,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
       observacoes: "",
       concorrentes: "",
       prospeccaoIA: "",
+      codigoConstrutora: "",
       ...defaultValues,
     },
   });
@@ -238,12 +240,21 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
                 <FormControl>
                   <ConstrutoraCombobox
                     value={field.value}
-                    onChange={field.onChange}
+                    onChange={(nome, codigo) => {
+                      field.onChange(nome);
+                      // dual-write: salva o código quando vier de uma construtora existente
+                      form.setValue("codigoConstrutora", codigo || "", { shouldDirty: true });
+                    }}
                     placeholder="Buscar existente ou criar nova"
                   />
                 </FormControl>
                 <p className="text-xs text-muted-foreground mt-1">
                   Pesquise para reutilizar uma construtora existente ou digite um nome novo para criar.
+                  {form.watch("codigoConstrutora") && (
+                    <span className="ml-2 font-mono text-[10px] text-primary">
+                      {form.watch("codigoConstrutora")}
+                    </span>
+                  )}
                 </p>
                 <FormMessage />
               </FormItem>
