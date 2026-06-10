@@ -31,13 +31,36 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
+      let finalEmail = email.trim();
+      if (!finalEmail.includes("@")) {
+        finalEmail = `${finalEmail.replace(/\s+/g, "").toLowerCase()}@gallo.com`;
+      }
+
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("Bem-vindo!");
+        const { error } = await supabase.auth.signInWithPassword({ email: finalEmail, password });
+        if (error) {
+          // If login fails because user does not exist, try to sign up automatically
+          if (error.message.toLowerCase().includes("invalid login credentials")) {
+            const { error: signUpError } = await supabase.auth.signUp({
+              email: finalEmail,
+              password,
+              options: { emailRedirectTo: `${window.location.origin}/` },
+            });
+            if (signUpError) throw signUpError;
+            
+            // Login again after sign up
+            const { error: signInError } = await supabase.auth.signInWithPassword({ email: finalEmail, password });
+            if (signInError) throw signInError;
+            toast.success("Conta criada e conectado com sucesso!");
+          } else {
+            throw error;
+          }
+        } else {
+          toast.success("Bem-vindo!");
+        }
       } else {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: finalEmail,
           password,
           options: { emailRedirectTo: `${window.location.origin}/` },
         });
@@ -98,16 +121,16 @@ export default function Auth() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email ou Usuário</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
+                  placeholder="Ex: gallo.rep ou seu@email.com"
                   className="pl-10"
                   autoComplete="email"
                 />
