@@ -264,6 +264,7 @@ export default function ProspeccaoIA() {
   const [construtoras, setConstrutoras] = useState<ConstrutoraEntry[]>([]);
   const [obras, setObras] = useState<ObraEntry[]>([]);
   const [pessoas, setPessoas] = useState<PessoaEntry[]>([]);
+  const [todasCtsList, setTodasCtsList] = useState<Construtora[]>([]);
   const [resumo, setResumo] = useState<string>("");
 
   function copiarPrompt() {
