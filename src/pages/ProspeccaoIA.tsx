@@ -13,32 +13,59 @@ import {
   atualizarConstrutora,
   type Construtora,
 } from "@/services/construtorasService";
+import { listarPessoas, criarPessoa, type Pessoa } from "@/services/pessoasService";
 
-const PROMPT_TEMPLATE = `Você vai me retornar informações de prospecção em formato JSON ESTRITO seguindo o schema abaixo.
+const PROMPT_TEMPLATE = `Você vai me retornar informações de prospecção em formato JSON ESTRITO seguindo exatamente o schema abaixo.
 
-REGRAS:
-- Retorne APENAS um objeto JSON válido (sem markdown, sem texto fora do JSON).
-- Campos desconhecidos devem ser string vazia "" (nunca null).
-- Datas em DD/MM/AAAA.
-- Produtos em obras: use APENAS valores em CAIXA ALTA: "PRADO", "RHODEN", "IMAB" (separados por vírgula).
-- Produtos em construtoras: use APENAS "Prado", "Rhoden", "Imab" (capitalizado).
-- "statusProspeccao" deve ser um de: "Prospectar", "Em prospecção", "Fazendo Orçamento", "Orçamento Enviado", "Fechado", "Perdido".
-- "classificacao" deve ser um de: "Baixo", "Médio", "Médio/Alto", "Alto".
-- "estagioObra" deve ser um de: "Fundação", "Estrutura", "Alvenaria", "Acabamento", "Finalizado", "Não iniciado".
-- "status" de construtora deve ser "Já Cliente" ou "Prospecção".
-- Não invente dados. Se não souber, deixe vazio.
-- O campo "prospeccaoIA" deve conter um resumo textual organizado de tudo que você pesquisou/inferiu sobre aquela obra ou construtora (insights, contatos extras, links, histórico).
+IMPORTANTE:
+- Retorne APENAS um JSON válido.
+- Não utilize markdown.
+- Não escreva explicações.
+- Não escreva texto antes ou depois do JSON.
+- Nunca utilize null. Campos desconhecidos devem retornar "".
+- Datas sempre em DD/MM/AAAA.
+- Não invente informações. Se não encontrar um dado, deixe vazio.
 
-SCHEMA:
+==================================================
+OBJETIVO
+Identificar Construtoras, Obras, Pessoas relacionadas e informações estratégicas para prospecção comercial.
+
+==================================================
+REGRAS DE PADRONIZAÇÃO
+
+STATUS COMERCIAL CONSTRUTORA: Prospectar | Em Prospecção | Cliente | Inativa
+CLASSIFICAÇÃO DA OBRA: Prédio Residencial | Condomínio de Casas | Outro | Não Informado
+PADRÃO DA OBRA: MCMV | Popular | Médio | Alto | Não Informado
+ESTÁGIO DA OBRA: Terreno | Fundação | Estrutura | Alvenaria | Acabamento | Finalização | Entregue | Não Informado
+ESTÁGIO COMERCIAL: Prospectar | Em Prospecção | Contato Inicial | Visita Realizada | Orçamento Enviado | Negociação | Fechado | Perdido | Não Informado
+CARGOS: Compras | Engenheiro | Arquiteto | Mestre de Obras | Dono | Outros | Não Informado
+PRODUTOS DA OBRA (CAIXA ALTA, separados por vírgula): PRADO,RHODEN,IMAB
+PRODUTOS DA CONSTRUTORA (capitalizado, separados por vírgula): Prado,Rhoden,Imab
+
+==================================================
+SCHEMA
 {
   "construtoras": [
     {
       "nome": "",
       "cnpj": "",
-      "produto": "",
-      "status": "Prospecção",
+      "cidade": "",
+      "estado": "",
+      "statusComercial": "",
+      "produtos": "",
       "observacoes": "",
       "prospeccaoIA": ""
+    }
+  ],
+  "pessoas": [
+    {
+      "nome": "",
+      "cargo": "",
+      "telefone": "",
+      "email": "",
+      "construtora": "",
+      "obraRelacionada": "",
+      "observacoes": ""
     }
   ],
   "obras": [
@@ -46,20 +73,27 @@ SCHEMA:
       "nome": "",
       "construtora": "",
       "classificacao": "",
-      "responsavel": "",
-      "telefone": "",
-      "email": "",
+      "padraoObra": "",
       "cidade": "",
-      "localizacao": "",
-      "produtoOferecido": "",
+      "estado": "",
+      "endereco": "",
       "estagioObra": "",
-      "statusProspeccao": "Prospectar",
-      "observacoes": "",
+      "estagioComercial": "",
+      "produtos": "",
       "concorrentes": "",
+      "proximaAcao": "",
+      "observacoes": "",
       "prospeccaoIA": ""
     }
   ]
 }
+
+==================================================
+REGRAS IMPORTANTES
+- Uma construtora pode possuir várias obras e várias pessoas.
+- Uma pessoa pode estar relacionada a uma obra específica.
+- Se identificar concorrentes (Papaiz, Pado, Yale, Stam, Soprano, etc.), preencher concorrentes.
+- O campo "prospeccaoIA" deve conter um resumo estratégico útil para vendas.
 
 Agora preencha com os dados solicitados:`;
 
@@ -71,16 +105,153 @@ function norm(s: string) {
     .trim();
 }
 
+// ============ Normalizadores (Opção A: prompt novo -> valores canônicos atuais) ============
+
+function mapStatusConstrutora(v: string): string {
+  const n = norm(v);
+  if (n === "cliente" || n === "ja cliente") return "Já Cliente";
+  return "Prospecção"; // Prospectar / Em Prospecção / Inativa / vazio
+}
+
+function mapStatusProspeccao(v: string): string {
+  const n = norm(v);
+  const map: Record<string, string> = {
+    "prospectar": "Prospectar",
+    "em prospeccao": "Em prospecção",
+    "contato inicial": "Em prospecção",
+    "visita realizada": "Em prospecção",
+    "orcamento enviado": "Orçamento Enviado",
+    "negociacao": "Fazendo Orçamento",
+    "fazendo orcamento": "Fazendo Orçamento",
+    "fechado": "Fechado",
+    "perdido": "Perdido",
+  };
+  return map[n] || "Prospectar";
+}
+
+function mapEstagioObra(v: string): string {
+  const n = norm(v);
+  const map: Record<string, string> = {
+    "terreno": "Não iniciado",
+    "nao iniciado": "Não iniciado",
+    "fundacao": "Fundação",
+    "estrutura": "Estrutura",
+    "alvenaria": "Alvenaria",
+    "acabamento": "Acabamento",
+    "finalizacao": "Finalizado",
+    "finalizado": "Finalizado",
+    "entregue": "Finalizado",
+  };
+  return map[n] || "";
+}
+
+function mapPadraoObra(v: string): string {
+  // padraoObra do prompt novo -> classificacao atual (campo único hoje)
+  const n = norm(v);
+  const map: Record<string, string> = {
+    "mcmv": "Baixo",
+    "popular": "Baixo",
+    "medio": "Médio",
+    "alto": "Alto",
+  };
+  return map[n] || "";
+}
+
+function mapProdutosObra(v: string): string {
+  // PRADO,RHODEN,IMAB
+  return (v || "").toUpperCase().replace(/\s+/g, "");
+}
+
+function mapProdutosConstrutora(v: string): string {
+  // Prado,Rhoden,Imab
+  return (v || "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1).toLowerCase())
+    .join(",");
+}
+
+function buildObservacoesObra(o: ObraPromptInput): string {
+  const extras: string[] = [];
+  if (o.observacoes) extras.push(o.observacoes);
+  if (o.classificacao) extras.push(`Classificação: ${o.classificacao}`);
+  if (o.padraoObra) extras.push(`Padrão: ${o.padraoObra}`);
+  if (o.endereco) extras.push(`Endereço: ${o.endereco}`);
+  if (o.estado) extras.push(`Estado: ${o.estado}`);
+  if (o.proximaAcao) extras.push(`Próxima ação: ${o.proximaAcao}`);
+  return extras.join(" | ");
+}
+
+function buildObservacoesConstrutora(c: ConstrutoraPromptInput): string {
+  const extras: string[] = [];
+  if (c.observacoes) extras.push(c.observacoes);
+  if (c.cidade) extras.push(`Cidade: ${c.cidade}`);
+  if (c.estado) extras.push(`Estado: ${c.estado}`);
+  if (c.statusComercial && norm(c.statusComercial) !== "cliente") {
+    extras.push(`Status original: ${c.statusComercial}`);
+  }
+  return extras.join(" | ");
+}
+
+// ============ Tipos do prompt novo ============
+
+interface ConstrutoraPromptInput {
+  nome?: string;
+  cnpj?: string;
+  cidade?: string;
+  estado?: string;
+  statusComercial?: string;
+  produtos?: string;
+  observacoes?: string;
+  prospeccaoIA?: string;
+}
+interface ObraPromptInput {
+  nome?: string;
+  construtora?: string;
+  classificacao?: string;
+  padraoObra?: string;
+  cidade?: string;
+  estado?: string;
+  endereco?: string;
+  estagioObra?: string;
+  estagioComercial?: string;
+  produtos?: string;
+  concorrentes?: string;
+  proximaAcao?: string;
+  observacoes?: string;
+  prospeccaoIA?: string;
+}
+interface PessoaPromptInput {
+  nome?: string;
+  cargo?: string;
+  telefone?: string;
+  email?: string;
+  construtora?: string;
+  obraRelacionada?: string;
+  observacoes?: string;
+}
+
 interface ConstrutoraEntry {
+  raw: ConstrutoraPromptInput;
   data: Partial<Construtora>;
   existing?: Construtora;
-  reuse: boolean; // se true e existing existe, não cria — apenas usa
+  reuse: boolean;
 }
 interface ObraEntry {
+  raw: ObraPromptInput;
   data: Partial<Obra>;
-  duplicate?: Obra; // obra com mesmo nome+construtora
+  duplicate?: Obra;
   construtoraExistente?: Construtora;
-  create: boolean; // checkbox para confirmar criação
+  create: boolean;
+}
+interface PessoaEntry {
+  raw: PessoaPromptInput;
+  data: Partial<Pessoa>;
+  duplicate?: Pessoa;
+  construtoraExistenteNome?: string;
+  obraExistenteNome?: string;
+  create: boolean;
 }
 
 export default function ProspeccaoIA() {
@@ -90,6 +261,7 @@ export default function ProspeccaoIA() {
   const [importing, setImporting] = useState(false);
   const [construtoras, setConstrutoras] = useState<ConstrutoraEntry[]>([]);
   const [obras, setObras] = useState<ObraEntry[]>([]);
+  const [pessoas, setPessoas] = useState<PessoaEntry[]>([]);
   const [resumo, setResumo] = useState<string>("");
 
   function copiarPrompt() {
@@ -101,19 +273,37 @@ export default function ProspeccaoIA() {
     setParsing(true);
     setConstrutoras([]);
     setObras([]);
+    setPessoas([]);
     setResumo("");
     try {
       const cleaned = jsonText.trim().replace(/^```json\s*/i, "").replace(/```$/, "").trim();
       const parsed = JSON.parse(cleaned);
-      const ctsIn: Partial<Construtora>[] = Array.isArray(parsed.construtoras) ? parsed.construtoras : [];
-      const obrsIn: Partial<Obra>[] = Array.isArray(parsed.obras) ? parsed.obras : [];
+      const ctsIn: ConstrutoraPromptInput[] = Array.isArray(parsed.construtoras) ? parsed.construtoras : [];
+      const obrsIn: ObraPromptInput[] = Array.isArray(parsed.obras) ? parsed.obras : [];
+      const pesIn: PessoaPromptInput[] = Array.isArray(parsed.pessoas) ? parsed.pessoas : [];
 
-      const [todasCts, todasObras] = await Promise.all([listarConstrutoras(), listarObras()]);
+      const [todasCts, todasObras, todasPessoas] = await Promise.all([
+        listarConstrutoras(),
+        listarObras(),
+        listarPessoas().catch(() => [] as Pessoa[]),
+      ]);
 
       const ctEntries: ConstrutoraEntry[] = ctsIn.map((c) => {
         const target = norm(c.nome || "");
         const existing = todasCts.find((x) => norm(x.nome) === target);
-        return { data: c, existing, reuse: !!existing };
+        return {
+          raw: c,
+          data: {
+            nome: c.nome || "",
+            cnpj: c.cnpj || "",
+            produto: mapProdutosConstrutora(c.produtos || ""),
+            status: mapStatusConstrutora(c.statusComercial || ""),
+            observacoes: buildObservacoesConstrutora(c),
+            prospeccaoIA: c.prospeccaoIA || "",
+          },
+          existing,
+          reuse: !!existing,
+        };
       });
 
       const obrEntries: ObraEntry[] = obrsIn.map((o) => {
@@ -123,18 +313,68 @@ export default function ProspeccaoIA() {
           (x) => norm(x.nome) === nomeKey && norm(x.construtora) === ctKey,
         );
         const construtoraExistente = todasCts.find((x) => norm(x.nome) === ctKey);
-        return { data: o, duplicate, construtoraExistente, create: !duplicate };
+        const classificacaoFinal = mapPadraoObra(o.padraoObra || "");
+        return {
+          raw: o,
+          data: {
+            nome: o.nome || "",
+            construtora: o.construtora || "",
+            classificacao: classificacaoFinal,
+            cidade: o.cidade || "",
+            produtoOferecido: mapProdutosObra(o.produtos || ""),
+            estagioObra: mapEstagioObra(o.estagioObra || ""),
+            statusProspeccao: mapStatusProspeccao(o.estagioComercial || ""),
+            concorrentes: o.concorrentes || "",
+            observacoes: buildObservacoesObra(o),
+            prospeccaoIA: o.prospeccaoIA || "",
+          },
+          duplicate,
+          construtoraExistente,
+          create: !duplicate,
+        };
+      });
+
+      const pesEntries: PessoaEntry[] = pesIn.map((p) => {
+        const nomeKey = norm(p.nome || "");
+        const ctKey = norm(p.construtora || "");
+        const obraKey = norm(p.obraRelacionada || "");
+        const construtora = todasCts.find((x) => norm(x.nome) === ctKey);
+        const obra = todasObras.find(
+          (x) => norm(x.nome) === obraKey && (!ctKey || norm(x.construtora) === ctKey),
+        );
+        const duplicate = todasPessoas.find(
+          (x) =>
+            norm(x.nome) === nomeKey &&
+            (!construtora || x.codigoConstrutora === construtora.codigo),
+        );
+        return {
+          raw: p,
+          data: {
+            nome: p.nome || "",
+            cargo: p.cargo || "Não Informado",
+            whatsapp: p.telefone || "",
+            email: p.email || "",
+            observacoes: p.observacoes || "",
+          },
+          duplicate,
+          construtoraExistenteNome: construtora?.nome,
+          obraExistenteNome: obra?.nome,
+          create: !duplicate,
+        };
       });
 
       setConstrutoras(ctEntries);
       setObras(obrEntries);
+      setPessoas(pesEntries);
 
       const novasCt = ctEntries.filter((e) => !e.existing).length;
       const reusedCt = ctEntries.filter((e) => e.existing).length;
       const dupObras = obrEntries.filter((e) => e.duplicate).length;
+      const dupPes = pesEntries.filter((e) => e.duplicate).length;
       setResumo(
         `${ctEntries.length} construtoras (${novasCt} novas, ${reusedCt} já existem) — ` +
-        `${obrEntries.length} obras (${dupObras} possíveis duplicatas)`,
+        `${pesEntries.length} pessoas (${dupPes} duplicatas) — ` +
+        `${obrEntries.length} obras (${dupObras} duplicatas)`,
       );
     } catch (e) {
       toast({
@@ -150,35 +390,38 @@ export default function ProspeccaoIA() {
   async function confirmar() {
     setImporting(true);
     try {
+      // Mapas para resolver código de construtora/obra a partir do nome
+      const ctCodigoPorNome = new Map<string, string>();
+      const obraCodigoPorChave = new Map<string, string>(); // norm(nome)+'|'+norm(ct)
+
       let ctCriadas = 0;
       let ctAtualizadas = 0;
-      // 1) construtoras
+      // 1) Construtoras
       for (const entry of construtoras) {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         if (entry.existing) {
-          // atualiza apenas prospeccaoIA (mescla) se vier preenchido
+          if (entry.existing.codigo) ctCodigoPorNome.set(norm(nome), entry.existing.codigo);
           const novaIA = (entry.data.prospeccaoIA || "").trim();
           if (novaIA) {
-            await atualizarConstrutora(entry.existing.codigo!, {
-              prospeccaoIA: novaIA,
-            });
+            await atualizarConstrutora(entry.existing.codigo!, { prospeccaoIA: novaIA });
             ctAtualizadas++;
           }
         } else {
-          await criarConstrutora({
+          const criada = await criarConstrutora({
             nome,
             cnpj: entry.data.cnpj || "",
             produto: entry.data.produto || "",
             status: entry.data.status || "Prospecção",
             observacoes: entry.data.observacoes || "",
             prospeccaoIA: entry.data.prospeccaoIA || "",
-          });
+          } as Construtora);
+          if (criada?.codigo) ctCodigoPorNome.set(norm(nome), criada.codigo);
           ctCriadas++;
         }
       }
 
-      // 2) obras
+      // 2) Obras
       let obrCriadas = 0;
       let obrAtualizadas = 0;
       const hoje = new Date().toISOString().split("T")[0];
@@ -187,8 +430,13 @@ export default function ProspeccaoIA() {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         if (entry.duplicate) {
-          // usuário marcou "criar mesmo assim" — atualiza prospeccaoIA na obra existente
           const novaIA = (entry.data.prospeccaoIA || "").trim();
+          if (entry.duplicate.codigoObra) {
+            obraCodigoPorChave.set(
+              `${norm(nome)}|${norm(entry.duplicate.construtora || "")}`,
+              entry.duplicate.codigoObra,
+            );
+          }
           if (novaIA && entry.duplicate.codigoObra) {
             await atualizarObra(entry.duplicate.codigoObra, {
               ...entry.duplicate,
@@ -198,17 +446,20 @@ export default function ProspeccaoIA() {
           }
           continue;
         }
-        await criarObra({
+        const ctNome = entry.data.construtora || "";
+        const codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        const criada = await criarObra({
           dataCadastro: hoje,
           statusProspeccao: entry.data.statusProspeccao || "Prospectar",
           nome,
           classificacao: entry.data.classificacao || "",
-          construtora: entry.data.construtora || "",
-          responsavel: entry.data.responsavel || "",
-          telefone: entry.data.telefone || "",
-          email: entry.data.email || "",
+          construtora: ctNome,
+          codigoConstrutora: codigoCt,
+          responsavel: "",
+          telefone: "",
+          email: "",
           cidade: entry.data.cidade || "",
-          localizacao: entry.data.localizacao || "",
+          localizacao: "",
           produtoOferecido: entry.data.produtoOferecido || "",
           estagioObra: entry.data.estagioObra || "",
           marcouReuniao: "",
@@ -223,15 +474,53 @@ export default function ProspeccaoIA() {
           concorrentes: entry.data.concorrentes || "",
           prospeccaoIA: entry.data.prospeccaoIA || "",
         } as Obra);
+        if (criada?.codigoObra) {
+          obraCodigoPorChave.set(`${norm(nome)}|${norm(ctNome)}`, criada.codigoObra);
+        }
         obrCriadas++;
+      }
+
+      // 3) Pessoas
+      let pesCriadas = 0;
+      let pesIgnoradas = 0;
+      for (const entry of pessoas) {
+        if (!entry.create) {
+          pesIgnoradas++;
+          continue;
+        }
+        const nome = (entry.data.nome || "").trim();
+        if (!nome) continue;
+        const ctNome = entry.raw.construtora || "";
+        const codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        if (!codigoCt) {
+          // Sem construtora vinculável: pula com aviso
+          pesIgnoradas++;
+          continue;
+        }
+        const obraKey = `${norm(entry.raw.obraRelacionada || "")}|${norm(ctNome)}`;
+        const codigoObra = obraCodigoPorChave.get(obraKey) || "";
+        await criarPessoa({
+          codigoConstrutora: codigoCt,
+          codigoObraAtual: codigoObra || undefined,
+          nome,
+          cargo: entry.data.cargo || "Não Informado",
+          whatsapp: entry.data.whatsapp || "",
+          email: entry.data.email || "",
+          observacoes: entry.data.observacoes || "",
+        });
+        pesCriadas++;
       }
 
       toast({
         title: "Importação concluída",
-        description: `${ctCriadas} construtoras criadas, ${ctAtualizadas} atualizadas, ${obrCriadas} obras criadas, ${obrAtualizadas} atualizadas.`,
+        description:
+          `${ctCriadas} construtoras criadas, ${ctAtualizadas} atualizadas • ` +
+          `${pesCriadas} pessoas criadas${pesIgnoradas ? ` (${pesIgnoradas} ignoradas)` : ""} • ` +
+          `${obrCriadas} obras criadas, ${obrAtualizadas} atualizadas.`,
       });
       setConstrutoras([]);
       setObras([]);
+      setPessoas([]);
       setJsonText("");
       setResumo("");
     } catch (e) {
@@ -244,6 +533,8 @@ export default function ProspeccaoIA() {
       setImporting(false);
     }
   }
+
+  const temResultado = construtoras.length > 0 || obras.length > 0 || pessoas.length > 0;
 
   return (
     <div className="space-y-6">
@@ -280,7 +571,7 @@ export default function ProspeccaoIA() {
             onChange={(e) => setJsonText(e.target.value)}
             rows={10}
             className="font-mono text-xs"
-            placeholder='{ "construtoras": [...], "obras": [...] }'
+            placeholder='{ "construtoras": [...], "pessoas": [...], "obras": [...] }'
           />
           <div className="flex gap-2">
             <Button onClick={analisar} disabled={!jsonText.trim() || parsing}>
@@ -292,7 +583,7 @@ export default function ProspeccaoIA() {
         </CardContent>
       </Card>
 
-      {(construtoras.length > 0 || obras.length > 0) && (
+      {temResultado && (
         <Card>
           <CardContent className="p-4 space-y-4">
             <h2 className="font-semibold">3. Revise e confirme</h2>
@@ -319,6 +610,56 @@ export default function ProspeccaoIA() {
                       {e.data.prospeccaoIA && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.data.prospeccaoIA}</p>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pessoas.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Pessoas</h3>
+                <div className="space-y-2">
+                  {pessoas.map((e, i) => (
+                    <div key={i} className="border rounded-md p-3 text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {e.duplicate ? (
+                          <Badge variant="outline" className="text-amber-700 border-amber-400">
+                            <AlertTriangle className="h-3 w-3 mr-1" /> Já existe
+                          </Badge>
+                        ) : (
+                          <Badge variant="default">Nova pessoa</Badge>
+                        )}
+                        <span className="font-medium">{e.data.nome || "(sem nome)"}</span>
+                        <span className="text-xs text-muted-foreground">• {e.data.cargo}</span>
+                        {e.raw.construtora && (
+                          <span className="text-xs text-muted-foreground">
+                            @ {e.raw.construtora}
+                            {e.construtoraExistenteNome ? "" : " (nova)"}
+                          </span>
+                        )}
+                        {e.raw.obraRelacionada && (
+                          <span className="text-xs text-muted-foreground">
+                            • obra: {e.raw.obraRelacionada}
+                          </span>
+                        )}
+                      </div>
+                      {(e.data.whatsapp || e.data.email) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {e.data.whatsapp} {e.data.email ? `• ${e.data.email}` : ""}
+                        </p>
+                      )}
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
+                        <Checkbox
+                          checked={e.create}
+                          onCheckedChange={(c) => {
+                            const next = [...pessoas];
+                            next[i] = { ...next[i], create: !!c };
+                            setPessoas(next);
+                          }}
+                        />
+                        {e.duplicate ? "Criar mesmo assim (duplicata)" : "Criar esta pessoa"}
+                      </label>
                     </div>
                   ))}
                 </div>
