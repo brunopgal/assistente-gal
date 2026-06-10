@@ -13,7 +13,7 @@ const SHEET_HEADERS = [
   'localizacao', 'produtoOferecido', 'estagioObra', 'marcouReuniao', 'visita',
   'dataUltimaVisita', 'dataOrcamentoEnviado', 'proximoContato',
   'linkOrcamentoRhoden', 'linkOrcamentoPrado', 'linkOrcamentoImab',
-  'observacoes', 'concorrentes', 'prospeccaoIA',
+  'observacoes', 'concorrentes', 'prospeccaoIA', 'codigoConstrutora',
 ];
 
 const SHEET_HEADER_ROW = [
@@ -24,10 +24,11 @@ const SHEET_HEADER_ROW = [
   'Data da última visita', 'Data orçamento enviado', 'Próximo contato/Follow up',
   'Link do orçamento/PDF  RHODEN', 'Link do orçamento/PDF  PRADO',
   'Link do orçamento/PDF  IMAB', 'Observação', 'Concorrentes', 'Prospecção IA',
+  'Codigo Construtora',
 ];
 
-const RANGE = 'Obras!A:Y';
-const LAST_COL = 'Y';
+const RANGE = 'Obras!A:Z';
+const LAST_COL = 'Z';
 
 async function getAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')!;
@@ -244,6 +245,23 @@ Deno.serve(async (req) => {
       const body = await req.json();
       if (shouldEnsureHeader(sheetId)) await ensureHeader(sheetId, accessToken);
 
+      // Resolve construtora code BEFORE writing (dual-write: name + code in same row)
+      if (body.construtora && String(body.construtora).trim() && !body.codigoConstrutora) {
+        try {
+          const supaUrl = Deno.env.get('SUPABASE_URL');
+          const supaKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+          if (supaUrl && supaKey) {
+            const ensureRes = await fetch(`${supaUrl}/functions/v1/construtoras/ensure`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${supaKey}`, apikey: supaKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nome: String(body.construtora).trim() }),
+            });
+            const ensureData = await ensureRes.json().catch(() => ({}));
+            if (ensureRes.ok && ensureData?.codigo) body.codigoConstrutora = ensureData.codigo;
+          }
+        } catch (e) { console.warn('ensure construtora falhou:', e); }
+      }
+
       // Generate next ID if not provided
       const rows = await fetchAllRows(sheetId, accessToken, false);
       const newId = body.codigoObra && String(body.codigoObra).trim()
@@ -254,8 +272,7 @@ Deno.serve(async (req) => {
       const values = [bodyToRow(body)];
 
       // Write to the explicit next row instead of relying on :append
-      // (append's table-detection can silently skip rows when sheet has gaps).
-      const targetRow = rows.length + 1; // rows is 0-indexed array of sheet rows
+      const targetRow = rows.length + 1;
       const writeRange = `Obras!A${targetRow}:${LAST_COL}${targetRow}`;
 
       const res = await fetch(
@@ -269,21 +286,6 @@ Deno.serve(async (req) => {
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
-
-      // Garante construtora correspondente (não bloqueia em caso de erro)
-      if (body.construtora && String(body.construtora).trim()) {
-        try {
-          const supaUrl = Deno.env.get('SUPABASE_URL');
-          const supaKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
-          if (supaUrl && supaKey) {
-            await fetch(`${supaUrl}/functions/v1/construtoras/ensure`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${supaKey}`, apikey: supaKey, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nome: String(body.construtora).trim() }),
-            });
-          }
-        } catch (e) { console.warn('ensure construtora falhou:', e); }
-      }
 
       return new Response(JSON.stringify({ success: true, id: newId, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
