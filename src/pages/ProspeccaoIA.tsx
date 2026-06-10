@@ -118,12 +118,12 @@ function mapStatusProspeccao(v: string): string {
   const n = norm(v);
   const map: Record<string, string> = {
     "prospectar": "Prospectar",
-    "em prospeccao": "Em prospecção",
-    "contato inicial": "Em prospecção",
-    "visita realizada": "Em prospecção",
+    "em prospeccao": "Em Prospecção",
+    "contato inicial": "Contato Inicial",
+    "visita realizada": "Visita Realizada",
     "orcamento enviado": "Orçamento Enviado",
-    "negociacao": "Fazendo Orçamento",
-    "fazendo orcamento": "Fazendo Orçamento",
+    "negociacao": "Negociação",
+    "fazendo orcamento": "Negociação",
     "fechado": "Fechado",
     "perdido": "Perdido",
   };

@@ -27,9 +27,11 @@ import {
 
 const STATUS_OPTIONS = [
   "Prospectar",
-  "Em prospecção",
-  "Fazendo Orçamento",
+  "Em Prospecção",
+  "Contato Inicial",
+  "Visita Realizada",
   "Orçamento Enviado",
+  "Negociação",
   "Fechado",
   "Perdido",
 ] as const;

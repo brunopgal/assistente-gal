@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
 import Obras from "./pages/Obras";
 import Agenda from "./pages/Agenda";
 import Mapa from "./pages/Mapa";
@@ -34,7 +35,8 @@ const App = () => (
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<Obras />} />
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/obras" element={<Obras />} />
                     <Route path="/agenda" element={<Agenda />} />
                     <Route path="/mapa" element={<Mapa />} />
                     <Route path="/follow-up" element={<FollowUp />} />

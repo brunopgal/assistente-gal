@@ -72,7 +72,7 @@ CAMPOS VÁLIDOS (use exatamente estes nomes):
 "Link do orçamento/PDF IMAB", "Observação", "Concorrentes"
 
 VALORES PADRONIZADOS (use EXATAMENTE estas grafias — capitalização importa):
-- "Status da prospecção": "Prospectar" | "Em prospecção" | "Fazendo Orçamento" | "Orçamento Enviado" | "Fechado" | "Perdido"
+- "Status da prospecção": "Prospectar" | "Em Prospecção" | "Contato Inicial" | "Visita Realizada" | "Orçamento Enviado" | "Negociação" | "Fechado" | "Perdido"
 - "Classificação da obra": "Baixo" | "Médio" | "Médio/Alto" | "Alto"
 - "Produto Oferecido" (multi, vírgula+espaço): "IMAB" | "RHODEN" | "PRADO" | "Nenhum"
   - Exemplos válidos: "IMAB", "PRADO, IMAB", "RHODEN, PRADO"
@@ -219,12 +219,16 @@ interface SecretariaAction {
 // ===== Server-side normalization (defense in depth) =====
 const STATUS_MAP: Record<string, string> = {
   "prospectar": "Prospectar",
-  "em prospeccao": "Em prospecção",
-  "em prospecção": "Em prospecção",
-  "fazendo orcamento": "Fazendo Orçamento",
-  "fazendo orçamento": "Fazendo Orçamento",
+  "em prospeccao": "Em Prospecção",
+  "em prospecção": "Em Prospecção",
+  "contato inicial": "Contato Inicial",
+  "visita realizada": "Visita Realizada",
   "orcamento enviado": "Orçamento Enviado",
   "orçamento enviado": "Orçamento Enviado",
+  "negociacao": "Negociação",
+  "negociação": "Negociação",
+  "fazendo orcamento": "Negociação",
+  "fazendo orçamento": "Negociação",
   "fechado": "Fechado",
   "perdido": "Perdido",
 };
