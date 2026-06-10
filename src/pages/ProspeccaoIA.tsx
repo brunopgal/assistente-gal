@@ -656,6 +656,35 @@ export default function ProspeccaoIA() {
                           {e.data.whatsapp} {e.data.email ? `• ${e.data.email}` : ""}
                         </p>
                       )}
+                      {!e.raw.construtora && !e.codigoConstrutoraOverride && (
+                        <div className="mt-2 flex items-center gap-2 text-xs">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                          <span className="text-amber-600">Sem construtora — selecione uma para importar:</span>
+                        </div>
+                      )}
+                      {!e.raw.construtora && (
+                        <div className="mt-1">
+                          <Select
+                            value={e.codigoConstrutoraOverride || ""}
+                            onValueChange={(v) => {
+                              const next = [...pessoas];
+                              next[i] = { ...next[i], codigoConstrutoraOverride: v };
+                              setPessoas(next);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Vincular a uma construtora existente..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {todasCtsList.map((c) => (
+                                <SelectItem key={c.codigo} value={c.codigo!}>
+                                  {c.nome} {c.codigo ? `(${c.codigo})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
                         <Checkbox
                           checked={e.create}
