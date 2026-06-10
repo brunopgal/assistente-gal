@@ -303,6 +303,10 @@ Deno.serve(async (req) => {
 
       // Preserve the original ID
       body.codigoObra = id;
+      // Safety: if codigoConstrutora not provided, keep whatever is already in the sheet
+      const existingRow = rows[rowNumber - 1] || [];
+      const existingCodigoCT = existingRow[SHEET_HEADERS.indexOf('codigoConstrutora')] || '';
+      if (!body.codigoConstrutora && existingCodigoCT) body.codigoConstrutora = existingCodigoCT;
       const updateRange = `Obras!A${rowNumber}:${LAST_COL}${rowNumber}`;
       const values = [bodyToRow(body)];
 
