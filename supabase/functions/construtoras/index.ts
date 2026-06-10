@@ -142,7 +142,9 @@ async function ensureSheet(sheetId: string, accessToken: string, name: string, l
 let rowsCache = new Map<string, { rows: string[][]; ts: number }>();
 let ensureCache = new Map<string, number>();
 let gidCache = new Map<string, { gid: number; ts: number }>();
+let inflight = new Map<string, Promise<string[][]>>();
 const CACHE_TTL_MS = 60_000;
+const STALE_TTL_MS = 10 * 60_000;
 const METADATA_CACHE_TTL_MS = 10 * 60_000;
 
 function shouldEnsureSheet(sheetId: string, name: string): boolean {
@@ -171,23 +173,42 @@ function rateLimitPayload() {
   };
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 async function fetchRows(sheetId: string, accessToken: string, range: string): Promise<string[][]> {
   const cacheKey = `${sheetId}:${range}`;
   const cached = rowsCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.rows;
 
-  const res = await fetch(
-    `${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(range)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const data = await res.json();
-  if (!res.ok) {
-    if ((res.status === 429 || res.status >= 500) && cached) return cached.rows;
-    throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
-  }
-  const rows = data.values || [];
-  rowsCache.set(cacheKey, { rows, ts: Date.now() });
-  return rows;
+  const existing = inflight.get(cacheKey);
+  if (existing) return existing;
+
+  const p = (async () => {
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(
+        `${SHEETS_BASE}/${sheetId}/values/${range}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        const rows = data.values || [];
+        rowsCache.set(cacheKey, { rows, ts: Date.now() });
+        return rows;
+      }
+      lastErr = data;
+      const msg = JSON.stringify(data);
+      const isRate = res.status === 429 || isRateLimitError(msg);
+      if (!isRate && res.status < 500) break;
+      if (cached && Date.now() - cached.ts < STALE_TTL_MS) return cached.rows;
+      if (attempt < 2) await sleep(800 * (attempt + 1));
+    }
+    if (cached) return cached.rows;
+    throw new Error(`Sheets API error: ${JSON.stringify(lastErr)}`);
+  })();
+
+  inflight.set(cacheKey, p);
+  try { return await p; } finally { inflight.delete(cacheKey); }
 }
 
 function generateNextId(rows: string[][], prefix: string, padLen: number): string {
