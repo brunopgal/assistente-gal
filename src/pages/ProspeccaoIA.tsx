@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Copy, Loader2, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, criarObra, atualizarObra, type Obra } from "@/services/obrasService";
@@ -251,6 +252,7 @@ interface PessoaEntry {
   duplicate?: Pessoa;
   construtoraExistenteNome?: string;
   obraExistenteNome?: string;
+  codigoConstrutoraOverride?: string;
   create: boolean;
 }
 
@@ -262,6 +264,7 @@ export default function ProspeccaoIA() {
   const [construtoras, setConstrutoras] = useState<ConstrutoraEntry[]>([]);
   const [obras, setObras] = useState<ObraEntry[]>([]);
   const [pessoas, setPessoas] = useState<PessoaEntry[]>([]);
+  const [todasCtsList, setTodasCtsList] = useState<Construtora[]>([]);
   const [resumo, setResumo] = useState<string>("");
 
   function copiarPrompt() {
@@ -366,6 +369,7 @@ export default function ProspeccaoIA() {
       setConstrutoras(ctEntries);
       setObras(obrEntries);
       setPessoas(pesEntries);
+      setTodasCtsList(todasCts);
 
       const novasCt = ctEntries.filter((e) => !e.existing).length;
       const reusedCt = ctEntries.filter((e) => e.existing).length;
@@ -491,7 +495,10 @@ export default function ProspeccaoIA() {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         const ctNome = entry.raw.construtora || "";
-        const codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        let codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        if (!codigoCt && entry.codigoConstrutoraOverride) {
+          codigoCt = entry.codigoConstrutoraOverride;
+        }
         if (!codigoCt) {
           // Sem construtora vinculável: pula com aviso
           pesIgnoradas++;
@@ -648,6 +655,35 @@ export default function ProspeccaoIA() {
                         <p className="text-xs text-muted-foreground mt-1">
                           {e.data.whatsapp} {e.data.email ? `• ${e.data.email}` : ""}
                         </p>
+                      )}
+                      {!e.raw.construtora && !e.codigoConstrutoraOverride && (
+                        <div className="mt-2 flex items-center gap-2 text-xs">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                          <span className="text-amber-600">Sem construtora — selecione uma para importar:</span>
+                        </div>
+                      )}
+                      {!e.raw.construtora && (
+                        <div className="mt-1">
+                          <Select
+                            value={e.codigoConstrutoraOverride || ""}
+                            onValueChange={(v) => {
+                              const next = [...pessoas];
+                              next[i] = { ...next[i], codigoConstrutoraOverride: v };
+                              setPessoas(next);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Vincular a uma construtora existente..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {todasCtsList.map((c) => (
+                                <SelectItem key={c.codigo} value={c.codigo!}>
+                                  {c.nome} {c.codigo ? `(${c.codigo})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       )}
                       <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
                         <Checkbox
