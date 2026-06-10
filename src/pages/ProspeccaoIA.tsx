@@ -495,7 +495,10 @@ export default function ProspeccaoIA() {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         const ctNome = entry.raw.construtora || "";
-        const codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        let codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        if (!codigoCt && entry.codigoConstrutoraOverride) {
+          codigoCt = entry.codigoConstrutoraOverride;
+        }
         if (!codigoCt) {
           // Sem construtora vinculável: pula com aviso
           pesIgnoradas++;
