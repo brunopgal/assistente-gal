@@ -201,6 +201,7 @@ function findRowNumberById(rows: string[][], id: string): number {
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 import { requireAuth } from '../_shared/auth.ts';
+import { geocodeAndSaveObra, buildObraQuery, normalizeText, runInBackground } from '../_shared/geocode.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -287,6 +288,9 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
 
+      // Geocodifica em segundo plano e grava em obras_coordenadas (não bloqueia o salvamento)
+      runInBackground(geocodeAndSaveObra(body));
+
       return new Response(JSON.stringify({ success: true, id: newId, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -322,6 +326,14 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
 
+      // Re-geocodifica apenas se o endereço (localizacao + cidade) mudou
+      const oldObra = rowToObra(existingRow);
+      const oldQuery = normalizeText(buildObraQuery(oldObra));
+      const newQuery = normalizeText(buildObraQuery(body));
+      if (newQuery && newQuery !== oldQuery) {
+        runInBackground(geocodeAndSaveObra(body));
+      }
+
       return new Response(JSON.stringify({ success: true, id, ...body }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -353,6 +365,17 @@ Deno.serve(async (req) => {
       const data = await res.json();
       if (!res.ok) throw new Error(`Sheets API error: ${JSON.stringify(data)}`);
       invalidateRowsCache();
+
+      // Se o campo alterado afeta o endereço, re-geocodifica com a linha mesclada
+      if (field === 'localizacao' || field === 'cidade') {
+        const merged = rowToObra(rows[rowNumber - 1] || []);
+        const before = normalizeText(buildObraQuery(merged));
+        merged[field] = String(value ?? '');
+        const after = normalizeText(buildObraQuery(merged));
+        if (after && after !== before) {
+          runInBackground(geocodeAndSaveObra(merged));
+        }
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
