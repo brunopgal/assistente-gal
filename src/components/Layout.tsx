@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard } from "lucide-react";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ const navItems = [
   { title: "Visita/Reunião", path: "/visitas", icon: CalendarClock, iconClassName: "" },
   { title: "Agenda", path: "/agenda", icon: Calendar, iconClassName: "" },
   { title: "Maps", path: "/mapa", icon: MapPin, iconClassName: "text-[#EA4335] fill-[#EA4335]" },
+  { title: "Relatórios", path: "/relatorios", icon: FileBarChart, iconClassName: "" },
   { title: "Prospecção IA", path: "/prospeccao-ia", icon: Sparkles, iconClassName: "" },
   { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle, iconClassName: "" },
 ];
