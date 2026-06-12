@@ -14,36 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      obras_coordenadas: {
-        Row: {
-          created_at: string
-          lat: number | null
-          lng: number | null
-          not_found: boolean
-          obra_id: string
-          query_normalizada: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          lat?: number | null
-          lng?: number | null
-          not_found?: boolean
-          obra_id: string
-          query_normalizada: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          lat?: number | null
-          lng?: number | null
-          not_found?: boolean
-          obra_id?: string
-          query_normalizada?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       pautas_reuniao: {
         Row: {
           conteudo: string
