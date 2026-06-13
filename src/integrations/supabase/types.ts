@@ -14,6 +14,213 @@ export type Database = {
   }
   public: {
     Tables: {
+      atividades: {
+        Row: {
+          comentario: string
+          created_at: string
+          dataAtividade: string
+          idAtividade: string
+          idObra: string
+          proximoContato: string
+          status: string
+          tipoContato: string
+          updated_at: string
+        }
+        Insert: {
+          comentario?: string
+          created_at?: string
+          dataAtividade?: string
+          idAtividade: string
+          idObra?: string
+          proximoContato?: string
+          status?: string
+          tipoContato?: string
+          updated_at?: string
+        }
+        Update: {
+          comentario?: string
+          created_at?: string
+          dataAtividade?: string
+          idAtividade?: string
+          idObra?: string
+          proximoContato?: string
+          status?: string
+          tipoContato?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      construtoras: {
+        Row: {
+          cnpj: string
+          codigo: string
+          created_at: string
+          nome: string
+          observacoes: string
+          produto: string
+          prospeccaoIA: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string
+          codigo: string
+          created_at?: string
+          nome?: string
+          observacoes?: string
+          produto?: string
+          prospeccaoIA?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string
+          codigo?: string
+          created_at?: string
+          nome?: string
+          observacoes?: string
+          produto?: string
+          prospeccaoIA?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      construtoras_atividades: {
+        Row: {
+          codigoConstrutora: string
+          comentario: string
+          created_at: string
+          criarFollowUp: string
+          data: string
+          horario: string
+          idAtividade: string
+          proximoContato: string
+          status: string
+          tipoContato: string
+          tipoRegistro: string
+          updated_at: string
+        }
+        Insert: {
+          codigoConstrutora?: string
+          comentario?: string
+          created_at?: string
+          criarFollowUp?: string
+          data?: string
+          horario?: string
+          idAtividade: string
+          proximoContato?: string
+          status?: string
+          tipoContato?: string
+          tipoRegistro?: string
+          updated_at?: string
+        }
+        Update: {
+          codigoConstrutora?: string
+          comentario?: string
+          created_at?: string
+          criarFollowUp?: string
+          data?: string
+          horario?: string
+          idAtividade?: string
+          proximoContato?: string
+          status?: string
+          tipoContato?: string
+          tipoRegistro?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      obras: {
+        Row: {
+          cidade: string
+          classificacao: string
+          codigoConstrutora: string
+          codigoObra: string
+          concorrentes: string
+          construtora: string
+          created_at: string
+          dataCadastro: string
+          dataOrcamentoEnviado: string
+          dataUltimaVisita: string
+          email: string
+          estagioObra: string
+          linkOrcamentoImab: string
+          linkOrcamentoPrado: string
+          linkOrcamentoRhoden: string
+          localizacao: string
+          marcouReuniao: string
+          nome: string
+          observacoes: string
+          produtoOferecido: string
+          prospeccaoIA: string
+          proximoContato: string
+          responsavel: string
+          statusProspeccao: string
+          telefone: string
+          updated_at: string
+          visita: string
+        }
+        Insert: {
+          cidade?: string
+          classificacao?: string
+          codigoConstrutora?: string
+          codigoObra: string
+          concorrentes?: string
+          construtora?: string
+          created_at?: string
+          dataCadastro?: string
+          dataOrcamentoEnviado?: string
+          dataUltimaVisita?: string
+          email?: string
+          estagioObra?: string
+          linkOrcamentoImab?: string
+          linkOrcamentoPrado?: string
+          linkOrcamentoRhoden?: string
+          localizacao?: string
+          marcouReuniao?: string
+          nome?: string
+          observacoes?: string
+          produtoOferecido?: string
+          prospeccaoIA?: string
+          proximoContato?: string
+          responsavel?: string
+          statusProspeccao?: string
+          telefone?: string
+          updated_at?: string
+          visita?: string
+        }
+        Update: {
+          cidade?: string
+          classificacao?: string
+          codigoConstrutora?: string
+          codigoObra?: string
+          concorrentes?: string
+          construtora?: string
+          created_at?: string
+          dataCadastro?: string
+          dataOrcamentoEnviado?: string
+          dataUltimaVisita?: string
+          email?: string
+          estagioObra?: string
+          linkOrcamentoImab?: string
+          linkOrcamentoPrado?: string
+          linkOrcamentoRhoden?: string
+          localizacao?: string
+          marcouReuniao?: string
+          nome?: string
+          observacoes?: string
+          produtoOferecido?: string
+          prospeccaoIA?: string
+          proximoContato?: string
+          responsavel?: string
+          statusProspeccao?: string
+          telefone?: string
+          updated_at?: string
+          visita?: string
+        }
+        Relationships: []
+      }
       obras_coordenadas: {
         Row: {
           created_at: string
@@ -65,6 +272,51 @@ export type Database = {
           id?: string
           obra_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      pessoas: {
+        Row: {
+          cargo: string
+          codigoConstrutora: string
+          codigoObraAtual: string
+          codigoPessoa: string
+          created_at: string
+          dataCadastro: string
+          dataUltimaAtualizacao: string
+          email: string
+          nome: string
+          observacoes: string
+          updated_at: string
+          whatsapp: string
+        }
+        Insert: {
+          cargo?: string
+          codigoConstrutora?: string
+          codigoObraAtual?: string
+          codigoPessoa: string
+          created_at?: string
+          dataCadastro?: string
+          dataUltimaAtualizacao?: string
+          email?: string
+          nome?: string
+          observacoes?: string
+          updated_at?: string
+          whatsapp?: string
+        }
+        Update: {
+          cargo?: string
+          codigoConstrutora?: string
+          codigoObraAtual?: string
+          codigoPessoa?: string
+          created_at?: string
+          dataCadastro?: string
+          dataUltimaAtualizacao?: string
+          email?: string
+          nome?: string
+          observacoes?: string
+          updated_at?: string
+          whatsapp?: string
         }
         Relationships: []
       }
