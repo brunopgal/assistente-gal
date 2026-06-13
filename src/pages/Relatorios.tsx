@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 // ─── Helpers (mesmos critérios do Dashboard) ───────────────────────────
 function parseDate(str: string): Date | null {
@@ -187,25 +189,316 @@ export default function Relatorios() {
   const decididas = contagem.fechada + contagem.perdida_pos_orcamento;
   const taxaConversao = decididas > 0 ? Math.round((contagem.fechada / decididas) * 100) : null;
 
-  function exportarCSV() {
-    const header = [
-      "Obra", "Construtora", "Cidade", "Categoria", "Status original",
-      "Data orçamento enviado", "Dias desde envio", "Concorrentes", "Próximo contato",
-    ];
-    const escape = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = filtradas.map((l) => [
-      l.obra.nome, l.obra.construtora, l.obra.cidade, CATEGORIA_LABEL[l.categoria],
-      l.obra.statusProspeccao, l.obra.dataOrcamentoEnviado,
-      l.diasOrcamento != null ? String(l.diasOrcamento) : "", l.obra.concorrentes, l.obra.proximoContato,
-    ].map(escape).join(";"));
-    const csv = "\uFEFF" + [header.map(escape).join(";"), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio-orcamentos-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function exportarExcel() {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Orçamentos");
+      
+      // Mostrar linhas de grade
+      worksheet.views = [{ showGridLines: true }];
+
+      // Estilos reutilizáveis
+      const thinBorder: ExcelJS.Border = {
+        top: { style: 'thin', color: { argb: 'D1D5DB' } },
+        left: { style: 'thin', color: { argb: 'D1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'D1D5DB' } },
+        right: { style: 'thin', color: { argb: 'D1D5DB' } }
+      };
+
+      // 1. TÍTULO PRINCIPAL (Linha 1)
+      worksheet.mergeCells("A1:U1");
+      const titleCell = worksheet.getCell("A1");
+      titleCell.value = "RELATÓRIO DE ORÇAMENTOS E PROSPECÇÃO";
+      titleCell.font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "FFFFFF" } };
+      titleCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "1E3A8A" } // Azul Escuro
+      };
+      titleCell.alignment = { horizontal: "center", vertical: "middle" };
+      worksheet.getRow(1).height = 30;
+
+      // SUBTÍTULO (Linha 2)
+      worksheet.mergeCells("A2:U2");
+      const subtitleCell = worksheet.getCell("A2");
+      subtitleCell.value = "ASSISTENTE COMERCIAL GAL";
+      subtitleCell.font = { name: "Segoe UI", size: 11, italic: true, color: { argb: "E5E7EB" } };
+      subtitleCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "1E3A8A" }
+      };
+      subtitleCell.alignment = { horizontal: "center", vertical: "middle" };
+      worksheet.getRow(2).height = 20;
+
+      // 2. METADADOS E FILTROS (Linha 4)
+      const dataGeracao = new Date().toLocaleString("pt-BR");
+      const deFormat = fDe ? parseDate(fDe)?.toLocaleDateString("pt-BR") : "";
+      const ateFormat = fAte ? parseDate(fAte)?.toLocaleDateString("pt-BR") : "";
+      const periodoTexto = (deFormat || ateFormat) ? ` | Período: ${deFormat || "Início"} até ${ateFormat || "Fim"}` : "";
+      
+      worksheet.mergeCells("A4:U4");
+      const metaCell = worksheet.getCell("A4");
+      metaCell.value = `Filtros aplicados - Categoria: ${fCategoria === "todas" ? "Todas" : CATEGORIA_LABEL[fCategoria as Categoria]} | Construtora: ${fConstrutora === "todas" ? "Todas" : fConstrutora} | Cidade: ${fCidade === "todas" ? "Todas" : fCidade}${periodoTexto}   (Gerado em: ${dataGeracao})`;
+      metaCell.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "4B5563" } };
+      metaCell.alignment = { horizontal: "left", vertical: "middle" };
+      worksheet.getRow(4).height = 18;
+
+      // 3. CARDS DE KPI (Linhas 6 a 8)
+      // Card 1: Em Andamento (B6:D8)
+      worksheet.mergeCells("B6:D6");
+      worksheet.getCell("B6").value = "Orçamentos em Andamento";
+      worksheet.getCell("B6").font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "374151" } };
+      worksheet.getCell("B6").alignment = { horizontal: "center" };
+      
+      worksheet.mergeCells("B7:D7");
+      worksheet.getCell("B7").value = contagem.em_andamento;
+      worksheet.getCell("B7").font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "D97706" } }; // Amber
+      worksheet.getCell("B7").alignment = { horizontal: "center" };
+
+      worksheet.mergeCells("B8:D8");
+      worksheet.getCell("B8").value = paradas30d > 0 ? `${paradas30d} sem resp. há +30d` : "Nenhum atrasado";
+      worksheet.getCell("B8").font = { name: "Segoe UI", size: 8, italic: true, color: { argb: "B45309" } };
+      worksheet.getCell("B8").alignment = { horizontal: "center" };
+
+      // Card 2: Perdidas após Orçamento (F6:H8)
+      worksheet.mergeCells("F6:H6");
+      worksheet.getCell("F6").value = "Perdidas Pós-Orçamento";
+      worksheet.getCell("F6").font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "374151" } };
+      worksheet.getCell("F6").alignment = { horizontal: "center" };
+      
+      worksheet.mergeCells("F7:H7");
+      worksheet.getCell("F7").value = contagem.perdida_pos_orcamento;
+      worksheet.getCell("F7").font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "DC2626" } }; // Vermelho
+      worksheet.getCell("F7").alignment = { horizontal: "center" };
+
+      worksheet.mergeCells("F8:H8");
+      worksheet.getCell("F8").value = "—";
+      worksheet.getCell("F8").font = { name: "Segoe UI", size: 8, italic: true, color: { argb: "6B7280" } };
+      worksheet.getCell("F8").alignment = { horizontal: "center" };
+
+      // Card 3: Perdidas na Prospecção (J6:L8)
+      worksheet.mergeCells("J6:L6");
+      worksheet.getCell("J6").value = "Perdidas na Prospecção";
+      worksheet.getCell("J6").font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "374151" } };
+      worksheet.getCell("J6").alignment = { horizontal: "center" };
+      
+      worksheet.mergeCells("J7:L7");
+      worksheet.getCell("J7").value = contagem.perdida_prospeccao;
+      worksheet.getCell("J7").font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "4B5563" } }; // Cinza
+      worksheet.getCell("J7").alignment = { horizontal: "center" };
+
+      worksheet.mergeCells("J8:L8");
+      worksheet.getCell("J8").value = "—";
+      worksheet.getCell("J8").font = { name: "Segoe UI", size: 8, italic: true, color: { argb: "6B7280" } };
+      worksheet.getCell("J8").alignment = { horizontal: "center" };
+
+      // Card 4: Fechadas (N6:P8)
+      worksheet.mergeCells("N6:P6");
+      worksheet.getCell("N6").value = "Fechadas (Ganhas)";
+      worksheet.getCell("N6").font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "374151" } };
+      worksheet.getCell("N6").alignment = { horizontal: "center" };
+      
+      worksheet.mergeCells("N7:P7");
+      worksheet.getCell("N7").value = contagem.fechada;
+      worksheet.getCell("N7").font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "059669" } }; // Esmeralda
+      worksheet.getCell("N7").alignment = { horizontal: "center" };
+
+      worksheet.mergeCells("N8:P8");
+      worksheet.getCell("N8").value = taxaConversao != null ? `${taxaConversao}% conversão pós-orç.` : "Sem dados de taxa";
+      worksheet.getCell("N8").font = { name: "Segoe UI", size: 8, italic: true, color: { argb: "047857" } };
+      worksheet.getCell("N8").alignment = { horizontal: "center" };
+
+      // Estilizar blocos de KPI (Fundo e Bordas)
+      const kpiCols = [
+        { start: 'B', end: 'D' },
+        { start: 'F', end: 'H' },
+        { start: 'J', end: 'L' },
+        { start: 'N', end: 'P' }
+      ];
+      kpiCols.forEach(({ start, end }) => {
+        const startIdx = start.charCodeAt(0) - 64;
+        const endIdx = end.charCodeAt(0) - 64;
+        for (let r = 6; r <= 8; r++) {
+          for (let c = startIdx; c <= endIdx; c++) {
+            const cell = worksheet.getCell(r, c);
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "F3F4F6" }
+            };
+            cell.border = {
+              top: r === 6 ? { style: 'medium', color: { argb: 'D1D5DB' } } : undefined,
+              bottom: r === 8 ? { style: 'medium', color: { argb: 'D1D5DB' } } : undefined,
+              left: c === startIdx ? { style: 'medium', color: { argb: 'D1D5DB' } } : undefined,
+              right: c === endIdx ? { style: 'medium', color: { argb: 'D1D5DB' } } : undefined,
+            };
+          }
+        }
+      });
+      worksheet.getRow(6).height = 18;
+      worksheet.getRow(7).height = 24;
+      worksheet.getRow(8).height = 16;
+
+      // 4. TABELA DE DADOS - CABEÇALHOS (Linha 10)
+      const headers = [
+        "Código/ID", "Obra", "Construtora", "Cidade", "Categoria", "Status original",
+        "Classificação", "Produto", "Estágio Obra", "Data orçamento enviado", "Dias desde envio",
+        "Próximo contato", "Responsável", "Telefone", "E-mail", "Concorrentes",
+        "Orçamento Rhoden", "Orçamento Prado", "Orçamento Imab", "Observação", "Prospecção IA"
+      ];
+      
+      const headerRowNumber = 10;
+      const headerRow = worksheet.getRow(headerRowNumber);
+      headerRow.values = headers;
+      headerRow.height = 26;
+      
+      headers.forEach((_, index) => {
+        const cell = headerRow.getCell(index + 1);
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFF" } };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "2563EB" } // Azul Médio
+        };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
+
+      // 5. ADICIONAR LINHAS DE DADOS (Linha 11+)
+      let currentRowIdx = 11;
+      
+      filtradas.forEach((l) => {
+        const row = worksheet.getRow(currentRowIdx);
+        
+        // Obter links limpos (pegar a primeira url se for separada por vírgula)
+        const getCleanUrl = (rawUrl?: string) => {
+          if (!rawUrl) return "";
+          return rawUrl.split(",")[0].trim();
+        };
+
+        const valRhoden = getCleanUrl(l.obra.linkOrcamentoRhoden);
+        const valPrado = getCleanUrl(l.obra.linkOrcamentoPrado);
+        const valImab = getCleanUrl(l.obra.linkOrcamentoImab);
+
+        // Preencher valores brutos
+        row.getCell(1).value = l.obra.codigoObra || l.obra.id || "";
+        row.getCell(2).value = l.obra.nome || "Sem nome";
+        row.getCell(3).value = l.obra.construtora || "";
+        row.getCell(4).value = l.obra.cidade || "";
+        row.getCell(5).value = CATEGORIA_LABEL[l.categoria];
+        row.getCell(6).value = l.obra.statusProspeccao || "";
+        row.getCell(7).value = l.obra.classificacao || "";
+        row.getCell(8).value = l.obra.produtoOferecido || "";
+        row.getCell(9).value = l.obra.estagioObra || "";
+        row.getCell(10).value = l.obra.dataOrcamentoEnviado || "";
+        row.getCell(11).value = l.diasOrcamento != null ? `${l.diasOrcamento} dias` : "—";
+        row.getCell(12).value = l.obra.proximoContato || "";
+        row.getCell(13).value = l.obra.responsavel || "";
+        row.getCell(14).value = l.obra.telefone || "";
+        row.getCell(15).value = l.obra.email || "";
+        row.getCell(16).value = l.obra.concorrentes || "";
+        
+        // Tratar links como hiperlinks se existirem
+        if (valRhoden) {
+          row.getCell(17).value = { text: "Rhoden PDF", hyperlink: valRhoden };
+        } else {
+          row.getCell(17).value = "—";
+        }
+
+        if (valPrado) {
+          row.getCell(18).value = { text: "Prado PDF", hyperlink: valPrado };
+        } else {
+          row.getCell(18).value = "—";
+        }
+
+        if (valImab) {
+          row.getCell(19).value = { text: "Imab PDF", hyperlink: valImab };
+        } else {
+          row.getCell(19).value = "—";
+        }
+
+        row.getCell(20).value = l.obra.observacoes || "";
+        row.getCell(21).value = l.obra.prospeccaoIA || "";
+
+        // Estilizar a linha (Zebra e Bordas)
+        const isZebra = currentRowIdx % 2 === 0;
+        const rowBg = isZebra ? "F9FAFB" : "FFFFFF";
+
+        headers.forEach((_, colIndex) => {
+          const cell = row.getCell(colIndex + 1);
+          cell.border = thinBorder;
+          cell.font = { name: "Segoe UI", size: 9, color: { argb: "1F2937" } };
+          
+          if (!cell.fill || cell.fill.type !== "pattern") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: rowBg }
+            };
+          }
+
+          // Alinhamento inteligente
+          const alignCenterCols = [1, 5, 7, 8, 9, 10, 11, 12, 14, 17, 18, 19];
+          const alignLeftCols = [2, 3, 4, 6, 13, 15, 16, 20, 21];
+
+          cell.alignment = {
+            horizontal: alignCenterCols.includes(colIndex + 1) ? "center" : "left",
+            vertical: "middle",
+            wrapText: [20, 21].includes(colIndex + 1) // wrap text para obs e IA
+          };
+
+          // Estilizar links especificamente
+          if ([17, 18, 19].includes(colIndex + 1) && cell.value && typeof cell.value === "object" && "hyperlink" in cell.value) {
+            cell.font = {
+              name: "Segoe UI",
+              size: 9,
+              color: { argb: "2563EB" },
+              underline: true
+            };
+          }
+        });
+
+        row.height = 22;
+        currentRowIdx++;
+      });
+
+      // 6. AUTO-AJUSTE DAS COLUNAS (com margem de segurança)
+      worksheet.columns.forEach((column, index) => {
+        let maxLen = 0;
+        // Cabeçalho
+        const headerVal = column.values ? column.values[headerRowNumber] : null;
+        if (headerVal) maxLen = Math.max(maxLen, String(headerVal).length);
+
+        // Percorrer células da coluna na tabela de dados
+        for (let r = headerRowNumber + 1; r < currentRowIdx; r++) {
+          const cell = worksheet.getCell(r, index + 1);
+          if (cell.value) {
+            if (typeof cell.value === "object" && "text" in cell.value) {
+              maxLen = Math.max(maxLen, String((cell.value as any).text).length);
+            } else {
+              maxLen = Math.max(maxLen, String(cell.value).length);
+            }
+          }
+        }
+
+        // Definir larguras razoáveis e limites de max/min para evitar colunas gigantescas
+        let finalWidth = maxLen + 3;
+        if (index + 1 === 1) finalWidth = Math.max(finalWidth, 15); // ID
+        if ([2, 3].includes(index + 1)) finalWidth = Math.min(Math.max(finalWidth, 20), 40); // Obra, Construtora
+        if ([20, 21].includes(index + 1)) finalWidth = 40; // Obs, IA
+        
+        column.width = finalWidth;
+      });
+
+      // 7. GERAR ARQUIVO E SALVAR
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      saveAs(blob, `relatorio-orcamentos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      
+    } catch (err) {
+      console.error("Erro ao exportar excel:", err);
+    }
   }
 
   const cards: { cat: Categoria; titulo: string; icone: JSX.Element; destaque?: string }[] = [
@@ -227,9 +520,9 @@ export default function Relatorios() {
             Orçamentos em andamento e obras perdidas — antes ou depois do orçamento
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportarCSV} disabled={loading || filtradas.length === 0}>
+        <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtradas.length === 0}>
           <Download className="h-4 w-4 mr-2" />
-          Exportar CSV
+          Exportar Excel
         </Button>
       </div>
 
