@@ -180,13 +180,16 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !imageDataUrl) || loading) return;
 
     setLoading(true);
-    const userMsg: Message = { role: "user", content: text };
+    const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
+    const userMsg: Message = { role: "user", content: userText };
     const next: Message[] = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    const currentImage = imageDataUrl;
+    setImageDataUrl(null);
 
     try {
       // Ensure a conversation exists
@@ -194,7 +197,7 @@ export default function Michele() {
       if (!conversaId) {
         const { data: conv, error: convErr } = await supabase
           .from("conversas_michele")
-          .insert({ titulo: makeTitulo(text) })
+          .insert({ titulo: makeTitulo(userText) })
           .select("id,titulo,updated_at")
           .single();
         if (convErr || !conv) throw convErr ?? new Error("Falha ao criar conversa");
@@ -207,12 +210,12 @@ export default function Michele() {
       // Persist user message
       const { error: insUserErr } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "user", content: text });
+        .insert({ conversa_id: conversaId, role: "user", content: userText });
       if (insUserErr) console.error(insUserErr);
 
       // Call Michele
       const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: next },
+        body: { messages: next, image: currentImage },
       });
       if (error) throw error;
       const reply = (data as { text?: string; error?: string })?.text;
