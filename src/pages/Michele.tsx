@@ -773,4 +773,35 @@ function AcaoCard({
   );
 }
 
+function ChatImage({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase.storage
+        .from("michele-uploads")
+        .createSignedUrl(path, 60 * 60);
+      if (alive && !error) setUrl(data?.signedUrl ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [path]);
+  if (!url) {
+    return (
+      <div className="h-40 w-40 rounded-lg bg-muted animate-pulse" />
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block">
+      <img
+        src={url}
+        alt="anexo"
+        className="max-h-64 max-w-full rounded-lg border object-cover hover:opacity-90 transition"
+      />
+    </a>
+  );
+}
+
+
 
