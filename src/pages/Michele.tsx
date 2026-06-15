@@ -179,18 +179,54 @@ export default function Michele() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  async function uploadImagem(dataUrl: string): Promise<string | null> {
+    try {
+      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+      if (!m) return null;
+      const mime = m[1];
+      const b64 = m[2];
+      const ext = mime.split("/")[1] || "png";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const { data: u } = await supabase.auth.getUser();
+      const userId = u?.user?.id ?? "anon";
+      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("michele-uploads")
+        .upload(path, blob, { contentType: mime, upsert: false });
+      if (error) {
+        console.error("upload error", error);
+        return null;
+      }
+      return path;
+    } catch (e) {
+      console.error("uploadImagem", e);
+      return null;
+    }
+  }
+
   async function handleSend() {
     const text = input.trim();
     if ((!text && !imageDataUrl) || loading) return;
 
     setLoading(true);
     const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
-    const userMsg: Message = { role: "user", content: userText };
+    const currentImage = imageDataUrl;
+    setInput("");
+    setImageDataUrl(null);
+
+    // Upload da imagem (se houver) antes de pintar a mensagem, para já ter URL persistida
+    let imagemPath: string | null = null;
+    if (currentImage) {
+      imagemPath = await uploadImagem(currentImage);
+      if (!imagemPath) toast.error("Não consegui salvar a imagem (segui sem ela).");
+    }
+
+    const userMsg: Message = { role: "user", content: userText, imagem_url: imagemPath };
     const next: Message[] = [...messages, userMsg];
     setMessages(next);
-    setInput("");
-    const currentImage = imageDataUrl;
-    setImageDataUrl(null);
 
     try {
       // Ensure a conversation exists
@@ -211,7 +247,12 @@ export default function Michele() {
       // Persist user message
       const { error: insUserErr } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "user", content: userText });
+        .insert({
+          conversa_id: conversaId,
+          role: "user",
+          content: userText,
+          imagem_url: imagemPath,
+        });
       if (insUserErr) console.error(insUserErr);
 
       // Call Michele
