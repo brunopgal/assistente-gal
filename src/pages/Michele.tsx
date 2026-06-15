@@ -566,6 +566,17 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
   } else if (tipo === "mudar_fase") {
     push("Nova fase", "fase_michele");
     push("Temperatura", "temperatura");
+  } else if (tipo === "cadastrar_obra") {
+    push("Nome", "nome");
+    push("Construtora", "construtora");
+    push("Cidade", "cidade");
+    push("Endereço", "localizacao");
+    push("Estágio", "estagioObra");
+    push("Produto", "produtoOferecido");
+    push("Responsável", "responsavel");
+    push("Telefone", "telefone");
+    push("Email", "email");
+    push("Observações", "observacoes");
   } else {
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
