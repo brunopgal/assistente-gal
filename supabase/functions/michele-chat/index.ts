@@ -340,12 +340,36 @@ Deno.serve(async (req) => {
     const systemEnriquecido = `${systemPrompt}\n\n---\n${contexto}`;
     const anthropicMessages = sanitizeAnthropicMessages(messages as unknown[]);
 
+    // Imagem opcional: anexa como bloco na última mensagem do usuário
+    const imageDataUrl = typeof body?.image === "string" ? body.image : null;
+    if (imageDataUrl && anthropicMessages.length > 0) {
+      const parsed = parseDataUrl(imageDataUrl);
+      if (parsed) {
+        for (let i = anthropicMessages.length - 1; i >= 0; i--) {
+          if (anthropicMessages[i].role === "user") {
+            const txt = typeof anthropicMessages[i].content === "string"
+              ? (anthropicMessages[i].content as string)
+              : "";
+            anthropicMessages[i] = {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: parsed.media_type, data: parsed.data } },
+                { type: "text", text: txt || "Analise a imagem anexa." },
+              ],
+            };
+            break;
+          }
+        }
+      }
+    }
+
     if (anthropicMessages.length === 0) {
       return new Response(
         JSON.stringify({ error: "Nenhuma mensagem válida para enviar à Michele." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
