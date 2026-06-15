@@ -315,6 +315,27 @@ export type Database = {
         }
         Relationships: []
       }
+      conversas_michele: {
+        Row: {
+          created_at: string
+          id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_eventos: {
         Row: {
           codigoObra: string | null
@@ -478,6 +499,38 @@ export type Database = {
           tipo_acao?: string | null
         }
         Relationships: []
+      }
+      mensagens_michele: {
+        Row: {
+          content: string
+          conversa_id: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          conversa_id: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          content?: string
+          conversa_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_michele_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas_michele"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       obras: {
         Row: {
