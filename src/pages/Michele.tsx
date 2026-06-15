@@ -340,18 +340,33 @@ export default function Michele() {
                 </div>
               );
             }
-            const { texto: t1, memoria } = parseMemoria(m.content);
-            const { texto, acao } = parseAcao(t1);
+            const { texto: t1, memoria: memParsed } = parseMemoria(m.content);
+            const { texto, acao: acaoParsed } = parseAcao(t1);
+            // Prefer persisted dados over parsed
+            const memoria = m.memoria_dados ?? memParsed;
+            const acao = m.acao_dados ?? acaoParsed;
             return (
-              <div key={i} className="flex justify-start">
+              <div key={m.id ?? i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
                   {texto && (
                     <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-muted text-foreground">
                       {texto}
                     </div>
                   )}
-                  {memoria && <MemoriaCard memoria={memoria} />}
-                  {acao && <AcaoCard acao={acao} />}
+                  {memoria && (
+                    <MemoriaCard
+                      messageId={m.id}
+                      memoria={memoria as MemoriaSugerida}
+                      initialStatus={(m.memoria_status ?? "pendente") as Exclude<MemoriaStatus, null>}
+                    />
+                  )}
+                  {acao && (
+                    <AcaoCard
+                      messageId={m.id}
+                      acao={acao as AcaoSugerida}
+                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
+                    />
+                  )}
                 </div>
               </div>
             );
