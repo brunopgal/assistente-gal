@@ -198,7 +198,7 @@ export default function Relatorios() {
       worksheet.views = [{ showGridLines: true }];
 
       // Estilos reutilizáveis
-      const thinBorder: ExcelJS.Border = {
+      const thinBorder: Partial<ExcelJS.Borders> = {
         top: { style: 'thin', color: { argb: 'D1D5DB' } },
         left: { style: 'thin', color: { argb: 'D1D5DB' } },
         bottom: { style: 'thin', color: { argb: 'D1D5DB' } },

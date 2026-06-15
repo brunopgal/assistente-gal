@@ -14,6 +14,121 @@ export type Database = {
   }
   public: {
     Tables: {
+      acessos_orcamento: {
+        Row: {
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          orcamento_id: string | null
+          referrer: string | null
+          tempo_leitura_segundos: number | null
+          tipo_dispositivo: string | null
+          token_orcamento: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          orcamento_id?: string | null
+          referrer?: string | null
+          tempo_leitura_segundos?: number | null
+          tipo_dispositivo?: string | null
+          token_orcamento?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          orcamento_id?: string | null
+          referrer?: string | null
+          tempo_leitura_segundos?: number | null
+          tipo_dispositivo?: string | null
+          token_orcamento?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acessos_orcamento_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acessos_orcamento_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_orcamentos_abertos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      acessos_site: {
+        Row: {
+          codigoObra: string | null
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          pagina: string | null
+          referrer: string | null
+          tempo_sessao_segundos: number | null
+          tipo_dispositivo: string | null
+          token_rastreio: string | null
+          url_acessada: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          codigoObra?: string | null
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          pagina?: string | null
+          referrer?: string | null
+          tempo_sessao_segundos?: number | null
+          tipo_dispositivo?: string | null
+          token_rastreio?: string | null
+          url_acessada?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          codigoObra?: string | null
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          pagina?: string | null
+          referrer?: string | null
+          tempo_sessao_segundos?: number | null
+          tipo_dispositivo?: string | null
+          token_rastreio?: string | null
+          url_acessada?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acessos_site_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "acessos_site_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_acao_hoje"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "acessos_site_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_followups_pendentes"
+            referencedColumns: ["codigoObra"]
+          },
+        ]
+      }
       atividades: {
         Row: {
           comentario: string
@@ -47,6 +162,75 @@ export type Database = {
           status?: string
           tipoContato?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      cadencia_prospeccao: {
+        Row: {
+          ativa: boolean | null
+          canais_sugeridos: string | null
+          descricao: string | null
+          deve_propor_reuniao: boolean | null
+          dias_apos_anterior: number
+          id: string
+          numero_abordagem: number
+          template_email_assunto: string | null
+          template_email_corpo: string | null
+          template_whatsapp: string | null
+          titulo: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          canais_sugeridos?: string | null
+          descricao?: string | null
+          deve_propor_reuniao?: boolean | null
+          dias_apos_anterior: number
+          id?: string
+          numero_abordagem: number
+          template_email_assunto?: string | null
+          template_email_corpo?: string | null
+          template_whatsapp?: string | null
+          titulo?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          canais_sugeridos?: string | null
+          descricao?: string | null
+          deve_propor_reuniao?: boolean | null
+          dias_apos_anterior?: number
+          id?: string
+          numero_abordagem?: number
+          template_email_assunto?: string | null
+          template_email_corpo?: string | null
+          template_whatsapp?: string | null
+          titulo?: string | null
+        }
+        Relationships: []
+      }
+      configuracoes: {
+        Row: {
+          atualizado_em: string | null
+          chave: string
+          descricao: string | null
+          id: string
+          tipo_valor: string | null
+          valor: string | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          chave: string
+          descricao?: string | null
+          id?: string
+          tipo_valor?: string | null
+          valor?: string | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          chave?: string
+          descricao?: string | null
+          id?: string
+          tipo_valor?: string | null
+          valor?: string | null
         }
         Relationships: []
       }
@@ -131,6 +315,170 @@ export type Database = {
         }
         Relationships: []
       }
+      email_eventos: {
+        Row: {
+          codigoObra: string | null
+          created_at: string | null
+          id: string
+          idAtividade: string | null
+          ip_address: string | null
+          link_clicado: string | null
+          tipo_evento: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          codigoObra?: string | null
+          created_at?: string | null
+          id?: string
+          idAtividade?: string | null
+          ip_address?: string | null
+          link_clicado?: string | null
+          tipo_evento?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          codigoObra?: string | null
+          created_at?: string | null
+          id?: string
+          idAtividade?: string | null
+          ip_address?: string | null
+          link_clicado?: string | null
+          tipo_evento?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_eventos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "email_eventos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_acao_hoje"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "email_eventos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_followups_pendentes"
+            referencedColumns: ["codigoObra"]
+          },
+        ]
+      }
+      follow_ups: {
+        Row: {
+          canal_sugerido: string | null
+          codigoObra: string | null
+          completado_em: string | null
+          created_at: string | null
+          data_prevista: string
+          descricao: string
+          hora_prevista: string | null
+          id: string
+          notas: string | null
+          prioridade: string | null
+          responsavel: string | null
+          status: string | null
+          tipo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          canal_sugerido?: string | null
+          codigoObra?: string | null
+          completado_em?: string | null
+          created_at?: string | null
+          data_prevista: string
+          descricao: string
+          hora_prevista?: string | null
+          id?: string
+          notas?: string | null
+          prioridade?: string | null
+          responsavel?: string | null
+          status?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          canal_sugerido?: string | null
+          codigoObra?: string | null
+          completado_em?: string | null
+          created_at?: string | null
+          data_prevista?: string
+          descricao?: string
+          hora_prevista?: string | null
+          id?: string
+          notas?: string | null
+          prioridade?: string | null
+          responsavel?: string | null
+          status?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_ups_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "follow_ups_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_acao_hoje"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "follow_ups_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_followups_pendentes"
+            referencedColumns: ["codigoObra"]
+          },
+        ]
+      }
+      log_automacao: {
+        Row: {
+          codigoObra: string | null
+          created_at: string | null
+          criado_por: string | null
+          dados_json: Json | null
+          descricao: string | null
+          id: string
+          mensagem_erro: string | null
+          sucesso: boolean | null
+          tipo_acao: string | null
+        }
+        Insert: {
+          codigoObra?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          dados_json?: Json | null
+          descricao?: string | null
+          id?: string
+          mensagem_erro?: string | null
+          sucesso?: boolean | null
+          tipo_acao?: string | null
+        }
+        Update: {
+          codigoObra?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          dados_json?: Json | null
+          descricao?: string | null
+          id?: string
+          mensagem_erro?: string | null
+          sucesso?: boolean | null
+          tipo_acao?: string | null
+        }
+        Relationships: []
+      }
       obras: {
         Row: {
           cidade: string
@@ -140,24 +488,33 @@ export type Database = {
           concorrentes: string
           construtora: string
           created_at: string
+          data_proxima_acao: string | null
           dataCadastro: string
           dataOrcamentoEnviado: string
           dataUltimaVisita: string
           email: string
           estagioObra: string
+          fase_michele: string | null
+          foto_url: string | null
+          gerenciada_michele: boolean | null
+          link_unico: string | null
           linkOrcamentoImab: string
           linkOrcamentoPrado: string
           linkOrcamentoRhoden: string
           localizacao: string
           marcouReuniao: string
           nome: string
+          numero_tentativa: number | null
           observacoes: string
+          potencial: string | null
           produtoOferecido: string
           prospeccaoIA: string
           proximoContato: string
           responsavel: string
           statusProspeccao: string
           telefone: string
+          temperatura: string | null
+          token_rastreio: string | null
           updated_at: string
           visita: string
         }
@@ -169,24 +526,33 @@ export type Database = {
           concorrentes?: string
           construtora?: string
           created_at?: string
+          data_proxima_acao?: string | null
           dataCadastro?: string
           dataOrcamentoEnviado?: string
           dataUltimaVisita?: string
           email?: string
           estagioObra?: string
+          fase_michele?: string | null
+          foto_url?: string | null
+          gerenciada_michele?: boolean | null
+          link_unico?: string | null
           linkOrcamentoImab?: string
           linkOrcamentoPrado?: string
           linkOrcamentoRhoden?: string
           localizacao?: string
           marcouReuniao?: string
           nome?: string
+          numero_tentativa?: number | null
           observacoes?: string
+          potencial?: string | null
           produtoOferecido?: string
           prospeccaoIA?: string
           proximoContato?: string
           responsavel?: string
           statusProspeccao?: string
           telefone?: string
+          temperatura?: string | null
+          token_rastreio?: string | null
           updated_at?: string
           visita?: string
         }
@@ -198,24 +564,33 @@ export type Database = {
           concorrentes?: string
           construtora?: string
           created_at?: string
+          data_proxima_acao?: string | null
           dataCadastro?: string
           dataOrcamentoEnviado?: string
           dataUltimaVisita?: string
           email?: string
           estagioObra?: string
+          fase_michele?: string | null
+          foto_url?: string | null
+          gerenciada_michele?: boolean | null
+          link_unico?: string | null
           linkOrcamentoImab?: string
           linkOrcamentoPrado?: string
           linkOrcamentoRhoden?: string
           localizacao?: string
           marcouReuniao?: string
           nome?: string
+          numero_tentativa?: number | null
           observacoes?: string
+          potencial?: string | null
           produtoOferecido?: string
           prospeccaoIA?: string
           proximoContato?: string
           responsavel?: string
           statusProspeccao?: string
           telefone?: string
+          temperatura?: string | null
+          token_rastreio?: string | null
           updated_at?: string
           visita?: string
         }
@@ -251,6 +626,82 @@ export type Database = {
         }
         Relationships: []
       }
+      orcamentos: {
+        Row: {
+          codigoObra: string | null
+          created_at: string | null
+          criado_por: string | null
+          data_envio: string
+          data_validade: string | null
+          id: string
+          link_orcamento: string | null
+          notas: string | null
+          numero_orcamento: string | null
+          produto: string | null
+          status: string | null
+          token_orcamento: string | null
+          updated_at: string | null
+          valor_final: number | null
+          valor_total: number | null
+        }
+        Insert: {
+          codigoObra?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_envio: string
+          data_validade?: string | null
+          id?: string
+          link_orcamento?: string | null
+          notas?: string | null
+          numero_orcamento?: string | null
+          produto?: string | null
+          status?: string | null
+          token_orcamento?: string | null
+          updated_at?: string | null
+          valor_final?: number | null
+          valor_total?: number | null
+        }
+        Update: {
+          codigoObra?: string | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_envio?: string
+          data_validade?: string | null
+          id?: string
+          link_orcamento?: string | null
+          notas?: string | null
+          numero_orcamento?: string | null
+          produto?: string | null
+          status?: string | null
+          token_orcamento?: string | null
+          updated_at?: string | null
+          valor_final?: number | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamentos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "orcamentos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_acao_hoje"
+            referencedColumns: ["codigoObra"]
+          },
+          {
+            foreignKeyName: "orcamentos_codigoObra_fkey"
+            columns: ["codigoObra"]
+            isOneToOne: false
+            referencedRelation: "vw_followups_pendentes"
+            referencedColumns: ["codigoObra"]
+          },
+        ]
+      }
       pautas_reuniao: {
         Row: {
           conteudo: string
@@ -277,6 +728,7 @@ export type Database = {
       }
       pessoas: {
         Row: {
+          canal_preferido: string | null
           cargo: string
           codigoConstrutora: string
           codigoObraAtual: string
@@ -285,12 +737,14 @@ export type Database = {
           dataCadastro: string
           dataUltimaAtualizacao: string
           email: string
+          melhor_horario: string | null
           nome: string
           observacoes: string
           updated_at: string
           whatsapp: string
         }
         Insert: {
+          canal_preferido?: string | null
           cargo?: string
           codigoConstrutora?: string
           codigoObraAtual?: string
@@ -299,12 +753,14 @@ export type Database = {
           dataCadastro?: string
           dataUltimaAtualizacao?: string
           email?: string
+          melhor_horario?: string | null
           nome?: string
           observacoes?: string
           updated_at?: string
           whatsapp?: string
         }
         Update: {
+          canal_preferido?: string | null
           cargo?: string
           codigoConstrutora?: string
           codigoObraAtual?: string
@@ -313,6 +769,7 @@ export type Database = {
           dataCadastro?: string
           dataUltimaAtualizacao?: string
           email?: string
+          melhor_horario?: string | null
           nome?: string
           observacoes?: string
           updated_at?: string
@@ -320,9 +777,111 @@ export type Database = {
         }
         Relationships: []
       }
+      produtos: {
+        Row: {
+          ativo: boolean | null
+          categoria: string | null
+          cidade_fabrica: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          url_pagina: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria?: string | null
+          cidade_fabrica?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          url_pagina?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string | null
+          cidade_fabrica?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          url_pagina?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      vw_acao_hoje: {
+        Row: {
+          codigoObra: string | null
+          data_proxima_acao: string | null
+          fase_michele: string | null
+          nome_obra: string | null
+          numero_tentativa: number | null
+          produtoOferecido: string | null
+          responsavel: string | null
+          temperatura: string | null
+        }
+        Insert: {
+          codigoObra?: string | null
+          data_proxima_acao?: string | null
+          fase_michele?: string | null
+          nome_obra?: string | null
+          numero_tentativa?: number | null
+          produtoOferecido?: string | null
+          responsavel?: string | null
+          temperatura?: string | null
+        }
+        Update: {
+          codigoObra?: string | null
+          data_proxima_acao?: string | null
+          fase_michele?: string | null
+          nome_obra?: string | null
+          numero_tentativa?: number | null
+          produtoOferecido?: string | null
+          responsavel?: string | null
+          temperatura?: string | null
+        }
+        Relationships: []
+      }
+      vw_followups_pendentes: {
+        Row: {
+          canal_sugerido: string | null
+          codigoObra: string | null
+          data_prevista: string | null
+          descricao: string | null
+          dias_atraso: number | null
+          email: string | null
+          id: string | null
+          nome_obra: string | null
+          prioridade: string | null
+          responsavel: string | null
+          telefone: string | null
+        }
+        Relationships: []
+      }
+      vw_funil: {
+        Row: {
+          fase: string | null
+          quentes: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
+      vw_orcamentos_abertos: {
+        Row: {
+          data_envio: string | null
+          dias_desde_envio: number | null
+          id: string | null
+          nome_obra: string | null
+          numero_orcamento: string | null
+          produto: string | null
+          responsavel: string | null
+          status: string | null
+          total_acessos: number | null
+          ultimo_acesso: string | null
+          valor_final: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

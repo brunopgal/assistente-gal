@@ -18,6 +18,7 @@ import Atividades from "./pages/Atividades";
 import ProspeccaoIA from "./pages/ProspeccaoIA";
 import Pessoas from "./pages/Pessoas";
 import Relatorios from "./pages/Relatorios";
+import Michele from "./pages/Michele";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
                     <Route path="/atividades/:id" element={<Atividades />} />
                     <Route path="/pessoas" element={<Pessoas />} />
                     <Route path="/relatorios" element={<Relatorios />} />
+                    <Route path="/michele" element={<Michele />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
                     <Route path="*" element={<NotFound />} />
