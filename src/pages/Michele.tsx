@@ -477,7 +477,7 @@ function MemoriaCard({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setEstado("descartado")}
+          onClick={handleDescartar}
           disabled={saving}
         >
           <X className="h-3.5 w-3.5 mr-1" />
