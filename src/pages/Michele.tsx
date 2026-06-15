@@ -203,10 +203,48 @@ export default function Michele() {
       }
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
-      // Persist assistant message + bump conversation
-      await supabase
+      // Parse acao/memoria from reply and persist with status
+      const { memoria } = parseMemoria(reply);
+      const { acao } = parseAcao(reply);
+      const acao_status = acao ? "pendente" : null;
+      const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
+      const memoria_status = memoria ? "pendente" : null;
+      const memoria_dados = memoria ?? null;
+
+      const { data: insAss } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "assistant", content: reply });
+        .insert({
+          conversa_id: conversaId,
+          role: "assistant",
+          content: reply,
+          acao_status,
+          acao_dados: acao_dados as unknown as never,
+          memoria_status,
+          memoria_dados: memoria_dados as unknown as never,
+        })
+        .select("id")
+        .single();
+
+      if (insAss?.id) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === "assistant" && !copy[i].id) {
+              copy[i] = {
+                ...copy[i],
+                id: insAss.id,
+                acao_status,
+                acao_dados,
+                memoria_status,
+                memoria_dados,
+              };
+              break;
+            }
+          }
+          return copy;
+        });
+      }
+
       await supabase
         .from("conversas_michele")
         .update({ updated_at: new Date().toISOString() })
