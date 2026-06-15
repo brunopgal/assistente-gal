@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check } from "lucide-react";
+import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,8 +7,12 @@ import { toast } from "sonner";
 
 type MemoriaTipo = "preferencia" | "cliente" | "correcao" | "geral";
 type MemoriaSugerida = { tipo: MemoriaTipo; escopo: string; conteudo: string };
+type AcaoTipo = "criar_followup" | "mudar_fase" | "atualizar_obra" | string;
+type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
+const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -28,6 +32,38 @@ function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerid
   if (!conteudo) return { texto: content, memoria: null };
   return { texto, memoria: { tipo, escopo, conteudo } };
 }
+
+function parseAcao(content: string): { texto: string; acao: AcaoSugerida | null } {
+  const m = content.match(ACAO_RE);
+  if (!m) return { texto: content, acao: null };
+  const bloco = m[1];
+  const tipoMatch = /tipo\s*:\s*(.+)/i.exec(bloco);
+  const dadosMatch = /dados\s*:\s*([\s\S]+)/i.exec(bloco);
+  const tipo = tipoMatch ? tipoMatch[1].trim() : "";
+  let dados: Record<string, unknown> = {};
+  if (dadosMatch) {
+    const raw = dadosMatch[1].trim();
+    try {
+      dados = JSON.parse(raw);
+    } catch {
+      // try extracting just the JSON object
+      const jm = raw.match(/\{[\s\S]*\}/);
+      if (jm) {
+        try { dados = JSON.parse(jm[0]); } catch { dados = {}; }
+      }
+    }
+  }
+  const texto = content.replace(ACAO_RE, "").trim();
+  if (!tipo) return { texto: content, acao: null };
+  return { texto, acao: { tipo, dados } };
+}
+
+const ACAO_LABEL: Record<string, string> = {
+  criar_followup: "Criar follow-up",
+  mudar_fase: "Mudar fase da obra",
+  atualizar_obra: "Atualizar dados da obra",
+};
+
 
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -256,7 +292,8 @@ export default function Michele() {
                 </div>
               );
             }
-            const { texto, memoria } = parseMemoria(m.content);
+            const { texto: t1, memoria } = parseMemoria(m.content);
+            const { texto, acao } = parseAcao(t1);
             return (
               <div key={i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
@@ -266,6 +303,7 @@ export default function Michele() {
                     </div>
                   )}
                   {memoria && <MemoriaCard memoria={memoria} />}
+                  {acao && <AcaoCard acao={acao} />}
                 </div>
               </div>
             );
@@ -372,4 +410,143 @@ function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
     </div>
   );
 }
+
+function formatarDados(tipo: string, dados: Record<string, unknown>): { label: string; value: string }[] {
+  const entries: { label: string; value: string }[] = [];
+  const push = (label: string, key: string) => {
+    const v = dados[key];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      entries.push({ label, value: String(v) });
+    }
+  };
+  if (dados.codigoObra) entries.push({ label: "Obra", value: String(dados.codigoObra) });
+  if (tipo === "criar_followup") {
+    push("Descrição", "descricao");
+    push("Data", "data_prevista");
+    push("Tipo", "tipo");
+    push("Canal", "canal_sugerido");
+    push("Prioridade", "prioridade");
+    push("Responsável", "responsavel");
+  } else if (tipo === "mudar_fase") {
+    push("Nova fase", "fase_michele");
+    push("Temperatura", "temperatura");
+  } else {
+    for (const [k, v] of Object.entries(dados)) {
+      if (k === "codigoObra") continue;
+      if (v === undefined || v === null || String(v).trim() === "") continue;
+      entries.push({ label: k, value: typeof v === "object" ? JSON.stringify(v) : String(v) });
+    }
+  }
+  return entries;
+}
+
+function AcaoCard({ acao }: { acao: AcaoSugerida }) {
+  const [estado, setEstado] = useState<"pendente" | "executando" | "executado" | "cancelado" | "erro">("pendente");
+  const [resumo, setResumo] = useState<string>("");
+  const [erro, setErro] = useState<string>("");
+  const disponivel = ACOES_DISPONIVEIS.has(acao.tipo);
+  const label = ACAO_LABEL[acao.tipo] ?? acao.tipo;
+  const entries = formatarDados(acao.tipo, acao.dados);
+
+  if (estado === "cancelado") return null;
+
+  async function handleExecutar() {
+    setEstado("executando");
+    setErro("");
+    try {
+      const { data, error } = await supabase.functions.invoke("michele-executar-acao", {
+        body: { tipo: acao.tipo, dados: acao.dados },
+      });
+      if (error) throw error;
+      const r = data as { ok?: boolean; resumo?: string; error?: string };
+      if (!r?.ok) {
+        setErro(r?.error ?? "Não foi possível executar.");
+        setEstado("erro");
+        return;
+      }
+      setResumo(r.resumo ?? "Ação executada.");
+      setEstado("executado");
+      toast.success("Feito! ✅");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErro(msg);
+      setEstado("erro");
+      toast.error("Erro ao executar a ação.");
+    }
+  }
+
+  return (
+    <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/5 p-3 space-y-3">
+      <div className="flex items-start gap-2">
+        <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+            Ação proposta
+          </div>
+          <div className="text-sm font-medium text-foreground">{label}</div>
+          {!disponivel && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-3 w-3" />
+              Ação ainda não disponível.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {entries.length > 0 && (
+        <dl className="text-xs space-y-1 pl-6">
+          {entries.map((e) => (
+            <div key={e.label} className="flex gap-2">
+              <dt className="text-muted-foreground min-w-[80px]">{e.label}:</dt>
+              <dd className="text-foreground break-words flex-1">{e.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {estado === "executado" && (
+        <div className="rounded-md bg-primary/10 px-3 py-2 text-xs text-foreground flex items-start gap-2">
+          <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">Feito! ✅</div>
+            {resumo && <div className="text-muted-foreground mt-0.5">{resumo}</div>}
+          </div>
+        </div>
+      )}
+
+      {estado === "erro" && (
+        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {erro || "Erro ao executar."}
+        </div>
+      )}
+
+      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
+        <div className="flex gap-2 justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEstado("cancelado")}
+            disabled={estado === "executando"}
+          >
+            <X className="h-3.5 w-3.5 mr-1" />
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleExecutar}
+            disabled={!disponivel || estado === "executando"}
+          >
+            {estado === "executando" ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+            ) : (
+              <Zap className="h-3.5 w-3.5 mr-1" />
+            )}
+            {estado === "erro" ? "Tentar novamente" : "Aprovar e executar"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 

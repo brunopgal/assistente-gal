@@ -1,0 +1,149 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const ALLOWED = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
+
+const OBRA_FIELDS = new Set([
+  "statusProspeccao", "nome", "classificacao", "construtora", "responsavel",
+  "telefone", "email", "cidade", "localizacao", "produtoOferecido", "estagioObra",
+  "marcouReuniao", "visita", "dataUltimaVisita", "dataOrcamentoEnviado",
+  "proximoContato", "observacoes", "concorrentes", "prospeccaoIA",
+  "fase_michele", "temperatura", "numero_tentativa", "data_proxima_acao",
+  "potencial", "gerenciada_michele",
+]);
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const userClient = createClient(SUPABASE_URL, ANON, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: claims, error: authErr } = await userClient.auth.getClaims(
+    authHeader.slice(7),
+  );
+  if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
+
+  const sb = createClient(SUPABASE_URL, SERVICE);
+
+  let body: { tipo?: string; dados?: Record<string, unknown> };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "JSON inválido" }, 400);
+  }
+  const tipo = String(body?.tipo ?? "");
+  const dados = (body?.dados ?? {}) as Record<string, unknown>;
+
+  if (!ALLOWED.has(tipo)) {
+    return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
+  }
+
+  const codigoObra = String(dados.codigoObra ?? "").trim();
+  if (!codigoObra) return json({ error: "codigoObra é obrigatório" }, 400);
+
+  const { data: obra, error: obraErr } = await sb
+    .from("obras")
+    .select("codigoObra,nome,fase_michele,temperatura")
+    .eq("codigoObra", codigoObra)
+    .maybeSingle();
+  if (obraErr) return json({ error: obraErr.message }, 500);
+  if (!obra) return json({ error: `Obra ${codigoObra} não encontrada` }, 404);
+
+  async function log(sucesso: boolean, descricao: string, erro?: string) {
+    await sb.from("log_automacao").insert({
+      codigoObra,
+      tipo_acao: tipo,
+      descricao,
+      sucesso,
+      mensagem_erro: erro ?? null,
+      dados_json: dados,
+      criado_por: "michele",
+    });
+  }
+
+  try {
+    if (tipo === "criar_followup") {
+      const payload = {
+        codigoObra,
+        descricao: String(dados.descricao ?? "").trim(),
+        tipo: dados.tipo ? String(dados.tipo) : null,
+        data_prevista: String(dados.data_prevista ?? ""),
+        canal_sugerido: dados.canal_sugerido ? String(dados.canal_sugerido) : null,
+        prioridade: dados.prioridade ? String(dados.prioridade) : "normal",
+        responsavel: dados.responsavel ? String(dados.responsavel) : "michele",
+      };
+      if (!payload.descricao || !payload.data_prevista) {
+        await log(false, "Follow-up sem descrição ou data", "campos obrigatórios faltando");
+        return json({ error: "descricao e data_prevista são obrigatórios" }, 400);
+      }
+      const { data, error } = await sb
+        .from("follow_ups")
+        .insert(payload)
+        .select("id,descricao,data_prevista,canal_sugerido,prioridade")
+        .single();
+      if (error) { await log(false, "Falha ao criar follow-up", error.message); return json({ error: error.message }, 500); }
+      await log(true, `Follow-up criado: ${payload.descricao}`);
+      return json({ ok: true, resumo: `Follow-up criado para ${obra.nome || codigoObra} em ${payload.data_prevista}.`, registro: data });
+    }
+
+    if (tipo === "mudar_fase") {
+      const update: Record<string, unknown> = {};
+      if (dados.fase_michele) update.fase_michele = String(dados.fase_michele);
+      if (dados.temperatura) update.temperatura = String(dados.temperatura);
+      if (Object.keys(update).length === 0) {
+        await log(false, "mudar_fase sem campos", "fase_michele ou temperatura obrigatórios");
+        return json({ error: "Informe fase_michele e/ou temperatura" }, 400);
+      }
+      const { error } = await sb.from("obras").update(update).eq("codigoObra", codigoObra);
+      if (error) { await log(false, "Falha ao mudar fase", error.message); return json({ error: error.message }, 500); }
+      const partes = [
+        update.fase_michele ? `fase ${obra.fase_michele} → ${update.fase_michele}` : null,
+        update.temperatura ? `temperatura ${obra.temperatura} → ${update.temperatura}` : null,
+      ].filter(Boolean).join(", ");
+      await log(true, `Obra atualizada (${partes})`);
+      return json({ ok: true, resumo: `${obra.nome || codigoObra}: ${partes}.` });
+    }
+
+    if (tipo === "atualizar_obra") {
+      const update: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(dados)) {
+        if (k === "codigoObra") continue;
+        if (OBRA_FIELDS.has(k)) update[k] = v;
+      }
+      if (Object.keys(update).length === 0) {
+        await log(false, "atualizar_obra sem campos válidos");
+        return json({ error: "Nenhum campo válido para atualizar" }, 400);
+      }
+      const { error } = await sb.from("obras").update(update).eq("codigoObra", codigoObra);
+      if (error) { await log(false, "Falha ao atualizar obra", error.message); return json({ error: error.message }, 500); }
+      const campos = Object.keys(update).join(", ");
+      await log(true, `Obra atualizada: ${campos}`);
+      return json({ ok: true, resumo: `${obra.nome || codigoObra} atualizada (${campos}).` });
+    }
+
+    return json({ error: "Ação não implementada" }, 400);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await log(false, "Erro inesperado", msg);
+    return json({ error: msg }, 500);
+  }
+});
