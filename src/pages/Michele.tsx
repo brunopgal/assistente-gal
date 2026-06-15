@@ -398,9 +398,14 @@ export default function Michele() {
           {messages.map((m, i) => {
             if (m.role === "user") {
               return (
-                <div key={i} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
-                    {m.content}
+                <div key={m.id ?? i} className="flex justify-end">
+                  <div className="max-w-[80%] space-y-2">
+                    {m.imagem_url && <ChatImage path={m.imagem_url} />}
+                    {m.content && m.content !== "[imagem anexa]" && (
+                      <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
+                        {m.content}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
