@@ -610,13 +610,22 @@ function AcaoCard({
         </dl>
       )}
 
-      {estado === "executado" && (
-        <div className="rounded-md bg-primary/10 px-3 py-2 text-xs text-foreground flex items-start gap-2">
-          <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+      {estado === "aprovada" && (
+        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-foreground flex items-start gap-2">
+          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium">Feito! ✅</div>
+            <div className="font-medium text-emerald-700 dark:text-emerald-300">
+              ✅ Aprovado e executado
+            </div>
             {resumo && <div className="text-muted-foreground mt-0.5">{resumo}</div>}
           </div>
+        </div>
+      )}
+
+      {estado === "cancelada" && (
+        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+          <X className="h-3.5 w-3.5" />
+          Cancelado
         </div>
       )}
 
@@ -631,7 +640,7 @@ function AcaoCard({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setEstado("cancelado")}
+            onClick={handleCancelar}
             disabled={estado === "executando"}
           >
             <X className="h-3.5 w-3.5 mr-1" />
