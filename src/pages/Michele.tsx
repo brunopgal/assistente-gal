@@ -77,6 +77,7 @@ type Message = {
   acao_dados?: { tipo: string; dados: Record<string, unknown> } | null;
   memoria_status?: MemoriaStatus;
   memoria_dados?: MemoriaSugerida | null;
+  imagem_url?: string | null;
 };
 type Conversa = { id: string; titulo: string; updated_at: string };
 
@@ -140,7 +141,7 @@ export default function Michele() {
   const loadMessages = useCallback(async (conversaId: string) => {
     const { data, error } = await supabase
       .from("mensagens_michele")
-      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados")
+      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados,imagem_url")
       .eq("conversa_id", conversaId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -178,18 +179,54 @@ export default function Michele() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  async function uploadImagem(dataUrl: string): Promise<string | null> {
+    try {
+      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+      if (!m) return null;
+      const mime = m[1];
+      const b64 = m[2];
+      const ext = mime.split("/")[1] || "png";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const { data: u } = await supabase.auth.getUser();
+      const userId = u?.user?.id ?? "anon";
+      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("michele-uploads")
+        .upload(path, blob, { contentType: mime, upsert: false });
+      if (error) {
+        console.error("upload error", error);
+        return null;
+      }
+      return path;
+    } catch (e) {
+      console.error("uploadImagem", e);
+      return null;
+    }
+  }
+
   async function handleSend() {
     const text = input.trim();
     if ((!text && !imageDataUrl) || loading) return;
 
     setLoading(true);
     const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
-    const userMsg: Message = { role: "user", content: userText };
+    const currentImage = imageDataUrl;
+    setInput("");
+    setImageDataUrl(null);
+
+    // Upload da imagem (se houver) antes de pintar a mensagem, para já ter URL persistida
+    let imagemPath: string | null = null;
+    if (currentImage) {
+      imagemPath = await uploadImagem(currentImage);
+      if (!imagemPath) toast.error("Não consegui salvar a imagem (segui sem ela).");
+    }
+
+    const userMsg: Message = { role: "user", content: userText, imagem_url: imagemPath };
     const next: Message[] = [...messages, userMsg];
     setMessages(next);
-    setInput("");
-    const currentImage = imageDataUrl;
-    setImageDataUrl(null);
 
     try {
       // Ensure a conversation exists
@@ -210,7 +247,12 @@ export default function Michele() {
       // Persist user message
       const { error: insUserErr } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "user", content: userText });
+        .insert({
+          conversa_id: conversaId,
+          role: "user",
+          content: userText,
+          imagem_url: imagemPath,
+        });
       if (insUserErr) console.error(insUserErr);
 
       // Call Michele
@@ -356,9 +398,14 @@ export default function Michele() {
           {messages.map((m, i) => {
             if (m.role === "user") {
               return (
-                <div key={i} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
-                    {m.content}
+                <div key={m.id ?? i} className="flex justify-end">
+                  <div className="max-w-[80%] space-y-2">
+                    {m.imagem_url && <ChatImage path={m.imagem_url} />}
+                    {m.content && m.content !== "[imagem anexa]" && (
+                      <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
+                        {m.content}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -725,5 +772,36 @@ function AcaoCard({
     </div>
   );
 }
+
+function ChatImage({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase.storage
+        .from("michele-uploads")
+        .createSignedUrl(path, 60 * 60);
+      if (alive && !error) setUrl(data?.signedUrl ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [path]);
+  if (!url) {
+    return (
+      <div className="h-40 w-40 rounded-lg bg-muted animate-pulse" />
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block">
+      <img
+        src={url}
+        alt="anexo"
+        className="max-h-64 max-w-full rounded-lg border object-cover hover:opacity-90 transition"
+      />
+    </a>
+  );
+}
+
 
 
