@@ -500,6 +500,33 @@ export type Database = {
         }
         Relationships: []
       }
+      memoria_michele: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          created_at: string
+          escopo: string
+          id: string
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          created_at?: string
+          escopo?: string
+          id?: string
+          tipo: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          created_at?: string
+          escopo?: string
+          id?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       mensagens_michele: {
         Row: {
           content: string
