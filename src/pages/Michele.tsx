@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle } from "lucide-react";
+import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle, Paperclip } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
