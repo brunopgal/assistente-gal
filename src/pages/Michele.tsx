@@ -77,6 +77,7 @@ type Message = {
   acao_dados?: { tipo: string; dados: Record<string, unknown> } | null;
   memoria_status?: MemoriaStatus;
   memoria_dados?: MemoriaSugerida | null;
+  imagem_url?: string | null;
 };
 type Conversa = { id: string; titulo: string; updated_at: string };
 
@@ -140,7 +141,7 @@ export default function Michele() {
   const loadMessages = useCallback(async (conversaId: string) => {
     const { data, error } = await supabase
       .from("mensagens_michele")
-      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados")
+      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados,imagem_url")
       .eq("conversa_id", conversaId)
       .order("created_at", { ascending: true });
     if (error) {
