@@ -12,7 +12,7 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
