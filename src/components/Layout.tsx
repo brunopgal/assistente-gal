@@ -1,7 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart, Bot } from "lucide-react";
 import { useState } from "react";
-import SecretariaChat from "@/components/SecretariaChat";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -125,8 +124,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Floating AI Secretary */}
-      <SecretariaChat />
     </div>
   );
 }
