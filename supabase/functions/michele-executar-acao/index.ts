@@ -6,16 +6,36 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ALLOWED = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
+const ALLOWED = new Set([
+  "criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra",
+  "cadastrar_construtora", "cadastrar_contato", "atualizar_contato",
+]);
 
 const OBRA_FIELDS = new Set([
-  "statusProspeccao", "nome", "classificacao", "construtora", "responsavel",
-  "telefone", "email", "cidade", "localizacao", "produtoOferecido", "estagioObra",
+  "statusProspeccao", "nome", "classificacao", "construtora", "codigoConstrutora",
+  "responsavel", "telefone", "email", "cidade", "localizacao", "produtoOferecido", "estagioObra",
   "marcouReuniao", "visita", "dataUltimaVisita", "dataOrcamentoEnviado",
   "proximoContato", "observacoes", "concorrentes", "prospeccaoIA",
   "fase_michele", "temperatura", "numero_tentativa", "data_proxima_acao",
   "potencial", "gerenciada_michele",
 ]);
+
+const CONSTRUTORA_FIELDS = new Set(["nome", "cnpj", "produto", "status", "observacoes", "prospeccaoIA"]);
+const PESSOA_FIELDS = new Set([
+  "codigoConstrutora", "codigoObraAtual", "nome", "cargo", "whatsapp", "email",
+  "observacoes", "canal_preferido", "melhor_horario",
+]);
+
+async function proximoCodigo(sb: any, table: string, col: string, prefix: string, pad: number): Promise<string> {
+  const { data } = await sb.from(table).select(col).ilike(col, `${prefix}%`).order(col, { ascending: false }).limit(50);
+  let max = 0;
+  const re = new RegExp(`${prefix}0*(\\d+)`, "i");
+  for (const r of (data as any[]) ?? []) {
+    const m = re.exec(String(r[col] ?? ""));
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return prefix + String(max + 1).padStart(pad, "0");
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -128,8 +148,77 @@ Deno.serve(async (req) => {
     });
   }
 
+  if (tipo === "cadastrar_construtora") {
+    const nome = String(dados.nome ?? "").trim();
+    if (!nome) return json({ error: "nome é obrigatório" }, 400);
+    const novoCodigo = await proximoCodigo(sb, "construtoras", "codigo", "CT", 9);
+    const insert: Record<string, unknown> = { codigo: novoCodigo };
+    for (const [k, v] of Object.entries(dados)) {
+      if (CONSTRUTORA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+    }
+    if (!insert.status) insert.status = "Prospecção";
+    const { data: ins, error } = await sb.from("construtoras").insert(insert).select("codigo,nome").single();
+    if (error) {
+      await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: "Falha ao cadastrar construtora", sucesso: false, mensagem_erro: error.message, dados_json: dados, criado_por: "michele" });
+      return json({ error: error.message }, 500);
+    }
+    await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: `Construtora cadastrada: ${nome} (${novoCodigo})`, sucesso: true, dados_json: dados, criado_por: "michele" });
+    return json({ ok: true, resumo: `Construtora "${nome}" cadastrada como ${novoCodigo}.`, registro: ins, codigo: novoCodigo });
+  }
+
+  if (tipo === "cadastrar_contato") {
+    const nome = String(dados.nome ?? "").trim();
+    if (!nome) return json({ error: "nome é obrigatório" }, 400);
+    const novoCodigo = await proximoCodigo(sb, "pessoas", "codigoPessoa", "PE", 9);
+    const insert: Record<string, unknown> = { codigoPessoa: novoCodigo };
+    for (const [k, v] of Object.entries(dados)) {
+      if (PESSOA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+    }
+    if (!insert.cargo) insert.cargo = "Não Informado";
+    const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    insert.dataCadastro = hoje;
+    insert.dataUltimaAtualizacao = hoje;
+    const { data: ins, error } = await sb.from("pessoas").insert(insert).select("codigoPessoa,nome").single();
+    if (error) {
+      await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: "Falha ao cadastrar contato", sucesso: false, mensagem_erro: error.message, dados_json: dados, criado_por: "michele" });
+      return json({ error: error.message }, 500);
+    }
+    await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: `Contato cadastrado: ${nome} (${novoCodigo})`, sucesso: true, dados_json: dados, criado_por: "michele" });
+    return json({ ok: true, resumo: `Contato "${nome}" cadastrado como ${novoCodigo}.`, registro: ins, codigoPessoa: novoCodigo });
+  }
+
+  if (tipo === "atualizar_contato") {
+    const codigoPessoa = String(dados.codigoPessoa ?? "").trim();
+    if (!codigoPessoa) return json({ error: "codigoPessoa é obrigatório" }, 400);
+    const { data: existente, error: getErr } = await sb.from("pessoas").select("codigoPessoa,nome,observacoes").eq("codigoPessoa", codigoPessoa).maybeSingle();
+    if (getErr) return json({ error: getErr.message }, 500);
+    if (!existente) return json({ error: `Contato ${codigoPessoa} não encontrado` }, 404);
+
+    const update: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(dados)) {
+      if (k === "codigoPessoa" || k === "observacoes") continue;
+      if (PESSOA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") update[k] = v;
+    }
+    const novaObs = dados.observacoes !== undefined && dados.observacoes !== null ? String(dados.observacoes).trim() : "";
+    if (novaObs) {
+      const atual = String((existente as any).observacoes ?? "").trim();
+      update.observacoes = atual ? `${atual}\n${novaObs}` : novaObs;
+    }
+    if (Object.keys(update).length === 0) return json({ error: "Nenhum campo para atualizar" }, 400);
+    update.dataUltimaAtualizacao = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    const { error } = await sb.from("pessoas").update(update).eq("codigoPessoa", codigoPessoa);
+    if (error) {
+      await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: "Falha ao atualizar contato", sucesso: false, mensagem_erro: error.message, dados_json: dados, criado_por: "michele" });
+      return json({ error: error.message }, 500);
+    }
+    const campos = Object.keys(update).join(", ");
+    await sb.from("log_automacao").insert({ tipo_acao: tipo, descricao: `Contato ${codigoPessoa} atualizado (${campos})`, sucesso: true, dados_json: dados, criado_por: "michele" });
+    return json({ ok: true, resumo: `Contato ${(existente as any).nome || codigoPessoa} atualizado (${campos}).` });
+  }
+
   const codigoObra = String(dados.codigoObra ?? "").trim();
   if (!codigoObra) return json({ error: "codigoObra é obrigatório" }, 400);
+
 
   const { data: obra, error: obraErr } = await sb
     .from("obras")

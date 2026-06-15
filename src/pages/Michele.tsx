@@ -12,7 +12,7 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -63,6 +63,9 @@ const ACAO_LABEL: Record<string, string> = {
   mudar_fase: "Mudar fase da obra",
   atualizar_obra: "Atualizar dados da obra",
   cadastrar_obra: "Cadastrar nova obra",
+  cadastrar_construtora: "Cadastrar nova construtora",
+  cadastrar_contato: "Cadastrar novo contato",
+  atualizar_contato: "Atualizar contato",
 };
 
 
@@ -624,6 +627,29 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
     push("Telefone", "telefone");
     push("Email", "email");
     push("Observações", "observacoes");
+  } else if (tipo === "cadastrar_construtora") {
+    push("Nome", "nome");
+    push("CNPJ", "cnpj");
+    push("Produto", "produto");
+    push("Status", "status");
+    push("Observações", "observacoes");
+  } else if (tipo === "cadastrar_contato") {
+    push("Nome", "nome");
+    push("Cargo", "cargo");
+    push("WhatsApp", "whatsapp");
+    push("Email", "email");
+    push("Construtora", "codigoConstrutora");
+    push("Obra atual", "codigoObraAtual");
+    push("Observações", "observacoes");
+  } else if (tipo === "atualizar_contato") {
+    push("Contato", "codigoPessoa");
+    push("Nome", "nome");
+    push("Cargo", "cargo");
+    push("WhatsApp", "whatsapp");
+    push("Email", "email");
+    push("Construtora", "codigoConstrutora");
+    push("Obra atual", "codigoObraAtual");
+    push("Anexar à observação", "observacoes");
   } else {
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
