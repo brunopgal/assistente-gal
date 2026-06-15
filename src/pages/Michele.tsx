@@ -66,7 +66,17 @@ const ACAO_LABEL: Record<string, string> = {
 
 
 
-type Message = { role: "user" | "assistant"; content: string };
+type AcaoStatus = "pendente" | "aprovada" | "cancelada" | null;
+type MemoriaStatus = "pendente" | "guardada" | "descartada" | null;
+type Message = {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  acao_status?: AcaoStatus;
+  acao_dados?: { tipo: string; dados: Record<string, unknown> } | null;
+  memoria_status?: MemoriaStatus;
+  memoria_dados?: MemoriaSugerida | null;
+};
 type Conversa = { id: string; titulo: string; updated_at: string };
 
 const ACTIVE_KEY = "michele:active-conversa";
@@ -110,7 +120,7 @@ export default function Michele() {
   const loadMessages = useCallback(async (conversaId: string) => {
     const { data, error } = await supabase
       .from("mensagens_michele")
-      .select("role,content")
+      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados")
       .eq("conversa_id", conversaId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -118,7 +128,7 @@ export default function Michele() {
       setMessages([]);
       return;
     }
-    setMessages((data ?? []) as Message[]);
+    setMessages((data ?? []) as unknown as Message[]);
   }, []);
 
   // Initial load: list + restore last active conversation
@@ -193,10 +203,48 @@ export default function Michele() {
       }
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
-      // Persist assistant message + bump conversation
-      await supabase
+      // Parse acao/memoria from reply and persist with status
+      const { memoria } = parseMemoria(reply);
+      const { acao } = parseAcao(reply);
+      const acao_status = acao ? "pendente" : null;
+      const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
+      const memoria_status = memoria ? "pendente" : null;
+      const memoria_dados = memoria ?? null;
+
+      const { data: insAss } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "assistant", content: reply });
+        .insert({
+          conversa_id: conversaId,
+          role: "assistant",
+          content: reply,
+          acao_status,
+          acao_dados: acao_dados as unknown as never,
+          memoria_status,
+          memoria_dados: memoria_dados as unknown as never,
+        })
+        .select("id")
+        .single();
+
+      if (insAss?.id) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === "assistant" && !copy[i].id) {
+              copy[i] = {
+                ...copy[i],
+                id: insAss.id,
+                acao_status,
+                acao_dados,
+                memoria_status,
+                memoria_dados,
+              };
+              break;
+            }
+          }
+          return copy;
+        });
+      }
+
       await supabase
         .from("conversas_michele")
         .update({ updated_at: new Date().toISOString() })
@@ -292,18 +340,33 @@ export default function Michele() {
                 </div>
               );
             }
-            const { texto: t1, memoria } = parseMemoria(m.content);
-            const { texto, acao } = parseAcao(t1);
+            const { texto: t1, memoria: memParsed } = parseMemoria(m.content);
+            const { texto, acao: acaoParsed } = parseAcao(t1);
+            // Prefer persisted dados over parsed
+            const memoria = m.memoria_dados ?? memParsed;
+            const acao = m.acao_dados ?? acaoParsed;
             return (
-              <div key={i} className="flex justify-start">
+              <div key={m.id ?? i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
                   {texto && (
                     <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-muted text-foreground">
                       {texto}
                     </div>
                   )}
-                  {memoria && <MemoriaCard memoria={memoria} />}
-                  {acao && <AcaoCard acao={acao} />}
+                  {memoria && (
+                    <MemoriaCard
+                      messageId={m.id}
+                      memoria={memoria as MemoriaSugerida}
+                      initialStatus={(m.memoria_status ?? "pendente") as Exclude<MemoriaStatus, null>}
+                    />
+                  )}
+                  {acao && (
+                    <AcaoCard
+                      messageId={m.id}
+                      acao={acao as AcaoSugerida}
+                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -344,19 +407,35 @@ export default function Michele() {
   );
 }
 
-function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
-  const [estado, setEstado] = useState<"pendente" | "guardado" | "descartado">("pendente");
+function MemoriaCard({
+  memoria,
+  messageId,
+  initialStatus,
+}: {
+  memoria: MemoriaSugerida;
+  messageId?: string;
+  initialStatus: "pendente" | "guardada" | "descartada";
+}) {
+  const [estado, setEstado] = useState<"pendente" | "guardada" | "descartada">(initialStatus);
   const [saving, setSaving] = useState(false);
 
-  if (estado === "descartado") return null;
+  if (estado === "descartada") return null;
 
-  if (estado === "guardado") {
+  if (estado === "guardada") {
     return (
       <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
         <Check className="h-3.5 w-3.5 text-primary" />
-        Guardado! 📌
+        📌 Guardado
       </div>
     );
+  }
+
+  async function updateStatus(novo: "guardada" | "descartada") {
+    if (!messageId) return;
+    await supabase
+      .from("mensagens_michele")
+      .update({ memoria_status: novo })
+      .eq("id", messageId);
   }
 
   async function handleGuardar() {
@@ -372,7 +451,13 @@ function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
       toast.error("Não consegui guardar agora.");
       return;
     }
-    setEstado("guardado");
+    await updateStatus("guardada");
+    setEstado("guardada");
+  }
+
+  async function handleDescartar() {
+    await updateStatus("descartada");
+    setEstado("descartada");
   }
 
   return (
@@ -392,7 +477,7 @@ function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setEstado("descartado")}
+          onClick={handleDescartar}
           disabled={saving}
         >
           <X className="h-3.5 w-3.5 mr-1" />
@@ -440,15 +525,35 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
   return entries;
 }
 
-function AcaoCard({ acao }: { acao: AcaoSugerida }) {
-  const [estado, setEstado] = useState<"pendente" | "executando" | "executado" | "cancelado" | "erro">("pendente");
+function AcaoCard({
+  acao,
+  messageId,
+  initialStatus,
+}: {
+  acao: AcaoSugerida;
+  messageId?: string;
+  initialStatus: "pendente" | "aprovada" | "cancelada";
+}) {
+  type UIEstado = "pendente" | "executando" | "aprovada" | "cancelada" | "erro";
+  const [estado, setEstado] = useState<UIEstado>(initialStatus);
   const [resumo, setResumo] = useState<string>("");
   const [erro, setErro] = useState<string>("");
   const disponivel = ACOES_DISPONIVEIS.has(acao.tipo);
   const label = ACAO_LABEL[acao.tipo] ?? acao.tipo;
   const entries = formatarDados(acao.tipo, acao.dados);
 
-  if (estado === "cancelado") return null;
+  async function persistStatus(novo: "aprovada" | "cancelada") {
+    if (!messageId) return;
+    await supabase
+      .from("mensagens_michele")
+      .update({ acao_status: novo })
+      .eq("id", messageId);
+  }
+
+  async function handleCancelar() {
+    await persistStatus("cancelada");
+    setEstado("cancelada");
+  }
 
   async function handleExecutar() {
     setEstado("executando");
@@ -465,7 +570,8 @@ function AcaoCard({ acao }: { acao: AcaoSugerida }) {
         return;
       }
       setResumo(r.resumo ?? "Ação executada.");
-      setEstado("executado");
+      await persistStatus("aprovada");
+      setEstado("aprovada");
       toast.success("Feito! ✅");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -504,13 +610,22 @@ function AcaoCard({ acao }: { acao: AcaoSugerida }) {
         </dl>
       )}
 
-      {estado === "executado" && (
-        <div className="rounded-md bg-primary/10 px-3 py-2 text-xs text-foreground flex items-start gap-2">
-          <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+      {estado === "aprovada" && (
+        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-foreground flex items-start gap-2">
+          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium">Feito! ✅</div>
+            <div className="font-medium text-emerald-700 dark:text-emerald-300">
+              ✅ Aprovado e executado
+            </div>
             {resumo && <div className="text-muted-foreground mt-0.5">{resumo}</div>}
           </div>
+        </div>
+      )}
+
+      {estado === "cancelada" && (
+        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+          <X className="h-3.5 w-3.5" />
+          Cancelado
         </div>
       )}
 
@@ -525,7 +640,7 @@ function AcaoCard({ acao }: { acao: AcaoSugerida }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setEstado("cancelado")}
+            onClick={handleCancelar}
             disabled={estado === "executando"}
           >
             <X className="h-3.5 w-3.5 mr-1" />

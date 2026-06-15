@@ -529,24 +529,36 @@ export type Database = {
       }
       mensagens_michele: {
         Row: {
+          acao_dados: Json | null
+          acao_status: string | null
           content: string
           conversa_id: string
           created_at: string
           id: string
+          memoria_dados: Json | null
+          memoria_status: string | null
           role: string
         }
         Insert: {
+          acao_dados?: Json | null
+          acao_status?: string | null
           content: string
           conversa_id: string
           created_at?: string
           id?: string
+          memoria_dados?: Json | null
+          memoria_status?: string | null
           role: string
         }
         Update: {
+          acao_dados?: Json | null
+          acao_status?: string | null
           content?: string
           conversa_id?: string
           created_at?: string
           id?: string
+          memoria_dados?: Json | null
+          memoria_status?: string | null
           role?: string
         }
         Relationships: [

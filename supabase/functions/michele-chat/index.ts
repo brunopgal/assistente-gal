@@ -23,6 +23,20 @@ async function buildContext(
   lastUserMsg: string,
 ): Promise<string> {
   const parts: string[] = [];
+
+  // DATA DE HOJE (fuso São Paulo)
+  const hojeFmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+  parts.push(
+    `DATA DE HOJE: ${hojeFmt} (fuso America/Sao_Paulo). ` +
+      "Use sempre esta data como referência para calcular prazos e follow-ups. " +
+      "Nunca use datas de cadastro das obras como referência para 'hoje'.",
+  );
+  parts.push("");
   parts.push("CONTEXTO ATUAL DO CRM (dados reais de agora):");
 
   try {
