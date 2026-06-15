@@ -16,6 +16,7 @@ const navItems = [
   { title: "Maps", path: "/mapa", icon: MapPin, iconClassName: "text-[#EA4335] fill-[#EA4335]" },
   { title: "Relatórios", path: "/relatorios", icon: FileBarChart, iconClassName: "" },
   { title: "Prospecção IA", path: "/prospeccao-ia", icon: Sparkles, iconClassName: "" },
+  { title: "Michele", path: "/michele", icon: Bot, iconClassName: "text-primary" },
   { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle, iconClassName: "" },
 ];
 
