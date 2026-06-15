@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check } from "lucide-react";
+import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,8 +7,12 @@ import { toast } from "sonner";
 
 type MemoriaTipo = "preferencia" | "cliente" | "correcao" | "geral";
 type MemoriaSugerida = { tipo: MemoriaTipo; escopo: string; conteudo: string };
+type AcaoTipo = "criar_followup" | "mudar_fase" | "atualizar_obra" | string;
+type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
+const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -28,6 +32,38 @@ function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerid
   if (!conteudo) return { texto: content, memoria: null };
   return { texto, memoria: { tipo, escopo, conteudo } };
 }
+
+function parseAcao(content: string): { texto: string; acao: AcaoSugerida | null } {
+  const m = content.match(ACAO_RE);
+  if (!m) return { texto: content, acao: null };
+  const bloco = m[1];
+  const tipoMatch = /tipo\s*:\s*(.+)/i.exec(bloco);
+  const dadosMatch = /dados\s*:\s*([\s\S]+)/i.exec(bloco);
+  const tipo = tipoMatch ? tipoMatch[1].trim() : "";
+  let dados: Record<string, unknown> = {};
+  if (dadosMatch) {
+    const raw = dadosMatch[1].trim();
+    try {
+      dados = JSON.parse(raw);
+    } catch {
+      // try extracting just the JSON object
+      const jm = raw.match(/\{[\s\S]*\}/);
+      if (jm) {
+        try { dados = JSON.parse(jm[0]); } catch { dados = {}; }
+      }
+    }
+  }
+  const texto = content.replace(ACAO_RE, "").trim();
+  if (!tipo) return { texto: content, acao: null };
+  return { texto, acao: { tipo, dados } };
+}
+
+const ACAO_LABEL: Record<string, string> = {
+  criar_followup: "Criar follow-up",
+  mudar_fase: "Mudar fase da obra",
+  atualizar_obra: "Atualizar dados da obra",
+};
+
 
 
 type Message = { role: "user" | "assistant"; content: string };
