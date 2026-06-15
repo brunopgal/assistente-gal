@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart } from "lucide-react";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart, Bot } from "lucide-react";
 import { useState } from "react";
 import SecretariaChat from "@/components/SecretariaChat";
 import { supabase } from "@/integrations/supabase/client";
