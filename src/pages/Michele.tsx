@@ -120,7 +120,7 @@ export default function Michele() {
   const loadMessages = useCallback(async (conversaId: string) => {
     const { data, error } = await supabase
       .from("mensagens_michele")
-      .select("role,content")
+      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados")
       .eq("conversa_id", conversaId)
       .order("created_at", { ascending: true });
     if (error) {
@@ -128,7 +128,7 @@ export default function Michele() {
       setMessages([]);
       return;
     }
-    setMessages((data ?? []) as Message[]);
+    setMessages((data ?? []) as unknown as Message[]);
   }, []);
 
   // Initial load: list + restore last active conversation
