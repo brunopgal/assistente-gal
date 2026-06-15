@@ -207,6 +207,33 @@ async function buildContext(
   return parts.join("\n");
 }
 
+type AnthropicMessage = { role: "user" | "assistant"; content: string };
+
+function normalizeMessageContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part: any) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        if (typeof part?.content === "string") return part.content;
+        return "";
+      })
+      .join(" ")
+      .trim();
+  }
+  return "";
+}
+
+function sanitizeAnthropicMessages(messages: unknown[]): AnthropicMessage[] {
+  return messages
+    .map((m: any) => ({
+      role: m?.role === "assistant" ? "assistant" : "user",
+      content: normalizeMessageContent(m?.content),
+    }))
+    .filter((m) => m.content.length > 0);
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -260,6 +287,14 @@ Deno.serve(async (req) => {
 
     const contexto = await buildContext(supa, lastUserText);
     const systemEnriquecido = `${systemPrompt}\n\n---\n${contexto}`;
+    const anthropicMessages = sanitizeAnthropicMessages(messages as unknown[]);
+
+    if (anthropicMessages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Nenhuma mensagem válida para enviar à Michele." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -272,7 +307,7 @@ Deno.serve(async (req) => {
         model: "claude-sonnet-4-5",
         max_tokens: 1500,
         system: systemEnriquecido,
-        messages: (messages as any[]).map((m) => ({ role: m.role, content: m.content })),
+        messages: anthropicMessages,
       }),
     });
 
