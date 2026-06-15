@@ -66,7 +66,17 @@ const ACAO_LABEL: Record<string, string> = {
 
 
 
-type Message = { role: "user" | "assistant"; content: string };
+type AcaoStatus = "pendente" | "aprovada" | "cancelada" | null;
+type MemoriaStatus = "pendente" | "guardada" | "descartada" | null;
+type Message = {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  acao_status?: AcaoStatus;
+  acao_dados?: { tipo: string; dados: Record<string, unknown> } | null;
+  memoria_status?: MemoriaStatus;
+  memoria_dados?: MemoriaSugerida | null;
+};
 type Conversa = { id: string; titulo: string; updated_at: string };
 
 const ACTIVE_KEY = "michele:active-conversa";
