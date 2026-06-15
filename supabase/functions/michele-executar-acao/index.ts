@@ -53,6 +53,26 @@ Deno.serve(async (req) => {
   const tipo = String(body?.tipo ?? "");
   const dados = (body?.dados ?? {}) as Record<string, unknown>;
 
+  // Aceitar aliases comuns vindos do modelo
+  const aliases: Record<string, string> = {
+    obra_id: "codigoObra",
+    codigo_obra: "codigoObra",
+    obraId: "codigoObra",
+    codigo: "codigoObra",
+    data_followup: "data_prevista",
+    data: "data_prevista",
+    dataPrevista: "data_prevista",
+    canal: "canal_sugerido",
+    fase: "fase_michele",
+  };
+  for (const [from, to] of Object.entries(aliases)) {
+    if (dados[from] !== undefined && dados[to] === undefined) {
+      dados[to] = dados[from];
+      delete dados[from];
+    }
+  }
+
+
   if (!ALLOWED.has(tipo)) {
     return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
   }
