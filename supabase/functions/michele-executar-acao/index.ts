@@ -6,16 +6,36 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ALLOWED = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
+const ALLOWED = new Set([
+  "criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra",
+  "cadastrar_construtora", "cadastrar_contato", "atualizar_contato",
+]);
 
 const OBRA_FIELDS = new Set([
-  "statusProspeccao", "nome", "classificacao", "construtora", "responsavel",
-  "telefone", "email", "cidade", "localizacao", "produtoOferecido", "estagioObra",
+  "statusProspeccao", "nome", "classificacao", "construtora", "codigoConstrutora",
+  "responsavel", "telefone", "email", "cidade", "localizacao", "produtoOferecido", "estagioObra",
   "marcouReuniao", "visita", "dataUltimaVisita", "dataOrcamentoEnviado",
   "proximoContato", "observacoes", "concorrentes", "prospeccaoIA",
   "fase_michele", "temperatura", "numero_tentativa", "data_proxima_acao",
   "potencial", "gerenciada_michele",
 ]);
+
+const CONSTRUTORA_FIELDS = new Set(["nome", "cnpj", "produto", "status", "observacoes", "prospeccaoIA"]);
+const PESSOA_FIELDS = new Set([
+  "codigoConstrutora", "codigoObraAtual", "nome", "cargo", "whatsapp", "email",
+  "observacoes", "canal_preferido", "melhor_horario",
+]);
+
+async function proximoCodigo(sb: any, table: string, col: string, prefix: string, pad: number): Promise<string> {
+  const { data } = await sb.from(table).select(col).ilike(col, `${prefix}%`).order(col, { ascending: false }).limit(50);
+  let max = 0;
+  const re = new RegExp(`${prefix}0*(\\d+)`, "i");
+  for (const r of (data as any[]) ?? []) {
+    const m = re.exec(String(r[col] ?? ""));
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return prefix + String(max + 1).padStart(pad, "0");
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
