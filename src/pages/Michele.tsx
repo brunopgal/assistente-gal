@@ -405,7 +405,34 @@ export default function Michele() {
           )}
         </div>
 
+        {imageDataUrl && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <img src={imageDataUrl} alt="anexo" className="h-16 w-16 rounded object-cover" />
+            <span className="text-xs text-muted-foreground flex-1">Imagem pronta para enviar</span>
+            <Button variant="ghost" size="sm" onClick={() => setImageDataUrl(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mt-3 flex gap-2 items-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={handleFile}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-[60px] w-[60px] shrink-0"
+            disabled={loading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Anexar imagem"
+          >
+            <Paperclip className="h-5 w-5" />
+          </Button>
           <Textarea
             ref={inputRef}
             value={input}
@@ -418,13 +445,14 @@ export default function Michele() {
           />
           <Button
             onClick={handleSend}
-            disabled={loading || !input.trim()}
+            disabled={loading || (!input.trim() && !imageDataUrl)}
             size="icon"
             className="h-[60px] w-[60px]"
           >
             <Send className="h-5 w-5" />
           </Button>
         </div>
+
       </div>
     </div>
   );
