@@ -62,6 +62,7 @@ const ACAO_LABEL: Record<string, string> = {
   criar_followup: "Criar follow-up",
   mudar_fase: "Mudar fase da obra",
   atualizar_obra: "Atualizar dados da obra",
+  cadastrar_obra: "Cadastrar nova obra",
 };
 
 
