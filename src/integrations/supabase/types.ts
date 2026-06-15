@@ -979,6 +979,44 @@ export type Database = {
       }
     }
     Functions: {
+      buscar_construtoras_fuzzy: {
+        Args: { limite?: number; termo: string }
+        Returns: {
+          cnpj: string
+          codigo: string
+          nome: string
+          observacoes: string
+          score: number
+          status: string
+        }[]
+      }
+      buscar_obras_fuzzy: {
+        Args: { limite?: number; termo: string }
+        Returns: {
+          cidade: string
+          codigoObra: string
+          construtora: string
+          fase_michele: string
+          nome: string
+          observacoes: string
+          responsavel: string
+          score: number
+        }[]
+      }
+      buscar_pessoas_fuzzy: {
+        Args: { limite?: number; termo: string }
+        Returns: {
+          cargo: string
+          codigoConstrutora: string
+          codigoObraAtual: string
+          codigoPessoa: string
+          email: string
+          nome: string
+          observacoes: string
+          score: number
+          whatsapp: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
