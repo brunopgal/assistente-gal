@@ -407,19 +407,35 @@ export default function Michele() {
   );
 }
 
-function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
-  const [estado, setEstado] = useState<"pendente" | "guardado" | "descartado">("pendente");
+function MemoriaCard({
+  memoria,
+  messageId,
+  initialStatus,
+}: {
+  memoria: MemoriaSugerida;
+  messageId?: string;
+  initialStatus: "pendente" | "guardada" | "descartada";
+}) {
+  const [estado, setEstado] = useState<"pendente" | "guardada" | "descartada">(initialStatus);
   const [saving, setSaving] = useState(false);
 
-  if (estado === "descartado") return null;
+  if (estado === "descartada") return null;
 
-  if (estado === "guardado") {
+  if (estado === "guardada") {
     return (
       <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
         <Check className="h-3.5 w-3.5 text-primary" />
-        Guardado! 📌
+        📌 Guardado
       </div>
     );
+  }
+
+  async function updateStatus(novo: "guardada" | "descartada") {
+    if (!messageId) return;
+    await supabase
+      .from("mensagens_michele")
+      .update({ memoria_status: novo })
+      .eq("id", messageId);
   }
 
   async function handleGuardar() {
@@ -435,7 +451,13 @@ function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
       toast.error("Não consegui guardar agora.");
       return;
     }
-    setEstado("guardado");
+    await updateStatus("guardada");
+    setEstado("guardada");
+  }
+
+  async function handleDescartar() {
+    await updateStatus("descartada");
+    setEstado("descartada");
   }
 
   return (
