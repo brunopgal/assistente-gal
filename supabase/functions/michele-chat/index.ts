@@ -243,7 +243,13 @@ async function buildContext(
   return parts.join("\n");
 }
 
-type AnthropicMessage = { role: "user" | "assistant"; content: string };
+type ImageBlock = {
+  type: "image";
+  source: { type: "base64"; media_type: string; data: string };
+};
+type TextBlock = { type: "text"; text: string };
+type AnthropicContent = string | Array<TextBlock | ImageBlock>;
+type AnthropicMessage = { role: "user" | "assistant"; content: AnthropicContent };
 
 function normalizeMessageContent(content: unknown): string {
   if (typeof content === "string") return content;
@@ -264,11 +270,20 @@ function normalizeMessageContent(content: unknown): string {
 function sanitizeAnthropicMessages(messages: unknown[]): AnthropicMessage[] {
   return messages
     .map((m: any) => ({
-      role: m?.role === "assistant" ? "assistant" : "user",
+      role: (m?.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
       content: normalizeMessageContent(m?.content),
     }))
-    .filter((m) => m.content.length > 0);
+    .filter((m) => typeof m.content === "string" && m.content.length > 0);
 }
+
+function parseDataUrl(dataUrl: string): { media_type: string; data: string } | null {
+  const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl.trim());
+  if (!m) return null;
+  const media_type = m[1];
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(media_type)) return null;
+  return { media_type, data: m[2] };
+}
+
 
 
 Deno.serve(async (req) => {
