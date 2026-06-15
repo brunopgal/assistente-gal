@@ -18,6 +18,7 @@ import Atividades from "./pages/Atividades";
 import ProspeccaoIA from "./pages/ProspeccaoIA";
 import Pessoas from "./pages/Pessoas";
 import Relatorios from "./pages/Relatorios";
+import Michele from "./pages/Michele";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
