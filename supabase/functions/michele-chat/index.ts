@@ -151,8 +151,48 @@ async function buildContext(
     console.error("Erro detalhe sob demanda:", e);
   }
 
+  // Memória de aprendizado
+  try {
+    const texto = (lastUserMsg || "").toLowerCase();
+
+    // Sempre: globais de preferencia/correcao
+    const { data: globais } = await supa
+      .from("memoria_michele")
+      .select("tipo, escopo, conteudo")
+      .eq("ativo", true)
+      .eq("escopo", "global")
+      .in("tipo", ["preferencia", "correcao"])
+      .order("created_at", { ascending: false })
+      .limit(15);
+
+    // Específicos por escopo mencionado
+    let especificos: any[] = [];
+    if (texto.length >= 3) {
+      const { data: outros } = await supa
+        .from("memoria_michele")
+        .select("tipo, escopo, conteudo")
+        .eq("ativo", true)
+        .neq("escopo", "global")
+        .order("created_at", { ascending: false });
+      especificos = ((outros as any[]) ?? []).filter(
+        (m) => m.escopo && texto.includes(String(m.escopo).toLowerCase()),
+      );
+    }
+
+    const todos = [...((globais as any[]) ?? []), ...especificos].slice(0, 15);
+    if (todos.length > 0) {
+      parts.push("\n\nMEMÓRIA (o que aprendi com o Bruno):");
+      for (const m of todos) {
+        parts.push(`  - [${m.tipo} · ${m.escopo}] ${m.conteudo}`);
+      }
+    }
+  } catch (e) {
+    console.error("Erro carregando memória:", e);
+  }
+
   return parts.join("\n");
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

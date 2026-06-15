@@ -1,9 +1,34 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare } from "lucide-react";
+import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+
+type MemoriaTipo = "preferencia" | "cliente" | "correcao" | "geral";
+type MemoriaSugerida = { tipo: MemoriaTipo; escopo: string; conteudo: string };
+
+const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
+
+function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
+  const m = content.match(MEMORIA_RE);
+  if (!m) return { texto: content, memoria: null };
+  const bloco = m[1];
+  const get = (k: string) => {
+    const r = new RegExp(`${k}\\s*:\\s*(.+)`, "i").exec(bloco);
+    return r ? r[1].trim().replace(/^['"]|['"]$/g, "") : "";
+  };
+  const tipoRaw = get("tipo").toLowerCase() as MemoriaTipo;
+  const tipo: MemoriaTipo = ["preferencia", "cliente", "correcao", "geral"].includes(tipoRaw)
+    ? tipoRaw
+    : "geral";
+  const escopo = get("escopo") || "global";
+  const conteudo = get("conteudo");
+  const texto = content.replace(MEMORIA_RE, "").trim();
+  if (!conteudo) return { texto: content, memoria: null };
+  return { texto, memoria: { tipo, escopo, conteudo } };
+}
+
 
 type Message = { role: "user" | "assistant"; content: string };
 type Conversa = { id: string; titulo: string; updated_at: string };
@@ -221,22 +246,31 @@ export default function Michele() {
               Comece a conversa com a Michele.
             </div>
           )}
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm ${
-                  m.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground"
-                }`}
-              >
-                {m.content}
+          {messages.map((m, i) => {
+            if (m.role === "user") {
+              return (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
+                    {m.content}
+                  </div>
+                </div>
+              );
+            }
+            const { texto, memoria } = parseMemoria(m.content);
+            return (
+              <div key={i} className="flex justify-start">
+                <div className="max-w-[80%] space-y-2">
+                  {texto && (
+                    <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-muted text-foreground">
+                      {texto}
+                    </div>
+                  )}
+                  {memoria && <MemoriaCard memoria={memoria} />}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
           {loading && (
             <div className="flex justify-start">
               <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground flex items-center gap-2">
@@ -271,3 +305,71 @@ export default function Michele() {
     </div>
   );
 }
+
+function MemoriaCard({ memoria }: { memoria: MemoriaSugerida }) {
+  const [estado, setEstado] = useState<"pendente" | "guardado" | "descartado">("pendente");
+  const [saving, setSaving] = useState(false);
+
+  if (estado === "descartado") return null;
+
+  if (estado === "guardado") {
+    return (
+      <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+        <Check className="h-3.5 w-3.5 text-primary" />
+        Guardado! 📌
+      </div>
+    );
+  }
+
+  async function handleGuardar() {
+    setSaving(true);
+    const { error } = await supabase.from("memoria_michele").insert({
+      tipo: memoria.tipo,
+      escopo: memoria.escopo || "global",
+      conteudo: memoria.conteudo,
+    });
+    setSaving(false);
+    if (error) {
+      console.error(error);
+      toast.error("Não consegui guardar agora.");
+      return;
+    }
+    setEstado("guardado");
+  }
+
+  return (
+    <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 space-y-2">
+      <div className="flex items-start gap-2">
+        <BookmarkPlus className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+        <div className="text-xs space-y-1">
+          <div className="text-muted-foreground">
+            <span className="font-medium text-foreground">{memoria.tipo}</span>
+            {" · "}
+            <span>{memoria.escopo}</span>
+          </div>
+          <p className="text-sm text-foreground">{memoria.conteudo}</p>
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setEstado("descartado")}
+          disabled={saving}
+        >
+          <X className="h-3.5 w-3.5 mr-1" />
+          Descartar
+        </Button>
+        <Button size="sm" onClick={handleGuardar} disabled={saving}>
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+          ) : (
+            <BookmarkPlus className="h-3.5 w-3.5 mr-1" />
+          )}
+          Guardar na memória
+        </Button>
+      </div>
+    </div>
+  );
+}
+
