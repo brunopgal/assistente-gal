@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
         model: "claude-sonnet-4-5",
         max_tokens: 1500,
         system: systemEnriquecido,
-        messages,
+        messages: (messages as any[]).map((m) => ({ role: m.role, content: m.content })),
       }),
     });
 
