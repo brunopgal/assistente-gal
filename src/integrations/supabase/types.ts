@@ -535,6 +535,7 @@ export type Database = {
           conversa_id: string
           created_at: string
           id: string
+          imagem_url: string | null
           memoria_dados: Json | null
           memoria_status: string | null
           role: string
@@ -546,6 +547,7 @@ export type Database = {
           conversa_id: string
           created_at?: string
           id?: string
+          imagem_url?: string | null
           memoria_dados?: Json | null
           memoria_status?: string | null
           role: string
@@ -557,6 +559,7 @@ export type Database = {
           conversa_id?: string
           created_at?: string
           id?: string
+          imagem_url?: string | null
           memoria_dados?: Json | null
           memoria_status?: string | null
           role?: string

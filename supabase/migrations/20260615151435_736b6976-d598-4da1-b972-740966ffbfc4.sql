@@ -1,0 +1,1 @@
+ALTER TABLE public.mensagens_michele ADD COLUMN IF NOT EXISTS imagem_url text;
