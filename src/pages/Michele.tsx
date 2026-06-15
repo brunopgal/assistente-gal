@@ -525,15 +525,35 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
   return entries;
 }
 
-function AcaoCard({ acao }: { acao: AcaoSugerida }) {
-  const [estado, setEstado] = useState<"pendente" | "executando" | "executado" | "cancelado" | "erro">("pendente");
+function AcaoCard({
+  acao,
+  messageId,
+  initialStatus,
+}: {
+  acao: AcaoSugerida;
+  messageId?: string;
+  initialStatus: "pendente" | "aprovada" | "cancelada";
+}) {
+  type UIEstado = "pendente" | "executando" | "aprovada" | "cancelada" | "erro";
+  const [estado, setEstado] = useState<UIEstado>(initialStatus);
   const [resumo, setResumo] = useState<string>("");
   const [erro, setErro] = useState<string>("");
   const disponivel = ACOES_DISPONIVEIS.has(acao.tipo);
   const label = ACAO_LABEL[acao.tipo] ?? acao.tipo;
   const entries = formatarDados(acao.tipo, acao.dados);
 
-  if (estado === "cancelado") return null;
+  async function persistStatus(novo: "aprovada" | "cancelada") {
+    if (!messageId) return;
+    await supabase
+      .from("mensagens_michele")
+      .update({ acao_status: novo })
+      .eq("id", messageId);
+  }
+
+  async function handleCancelar() {
+    await persistStatus("cancelada");
+    setEstado("cancelada");
+  }
 
   async function handleExecutar() {
     setEstado("executando");
@@ -550,7 +570,8 @@ function AcaoCard({ acao }: { acao: AcaoSugerida }) {
         return;
       }
       setResumo(r.resumo ?? "Ação executada.");
-      setEstado("executado");
+      await persistStatus("aprovada");
+      setEstado("aprovada");
       toast.success("Feito! ✅");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
