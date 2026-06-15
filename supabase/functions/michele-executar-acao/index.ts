@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ALLOWED = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
+const ALLOWED = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
 
 const OBRA_FIELDS = new Set([
   "statusProspeccao", "nome", "classificacao", "construtora", "responsavel",
