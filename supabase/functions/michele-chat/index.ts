@@ -204,6 +204,42 @@ async function buildContext(
     console.error("Erro carregando memória:", e);
   }
 
+  // Detecção de duplicatas (intenção de cadastrar obra, ou foto enviada)
+  try {
+    const stop = new Set([
+      "obra","construtora","cidade","nova","novo","favor","cadastrar","cadastra","cadastro",
+      "registrar","incluir","adicionar","quero","gostaria","poderia","preciso","essa","esse",
+      "para","esta","este","fica","local","localizada","endereco","aqui","tenho","foto","placa",
+      "print","mostra","com","sem","mais","menos","muito","pouco","talvez","aqui","sobre",
+    ]);
+    const tokens = (lastUserMsg || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4 && !stop.has(t))
+      .slice(0, 8);
+    if (tokens.length > 0) {
+      const ors = tokens
+        .flatMap((t) => [`nome.ilike.%${t}%`, `construtora.ilike.%${t}%`, `cidade.ilike.%${t}%`])
+        .join(",");
+      const { data: parecidas } = await supa
+        .from("obras")
+        .select("codigoObra,nome,construtora,cidade,fase_michele,responsavel")
+        .or(ors)
+        .limit(8);
+      if (parecidas && parecidas.length > 0) {
+        parts.push("\n\nOBRAS PARECIDAS JÁ EXISTENTES (verifique se é a mesma antes de cadastrar):");
+        for (const o of parecidas as any[]) {
+          parts.push(
+            `  - ${o.codigoObra} · ${o.nome ?? "-"} | ${o.construtora ?? "-"} | ${o.cidade ?? "-"} | fase ${o.fase_michele ?? "-"} | resp ${o.responsavel ?? "-"}`,
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Erro buscando duplicatas:", e);
+  }
+
   return parts.join("\n");
 }
 
