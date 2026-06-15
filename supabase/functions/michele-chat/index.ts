@@ -204,40 +204,98 @@ async function buildContext(
     console.error("Erro carregando memória:", e);
   }
 
-  // Detecção de duplicatas (intenção de cadastrar obra, ou foto enviada)
+  // Busca tolerante (parcial sem acento/caixa + fuzzy por similaridade) de
+  // pessoas, construtoras e obras parecidas ao que o Bruno mencionou.
   try {
     const stop = new Set([
       "obra","construtora","cidade","nova","novo","favor","cadastrar","cadastra","cadastro",
       "registrar","incluir","adicionar","quero","gostaria","poderia","preciso","essa","esse",
       "para","esta","este","fica","local","localizada","endereco","aqui","tenho","foto","placa",
-      "print","mostra","com","sem","mais","menos","muito","pouco","talvez","aqui","sobre",
+      "print","mostra","com","sem","mais","menos","muito","pouco","talvez","sobre","pessoa",
+      "contato","fala","conhece","sabe","quem","qual","quais","onde","como","tudo","ola",
+      "oi","bom","dia","tarde","noite","alguma","alguem","tem","tinha","aquele","aquela",
+      "criar","criou","criada","criado","nome","empresa","cliente","fornecedor",
     ]);
-    const tokens = (lastUserMsg || "")
+
+    const raw = (lastUserMsg || "").trim();
+    const candidatos = new Set<string>();
+
+    // Frases com iniciais maiúsculas (prováveis nomes próprios)
+    const frasesProprias = raw.match(
+      /\b[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][\wÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç]+(?:\s+(?:de|da|do|das|dos|e|[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][\wÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç]+))*/g,
+    ) || [];
+    for (const f of frasesProprias) {
+      const limpo = f.trim();
+      if (limpo.length >= 3) candidatos.add(limpo);
+    }
+
+    // Tokens longos não-stopword (cobre erros de digitação e nomes únicos)
+    const tokens = raw
       .toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .split(/[^a-z0-9]+/)
-      .filter((t) => t.length >= 4 && !stop.has(t))
-      .slice(0, 8);
-    if (tokens.length > 0) {
-      const ors = tokens
-        .flatMap((t) => [`nome.ilike.%${t}%`, `construtora.ilike.%${t}%`, `cidade.ilike.%${t}%`])
-        .join(",");
-      const { data: parecidas } = await supa
-        .from("obras")
-        .select("codigoObra,nome,construtora,cidade,fase_michele,responsavel")
-        .or(ors)
-        .limit(8);
-      if (parecidas && parecidas.length > 0) {
-        parts.push("\n\nOBRAS PARECIDAS JÁ EXISTENTES (verifique se é a mesma antes de cadastrar):");
-        for (const o of parecidas as any[]) {
+      .filter((t) => t.length >= 4 && !stop.has(t));
+    for (const t of tokens.slice(0, 6)) candidatos.add(t);
+
+    const termos = Array.from(candidatos).slice(0, 8);
+
+    if (termos.length > 0) {
+      const pessoas = new Map<string, any>();
+      const construtoras = new Map<string, any>();
+      const obras = new Map<string, any>();
+
+      await Promise.all(termos.flatMap((termo) => [
+        supa.rpc("buscar_pessoas_fuzzy", { termo, limite: 5 }).then(({ data }: any) => {
+          for (const r of (data ?? [])) {
+            const prev = pessoas.get(r.codigoPessoa);
+            if (!prev || (r.score ?? 0) > (prev.score ?? 0)) pessoas.set(r.codigoPessoa, r);
+          }
+        }).catch((e) => console.error("rpc pessoas:", e)),
+        supa.rpc("buscar_construtoras_fuzzy", { termo, limite: 5 }).then(({ data }: any) => {
+          for (const r of (data ?? [])) {
+            const prev = construtoras.get(r.codigo);
+            if (!prev || (r.score ?? 0) > (prev.score ?? 0)) construtoras.set(r.codigo, r);
+          }
+        }).catch((e) => console.error("rpc construtoras:", e)),
+        supa.rpc("buscar_obras_fuzzy", { termo, limite: 5 }).then(({ data }: any) => {
+          for (const r of (data ?? [])) {
+            const prev = obras.get(r.codigoObra);
+            if (!prev || (r.score ?? 0) > (prev.score ?? 0)) obras.set(r.codigoObra, r);
+          }
+        }).catch((e) => console.error("rpc obras:", e)),
+      ]));
+
+      const topPessoas = [...pessoas.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+      const topConstrutoras = [...construtoras.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+      const topObras = [...obras.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+
+      if (topPessoas.length > 0) {
+        parts.push("\n\nPESSOAS PARECIDAS JÁ CADASTRADAS (verifique antes de criar):");
+        for (const p of topPessoas) {
           parts.push(
-            `  - ${o.codigoObra} · ${o.nome ?? "-"} | ${o.construtora ?? "-"} | ${o.cidade ?? "-"} | fase ${o.fase_michele ?? "-"} | resp ${o.responsavel ?? "-"}`,
+            `  - ${p.codigoPessoa} · ${p.nome ?? "-"} | cargo ${p.cargo ?? "-"} | wpp ${p.whatsapp ?? "-"} | construtora ${p.codigoConstrutora ?? "-"} | obra ${p.codigoObraAtual ?? "-"}${p.observacoes ? ` | obs: ${String(p.observacoes).slice(0,120)}` : ""}`,
+          );
+        }
+      }
+      if (topConstrutoras.length > 0) {
+        parts.push("\n\nCONSTRUTORAS PARECIDAS JÁ CADASTRADAS (verifique antes de criar):");
+        for (const c of topConstrutoras) {
+          parts.push(
+            `  - ${c.codigo} · ${c.nome ?? "-"} | cnpj ${c.cnpj ?? "-"} | status ${c.status ?? "-"}${c.observacoes ? ` | obs: ${String(c.observacoes).slice(0,120)}` : ""}`,
+          );
+        }
+      }
+      if (topObras.length > 0) {
+        parts.push("\n\nOBRAS PARECIDAS JÁ CADASTRADAS (verifique antes de criar):");
+        for (const o of topObras) {
+          parts.push(
+            `  - ${o.codigoObra} · ${o.nome ?? "-"} | ${o.construtora ?? "-"} | ${o.cidade ?? "-"} | fase ${o.fase_michele ?? "-"} | resp ${o.responsavel ?? "-"}${o.observacoes ? ` | obs: ${String(o.observacoes).slice(0,120)}` : ""}`,
           );
         }
       }
     }
   } catch (e) {
-    console.error("Erro buscando duplicatas:", e);
+    console.error("Erro buscando parecidos (fuzzy):", e);
   }
 
   return parts.join("\n");
