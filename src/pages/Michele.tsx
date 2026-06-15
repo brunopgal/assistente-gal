@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle } from "lucide-react";
+import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle, Paperclip } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra"]);
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -62,6 +62,7 @@ const ACAO_LABEL: Record<string, string> = {
   criar_followup: "Criar follow-up",
   mudar_fase: "Mudar fase da obra",
   atualizar_obra: "Atualizar dados da obra",
+  cadastrar_obra: "Cadastrar nova obra",
 };
 
 
@@ -92,8 +93,27 @@ export default function Michele() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(f.type)) {
+      toast.error("Use JPG, PNG, GIF ou WEBP.");
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx 5MB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setImageDataUrl(String(reader.result));
+    reader.readAsDataURL(f);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -160,13 +180,16 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !imageDataUrl) || loading) return;
 
     setLoading(true);
-    const userMsg: Message = { role: "user", content: text };
+    const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
+    const userMsg: Message = { role: "user", content: userText };
     const next: Message[] = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    const currentImage = imageDataUrl;
+    setImageDataUrl(null);
 
     try {
       // Ensure a conversation exists
@@ -174,7 +197,7 @@ export default function Michele() {
       if (!conversaId) {
         const { data: conv, error: convErr } = await supabase
           .from("conversas_michele")
-          .insert({ titulo: makeTitulo(text) })
+          .insert({ titulo: makeTitulo(userText) })
           .select("id,titulo,updated_at")
           .single();
         if (convErr || !conv) throw convErr ?? new Error("Falha ao criar conversa");
@@ -187,12 +210,12 @@ export default function Michele() {
       // Persist user message
       const { error: insUserErr } = await supabase
         .from("mensagens_michele")
-        .insert({ conversa_id: conversaId, role: "user", content: text });
+        .insert({ conversa_id: conversaId, role: "user", content: userText });
       if (insUserErr) console.error(insUserErr);
 
       // Call Michele
       const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: next },
+        body: { messages: next, image: currentImage },
       });
       if (error) throw error;
       const reply = (data as { text?: string; error?: string })?.text;
@@ -382,7 +405,34 @@ export default function Michele() {
           )}
         </div>
 
+        {imageDataUrl && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <img src={imageDataUrl} alt="anexo" className="h-16 w-16 rounded object-cover" />
+            <span className="text-xs text-muted-foreground flex-1">Imagem pronta para enviar</span>
+            <Button variant="ghost" size="sm" onClick={() => setImageDataUrl(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mt-3 flex gap-2 items-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={handleFile}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-[60px] w-[60px] shrink-0"
+            disabled={loading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Anexar imagem"
+          >
+            <Paperclip className="h-5 w-5" />
+          </Button>
           <Textarea
             ref={inputRef}
             value={input}
@@ -395,13 +445,14 @@ export default function Michele() {
           />
           <Button
             onClick={handleSend}
-            disabled={loading || !input.trim()}
+            disabled={loading || (!input.trim() && !imageDataUrl)}
             size="icon"
             className="h-[60px] w-[60px]"
           >
             <Send className="h-5 w-5" />
           </Button>
         </div>
+
       </div>
     </div>
   );
@@ -515,6 +566,17 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
   } else if (tipo === "mudar_fase") {
     push("Nova fase", "fase_michele");
     push("Temperatura", "temperatura");
+  } else if (tipo === "cadastrar_obra") {
+    push("Nome", "nome");
+    push("Construtora", "construtora");
+    push("Cidade", "cidade");
+    push("Endereço", "localizacao");
+    push("Estágio", "estagioObra");
+    push("Produto", "produtoOferecido");
+    push("Responsável", "responsavel");
+    push("Telefone", "telefone");
+    push("Email", "email");
+    push("Observações", "observacoes");
   } else {
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;

@@ -204,10 +204,52 @@ async function buildContext(
     console.error("Erro carregando memória:", e);
   }
 
+  // Detecção de duplicatas (intenção de cadastrar obra, ou foto enviada)
+  try {
+    const stop = new Set([
+      "obra","construtora","cidade","nova","novo","favor","cadastrar","cadastra","cadastro",
+      "registrar","incluir","adicionar","quero","gostaria","poderia","preciso","essa","esse",
+      "para","esta","este","fica","local","localizada","endereco","aqui","tenho","foto","placa",
+      "print","mostra","com","sem","mais","menos","muito","pouco","talvez","aqui","sobre",
+    ]);
+    const tokens = (lastUserMsg || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4 && !stop.has(t))
+      .slice(0, 8);
+    if (tokens.length > 0) {
+      const ors = tokens
+        .flatMap((t) => [`nome.ilike.%${t}%`, `construtora.ilike.%${t}%`, `cidade.ilike.%${t}%`])
+        .join(",");
+      const { data: parecidas } = await supa
+        .from("obras")
+        .select("codigoObra,nome,construtora,cidade,fase_michele,responsavel")
+        .or(ors)
+        .limit(8);
+      if (parecidas && parecidas.length > 0) {
+        parts.push("\n\nOBRAS PARECIDAS JÁ EXISTENTES (verifique se é a mesma antes de cadastrar):");
+        for (const o of parecidas as any[]) {
+          parts.push(
+            `  - ${o.codigoObra} · ${o.nome ?? "-"} | ${o.construtora ?? "-"} | ${o.cidade ?? "-"} | fase ${o.fase_michele ?? "-"} | resp ${o.responsavel ?? "-"}`,
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Erro buscando duplicatas:", e);
+  }
+
   return parts.join("\n");
 }
 
-type AnthropicMessage = { role: "user" | "assistant"; content: string };
+type ImageBlock = {
+  type: "image";
+  source: { type: "base64"; media_type: string; data: string };
+};
+type TextBlock = { type: "text"; text: string };
+type AnthropicContent = string | Array<TextBlock | ImageBlock>;
+type AnthropicMessage = { role: "user" | "assistant"; content: AnthropicContent };
 
 function normalizeMessageContent(content: unknown): string {
   if (typeof content === "string") return content;
@@ -228,11 +270,20 @@ function normalizeMessageContent(content: unknown): string {
 function sanitizeAnthropicMessages(messages: unknown[]): AnthropicMessage[] {
   return messages
     .map((m: any) => ({
-      role: m?.role === "assistant" ? "assistant" : "user",
+      role: (m?.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
       content: normalizeMessageContent(m?.content),
     }))
-    .filter((m) => m.content.length > 0);
+    .filter((m) => typeof m.content === "string" && m.content.length > 0);
 }
+
+function parseDataUrl(dataUrl: string): { media_type: string; data: string } | null {
+  const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl.trim());
+  if (!m) return null;
+  const media_type = m[1];
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(media_type)) return null;
+  return { media_type, data: m[2] };
+}
+
 
 
 Deno.serve(async (req) => {
@@ -289,12 +340,36 @@ Deno.serve(async (req) => {
     const systemEnriquecido = `${systemPrompt}\n\n---\n${contexto}`;
     const anthropicMessages = sanitizeAnthropicMessages(messages as unknown[]);
 
+    // Imagem opcional: anexa como bloco na última mensagem do usuário
+    const imageDataUrl = typeof body?.image === "string" ? body.image : null;
+    if (imageDataUrl && anthropicMessages.length > 0) {
+      const parsed = parseDataUrl(imageDataUrl);
+      if (parsed) {
+        for (let i = anthropicMessages.length - 1; i >= 0; i--) {
+          if (anthropicMessages[i].role === "user") {
+            const txt = typeof anthropicMessages[i].content === "string"
+              ? (anthropicMessages[i].content as string)
+              : "";
+            anthropicMessages[i] = {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: parsed.media_type, data: parsed.data } },
+                { type: "text", text: txt || "Analise a imagem anexa." },
+              ],
+            };
+            break;
+          }
+        }
+      }
+    }
+
     if (anthropicMessages.length === 0) {
       return new Response(
         JSON.stringify({ error: "Nenhuma mensagem válida para enviar à Michele." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
