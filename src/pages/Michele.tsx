@@ -292,7 +292,8 @@ export default function Michele() {
                 </div>
               );
             }
-            const { texto, memoria } = parseMemoria(m.content);
+            const { texto: t1, memoria } = parseMemoria(m.content);
+            const { texto, acao } = parseAcao(t1);
             return (
               <div key={i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
@@ -302,6 +303,7 @@ export default function Michele() {
                     </div>
                   )}
                   {memoria && <MemoriaCard memoria={memoria} />}
+                  {acao && <AcaoCard acao={acao} />}
                 </div>
               </div>
             );
