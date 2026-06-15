@@ -77,6 +77,57 @@ Deno.serve(async (req) => {
     return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
   }
 
+  // cadastrar_obra: gera novo codigoObra e insere
+  if (tipo === "cadastrar_obra") {
+    const nome = String(dados.nome ?? "").trim();
+    if (!nome) return json({ error: "nome é obrigatório" }, 400);
+
+    // Encontra maior número existente
+    const { data: ultimas } = await sb
+      .from("obras")
+      .select("codigoObra")
+      .ilike("codigoObra", "OBRA%")
+      .order("codigoObra", { ascending: false })
+      .limit(50);
+    let max = 0;
+    for (const r of (ultimas as any[]) ?? []) {
+      const m = /OBRA0*(\d+)/i.exec(String(r.codigoObra ?? ""));
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    const novoCodigo = "OBRA" + String(max + 1).padStart(9, "0");
+
+    const insert: Record<string, unknown> = { codigoObra: novoCodigo, gerenciada_michele: true };
+    for (const [k, v] of Object.entries(dados)) {
+      if (k === "codigoObra") continue;
+      if (OBRA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") {
+        insert[k] = v;
+      }
+    }
+    insert.dataCadastro = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+    const { data: inserida, error: insErr } = await sb
+      .from("obras")
+      .insert(insert)
+      .select("codigoObra,nome")
+      .single();
+    if (insErr) {
+      await sb.from("log_automacao").insert({
+        codigoObra: novoCodigo, tipo_acao: tipo, descricao: "Falha ao cadastrar obra",
+        sucesso: false, mensagem_erro: insErr.message, dados_json: dados, criado_por: "michele",
+      });
+      return json({ error: insErr.message }, 500);
+    }
+    await sb.from("log_automacao").insert({
+      codigoObra: novoCodigo, tipo_acao: tipo, descricao: `Obra cadastrada: ${nome}`,
+      sucesso: true, dados_json: dados, criado_por: "michele",
+    });
+    return json({
+      ok: true,
+      resumo: `Obra "${nome}" cadastrada como ${novoCodigo}.`,
+      registro: inserida,
+    });
+  }
+
   const codigoObra = String(dados.codigoObra ?? "").trim();
   if (!codigoObra) return json({ error: "codigoObra é obrigatório" }, 400);
 
