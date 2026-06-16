@@ -462,7 +462,13 @@ Deno.serve(async (req) => {
       const update: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(dados)) {
         if (k === "codigoObra") continue;
-        if (OBRA_FIELDS.has(k)) update[k] = v;
+        if (!OBRA_FIELDS.has(k)) continue;
+        if (k === "produtoOferecido") {
+          const n = normalizarProdutos(v);
+          if (n !== undefined) update[k] = n;
+        } else {
+          update[k] = v;
+        }
       }
       if (Object.keys(update).length === 0) {
         await log(false, "atualizar_obra sem campos válidos");
