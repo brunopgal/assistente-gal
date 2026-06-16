@@ -209,7 +209,13 @@ Deno.serve(async (req) => {
         if (codigoConstrutora) insert.codigoConstrutora = codigoConstrutora;
         for (const k of ["cidade", "localizacao", "responsavel", "telefone", "email", "produtoOferecido", "estagioObra", "observacoes"]) {
           const v = (item as any)[k];
-          if (v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+          if (v === undefined || v === null) continue;
+          if (k === "produtoOferecido") {
+            const n = normalizarProdutos(v);
+            if (n) insert[k] = n;
+          } else if (String(v).trim() !== "") {
+            insert[k] = v;
+          }
         }
 
         const { error: insErr } = await sb.from("obras").insert(insert);
