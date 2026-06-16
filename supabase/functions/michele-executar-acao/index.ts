@@ -322,7 +322,14 @@ Deno.serve(async (req) => {
     const novoCodigo = await proximoCodigo(sb, "construtoras", "codigo", "CT", 9);
     const insert: Record<string, unknown> = { codigo: novoCodigo };
     for (const [k, v] of Object.entries(dados)) {
-      if (CONSTRUTORA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+      if (!CONSTRUTORA_FIELDS.has(k)) continue;
+      if (v === undefined || v === null) continue;
+      if (k === "produto") {
+        const n = normalizarProdutos(v);
+        if (n) insert[k] = n;
+      } else if (String(v).trim() !== "") {
+        insert[k] = v;
+      }
     }
     if (!insert.status) insert.status = "Prospecção";
     const { data: ins, error } = await sb.from("construtoras").insert(insert).select("codigo,nome").single();
