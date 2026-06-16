@@ -99,6 +99,7 @@ export default function Michele() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [planilha, setPlanilha] = useState<{ name: string; base64: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,16 +108,30 @@ export default function Michele() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (!/^image\/(jpeg|png|gif|webp)$/.test(f.type)) {
-      toast.error("Use JPG, PNG, GIF ou WEBP.");
+    const isImage = /^image\/(jpeg|png|gif|webp)$/.test(f.type);
+    const nameLower = f.name.toLowerCase();
+    const isSheet = /\.(xlsx|xls|csv)$/.test(nameLower) ||
+      /spreadsheet|excel|csv/.test(f.type);
+    if (!isImage && !isSheet) {
+      toast.error("Envie imagem (JPG/PNG/GIF/WEBP) ou planilha (.xlsx, .xls, .csv).");
       return;
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx 5MB).");
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 10MB).");
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setImageDataUrl(String(reader.result));
+    reader.onload = () => {
+      const result = String(reader.result);
+      if (isImage) {
+        setImageDataUrl(result);
+        setPlanilha(null);
+      } else {
+        const b64 = result.includes(",") ? result.split(",")[1] : result;
+        setPlanilha({ name: f.name, base64: b64 });
+        setImageDataUrl(null);
+      }
+    };
     reader.readAsDataURL(f);
   }
 
