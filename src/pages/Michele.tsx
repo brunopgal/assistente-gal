@@ -508,10 +508,17 @@ export default function Michele() {
               );
             }
             const { texto: t1, memoria: memParsed } = parseMemoria(m.content);
-            const { texto, acao: acaoParsed } = parseAcao(t1);
+            const { texto: t2, plano: planoParsed } = parsePlano(t1);
+            const { texto, acao: acaoParsed } = planoParsed
+              ? { texto: t2, acao: null as null }
+              : parseAcao(t2);
             // Prefer persisted dados over parsed
             const memoria = m.memoria_dados ?? memParsed;
-            const acao = m.acao_dados ?? acaoParsed;
+            const persistedIsPlano = m.acao_dados && (m.acao_dados as any).tipo === "plano";
+            const plano = persistedIsPlano
+              ? ((m.acao_dados as any).dados as { titulo: string; acoes: PlanoAcao[]; resultado?: any })
+              : planoParsed;
+            const acao = !persistedIsPlano && m.acao_dados ? m.acao_dados : acaoParsed;
             return (
               <div key={m.id ?? i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
@@ -527,7 +534,14 @@ export default function Michele() {
                       initialStatus={(m.memoria_status ?? "pendente") as Exclude<MemoriaStatus, null>}
                     />
                   )}
-                  {acao && (
+                  {plano && (
+                    <PlanoCard
+                      messageId={m.id}
+                      plano={plano as PlanoSugerido & { resultado?: any }}
+                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
+                    />
+                  )}
+                  {!plano && acao && (
                     <AcaoCard
                       messageId={m.id}
                       acao={acao as AcaoSugerida}
@@ -538,6 +552,7 @@ export default function Michele() {
               </div>
             );
           })}
+
 
           {loading && (
             <div className="flex justify-start">
