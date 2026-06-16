@@ -9,6 +9,7 @@ const corsHeaders = {
 const ALLOWED = new Set([
   "criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra",
   "cadastrar_construtora", "cadastrar_contato", "atualizar_contato",
+  "cadastrar_obras_lote",
 ]);
 
 const OBRA_FIELDS = new Set([
