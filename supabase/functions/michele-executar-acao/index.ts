@@ -27,6 +27,34 @@ const PESSOA_FIELDS = new Set([
   "observacoes", "canal_preferido", "melhor_horario",
 ]);
 
+// Normaliza valores multi-produto: aceita string "Rohden, Imab", "Rohden e Imab",
+// arrays ["Rohden","Imab"], ou repetições. Retorna "Rohden, Imab" preservando ordem
+// e capitalização canônica (Prado, Rohden, Imab). Nunca descarta produtos.
+function normalizarProdutos(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  let partes: string[] = [];
+  if (Array.isArray(v)) {
+    partes = v.flatMap((x) => String(x ?? "").split(/[,;|]| e | E |\+|\//));
+  } else {
+    partes = String(v).split(/[,;|]| e | E |\+|\//);
+  }
+  const canon: Record<string, string> = {
+    prado: "Prado", rohden: "Rohden", rhoden: "Rohden", imab: "Imab",
+  };
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of partes) {
+    const k = p.trim().toLowerCase();
+    if (!k) continue;
+    const nome = canon[k] ?? p.trim();
+    const key = nome.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(nome);
+  }
+  return out.length ? out.join(", ") : undefined;
+}
+
 async function proximoCodigo(sb: any, table: string, col: string, prefix: string, pad: number): Promise<string> {
   const { data } = await sb.from(table).select(col).ilike(col, `${prefix}%`).order(col, { ascending: false }).limit(50);
   let max = 0;
