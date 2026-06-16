@@ -243,15 +243,20 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if ((!text && !imageDataUrl && !planilha) || loading) return;
+    if ((!text && !imageDataUrl && !planilha && !documento) || loading) return;
 
     setLoading(true);
     const currentPlanilha = planilha;
-    const userText = text || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]` : (imageDataUrl ? "[imagem anexa]" : ""));
+    const currentDocumento = documento;
+    const userText = text
+      || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]`
+      : (currentDocumento ? `[documento: ${currentDocumento.name}]`
+      : (imageDataUrl ? "[imagem anexa]" : "")));
     const currentImage = imageDataUrl;
     setInput("");
     setImageDataUrl(null);
     setPlanilha(null);
+    setDocumento(null);
 
     // Upload da imagem (se houver) antes de pintar a mensagem
     let imagemPath: string | null = null;
@@ -291,7 +296,7 @@ export default function Michele() {
         });
       if (insUserErr) console.error(insUserErr);
 
-      // Branch: planilha → importar; senão → chat normal
+      // Branch: planilha → importar; senão → chat normal (com doc opcional)
       let reply: string | undefined;
       if (currentPlanilha) {
         const { data, error } = await supabase.functions.invoke("michele-importar-planilha", {
@@ -305,7 +310,13 @@ export default function Michele() {
         }
       } else {
         const { data, error } = await supabase.functions.invoke("michele-chat", {
-          body: { messages: next, image: currentImage },
+          body: {
+            messages: next,
+            image: currentImage,
+            documento: currentDocumento
+              ? { name: currentDocumento.name, base64: currentDocumento.base64, mime: currentDocumento.mime }
+              : undefined,
+          },
         });
         if (error) throw error;
         reply = (data as { text?: string; error?: string })?.text;
