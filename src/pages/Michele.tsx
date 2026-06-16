@@ -12,7 +12,40 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
+const PLANO_RE = /\[PLANO\]([\s\S]*?)\[\/PLANO\]/i;
 const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote"]);
+
+type PlanoAcao = { tipo: string; dados: Record<string, unknown> };
+type PlanoSugerido = { titulo: string; acoes: PlanoAcao[] };
+
+function parsePlano(content: string): { texto: string; plano: PlanoSugerido | null } {
+  const m = content.match(PLANO_RE);
+  if (!m) return { texto: content, plano: null };
+  const bloco = m[1];
+  const tituloMatch = /titulo\s*:\s*(.+)/i.exec(bloco);
+  const acoesMatch = /acoes\s*:\s*([\s\S]+)/i.exec(bloco);
+  const titulo = tituloMatch ? tituloMatch[1].trim().replace(/^['"]|['"]$/g, "") : "Plano";
+  let acoes: PlanoAcao[] = [];
+  if (acoesMatch) {
+    const raw = acoesMatch[1].trim();
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) acoes = parsed;
+    } catch {
+      const jm = raw.match(/\[[\s\S]*\]/);
+      if (jm) {
+        try {
+          const parsed = JSON.parse(jm[0]);
+          if (Array.isArray(parsed)) acoes = parsed;
+        } catch { /* ignore */ }
+      }
+    }
+  }
+  const texto = content.replace(PLANO_RE, "").trim();
+  if (acoes.length === 0) return { texto: content, plano: null };
+  return { texto, plano: { titulo, acoes } };
+}
+
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
