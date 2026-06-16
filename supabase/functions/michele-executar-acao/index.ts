@@ -282,7 +282,12 @@ Deno.serve(async (req) => {
     const insert: Record<string, unknown> = { codigoObra: novoCodigo, gerenciada_michele: true };
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
-      if (OBRA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") {
+      if (!OBRA_FIELDS.has(k)) continue;
+      if (v === undefined || v === null) continue;
+      if (k === "produtoOferecido") {
+        const n = normalizarProdutos(v);
+        if (n) insert[k] = n;
+      } else if (String(v).trim() !== "") {
         insert[k] = v;
       }
     }
