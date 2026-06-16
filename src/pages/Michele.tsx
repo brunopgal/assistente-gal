@@ -66,6 +66,7 @@ const ACAO_LABEL: Record<string, string> = {
   cadastrar_construtora: "Cadastrar nova construtora",
   cadastrar_contato: "Cadastrar novo contato",
   atualizar_contato: "Atualizar contato",
+  cadastrar_obras_lote: "Cadastrar obras em lote",
 };
 
 
