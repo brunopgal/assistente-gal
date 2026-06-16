@@ -524,7 +524,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 1500,
+        max_tokens: 8000,
         system: systemEnriquecido,
         messages: anthropicMessages,
       }),
