@@ -27,6 +27,34 @@ const PESSOA_FIELDS = new Set([
   "observacoes", "canal_preferido", "melhor_horario",
 ]);
 
+// Normaliza valores multi-produto: aceita string "Rohden, Imab", "Rohden e Imab",
+// arrays ["Rohden","Imab"], ou repetições. Retorna "Rohden, Imab" preservando ordem
+// e capitalização canônica (Prado, Rohden, Imab). Nunca descarta produtos.
+function normalizarProdutos(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  let partes: string[] = [];
+  if (Array.isArray(v)) {
+    partes = v.flatMap((x) => String(x ?? "").split(/[,;|]| e | E |\+|\//));
+  } else {
+    partes = String(v).split(/[,;|]| e | E |\+|\//);
+  }
+  const canon: Record<string, string> = {
+    prado: "Prado", rohden: "Rohden", rhoden: "Rohden", imab: "Imab",
+  };
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of partes) {
+    const k = p.trim().toLowerCase();
+    if (!k) continue;
+    const nome = canon[k] ?? p.trim();
+    const key = nome.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(nome);
+  }
+  return out.length ? out.join(", ") : undefined;
+}
+
 async function proximoCodigo(sb: any, table: string, col: string, prefix: string, pad: number): Promise<string> {
   const { data } = await sb.from(table).select(col).ilike(col, `${prefix}%`).order(col, { ascending: false }).limit(50);
   let max = 0;
@@ -181,7 +209,13 @@ Deno.serve(async (req) => {
         if (codigoConstrutora) insert.codigoConstrutora = codigoConstrutora;
         for (const k of ["cidade", "localizacao", "responsavel", "telefone", "email", "produtoOferecido", "estagioObra", "observacoes"]) {
           const v = (item as any)[k];
-          if (v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+          if (v === undefined || v === null) continue;
+          if (k === "produtoOferecido") {
+            const n = normalizarProdutos(v);
+            if (n) insert[k] = n;
+          } else if (String(v).trim() !== "") {
+            insert[k] = v;
+          }
         }
 
         const { error: insErr } = await sb.from("obras").insert(insert);
@@ -248,7 +282,12 @@ Deno.serve(async (req) => {
     const insert: Record<string, unknown> = { codigoObra: novoCodigo, gerenciada_michele: true };
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
-      if (OBRA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") {
+      if (!OBRA_FIELDS.has(k)) continue;
+      if (v === undefined || v === null) continue;
+      if (k === "produtoOferecido") {
+        const n = normalizarProdutos(v);
+        if (n) insert[k] = n;
+      } else if (String(v).trim() !== "") {
         insert[k] = v;
       }
     }
@@ -283,7 +322,14 @@ Deno.serve(async (req) => {
     const novoCodigo = await proximoCodigo(sb, "construtoras", "codigo", "CT", 9);
     const insert: Record<string, unknown> = { codigo: novoCodigo };
     for (const [k, v] of Object.entries(dados)) {
-      if (CONSTRUTORA_FIELDS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+      if (!CONSTRUTORA_FIELDS.has(k)) continue;
+      if (v === undefined || v === null) continue;
+      if (k === "produto") {
+        const n = normalizarProdutos(v);
+        if (n) insert[k] = n;
+      } else if (String(v).trim() !== "") {
+        insert[k] = v;
+      }
     }
     if (!insert.status) insert.status = "Prospecção";
     const { data: ins, error } = await sb.from("construtoras").insert(insert).select("codigo,nome").single();
@@ -416,7 +462,13 @@ Deno.serve(async (req) => {
       const update: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(dados)) {
         if (k === "codigoObra") continue;
-        if (OBRA_FIELDS.has(k)) update[k] = v;
+        if (!OBRA_FIELDS.has(k)) continue;
+        if (k === "produtoOferecido") {
+          const n = normalizarProdutos(v);
+          if (n !== undefined) update[k] = n;
+        } else {
+          update[k] = v;
+        }
       }
       if (Object.keys(update).length === 0) {
         await log(false, "atualizar_obra sem campos válidos");
