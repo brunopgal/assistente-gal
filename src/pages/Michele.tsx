@@ -302,8 +302,9 @@ export default function Michele() {
       setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
 
       // Parse acao/memoria from reply and persist with status
-      const { memoria } = parseMemoria(reply);
-      const { acao } = parseAcao(reply);
+      const replyText = reply!;
+      const { memoria } = parseMemoria(replyText);
+      const { acao } = parseAcao(replyText);
       const acao_status = acao ? "pendente" : null;
       const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
       const memoria_status = memoria ? "pendente" : null;
@@ -314,7 +315,7 @@ export default function Michele() {
         .insert({
           conversa_id: conversaId,
           role: "assistant",
-          content: reply,
+          content: replyText,
           acao_status,
           acao_dados: acao_dados as unknown as never,
           memoria_status,
