@@ -362,21 +362,41 @@ export default function Mapa() {
     return selectedIds.map((id) => byId.get(id)).filter(Boolean) as GeoObra[];
   }, [obras, selectedIds]);
 
-  const otimizarOrdem = () => {
-    if (selectedObras.length < 3) return;
-    const remaining = [...selectedObras];
-    const ordered = [remaining.shift()!];
-    while (remaining.length > 0) {
-      const last = ordered[ordered.length - 1];
-      let bestIdx = 0;
-      let bestDist = Infinity;
-      remaining.forEach((o, i) => {
-        const d = distKm(last, o);
-        if (d < bestDist) { bestDist = d; bestIdx = i; }
-      });
-      ordered.push(remaining.splice(bestIdx, 1)[0]);
+  const pedirLocalizacao = (): Promise<{ lat: number; lng: number } | null> =>
+    new Promise((resolve) => {
+      if (!("geolocation" in navigator)) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 },
+      );
+    });
+
+  const otimizarOrdem = async () => {
+    if (selectedObras.length < 2) return;
+    setOtimizando(true);
+    try {
+      const loc = userLoc ?? (await pedirLocalizacao());
+      if (loc) setUserLoc(loc);
+      const start = loc ?? { lat: selectedObras[0].lat, lng: selectedObras[0].lng };
+      const remaining = [...selectedObras];
+      const ordered: GeoObra[] = [];
+      let cursor = start;
+      while (remaining.length > 0) {
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        remaining.forEach((o, i) => {
+          const d = distKm(cursor, o);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        });
+        const next = remaining.splice(bestIdx, 1)[0];
+        ordered.push(next);
+        cursor = next;
+      }
+      setSelectedIds(ordered.map((o) => o.id || ""));
+    } finally {
+      setOtimizando(false);
     }
-    setSelectedIds(ordered.map((o) => o.id || ""));
   };
 
   const abrirRota = () => {
@@ -384,9 +404,11 @@ export default function Mapa() {
     const coords = selectedObras.map((o) => `${o.lat},${o.lng}`);
     const destination = coords[coords.length - 1];
     const waypoints = coords.slice(0, -1).join("|");
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=driving`;
+    const origin = userLoc ? `&origin=${encodeURIComponent(`${userLoc.lat},${userLoc.lng}`)}` : "";
+    const url = `https://www.google.com/maps/dir/?api=1${origin}&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=driving`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
+
 
   const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
