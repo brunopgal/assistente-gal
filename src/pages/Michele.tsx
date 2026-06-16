@@ -16,15 +16,17 @@ const PLANO_RE = /\[PLANO\]([\s\S]*?)\[\/PLANO\]/i;
 const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote"]);
 
 type PlanoAcao = { tipo: string; dados: Record<string, unknown> };
-type PlanoSugerido = { titulo: string; acoes: PlanoAcao[] };
+type PlanoSugerido = { titulo: string; resumo?: string; acoes: PlanoAcao[] };
 
 function parsePlano(content: string): { texto: string; plano: PlanoSugerido | null } {
   const m = content.match(PLANO_RE);
   if (!m) return { texto: content, plano: null };
   const bloco = m[1];
   const tituloMatch = /titulo\s*:\s*(.+)/i.exec(bloco);
+  const resumoMatch = /resumo\s*:\s*(.+)/i.exec(bloco);
   const acoesMatch = /acoes\s*:\s*([\s\S]+)/i.exec(bloco);
   const titulo = tituloMatch ? tituloMatch[1].trim().replace(/^['"]|['"]$/g, "") : "Plano";
+  const resumo = resumoMatch ? resumoMatch[1].trim().replace(/^['"]|['"]$/g, "") : "";
   let acoes: PlanoAcao[] = [];
   if (acoesMatch) {
     const raw = acoesMatch[1].trim();
@@ -43,7 +45,7 @@ function parsePlano(content: string): { texto: string; plano: PlanoSugerido | nu
   }
   const texto = content.replace(PLANO_RE, "").trim();
   if (acoes.length === 0) return { texto: content, plano: null };
-  return { texto, plano: { titulo, acoes } };
+  return { texto, plano: { titulo, resumo, acoes } };
 }
 
 
@@ -985,6 +987,7 @@ function PlanoCard({
   const [estado, setEstado] = useState<UIEstado>(initialStatus);
   const [resultado, setResultado] = useState<any>(plano.resultado ?? null);
   const [erro, setErro] = useState<string>("");
+  const [aberto, setAberto] = useState(false);
 
   const grupos = {
     cadastrar_construtora: [] as PlanoAcao[],
@@ -997,47 +1000,14 @@ function PlanoCard({
     else grupos.outros.push(a);
   }
 
-  const renderItem = (a: PlanoAcao, i: number) => {
-    const d = a.dados as any;
-    const nome = d.nome ?? "(sem nome)";
-    const detalhes: string[] = [];
-    if (a.tipo === "cadastrar_construtora") {
-      if (d.produto) detalhes.push(`produtos: ${d.produto}`);
-      if (d.cnpj) detalhes.push(`cnpj: ${d.cnpj}`);
-    } else if (a.tipo === "cadastrar_obra") {
-      const c = d.construtora_nome ?? d.construtora;
-      if (c) detalhes.push(`construtora: ${c}`);
-      if (d.cidade) detalhes.push(d.cidade);
-      if (d.produtoOferecido) detalhes.push(`produto: ${d.produtoOferecido}`);
-      if (d.estagioObra) detalhes.push(d.estagioObra);
-    } else if (a.tipo === "cadastrar_contato") {
-      if (d.cargo) detalhes.push(d.cargo);
-      if (d.whatsapp) detalhes.push(`wpp: ${d.whatsapp}`);
-      const c = d.construtora_nome ?? d.construtora;
-      const o = d.obra_nome ?? d.obra;
-      if (o) detalhes.push(`obra: ${o}`);
-      else if (c) detalhes.push(`construtora: ${c}`);
-    }
-    return (
-      <li key={i} className="text-xs text-foreground">
-        <span className="font-medium">{nome}</span>
-        {detalhes.length > 0 && (
-          <span className="text-muted-foreground"> — {detalhes.join(" · ")}</span>
-        )}
-      </li>
-    );
-  };
+  const contagens: Array<{ label: string; n: number }> = [
+    { label: "construtoras novas", n: grupos.cadastrar_construtora.length },
+    { label: "obras", n: grupos.cadastrar_obra.length },
+    { label: "contatos", n: grupos.cadastrar_contato.length },
+  ];
+  if (grupos.outros.length > 0) contagens.push({ label: "outras ações", n: grupos.outros.length });
 
-  const grupo = (titulo: string, itens: PlanoAcao[]) => itens.length > 0 && (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-        {titulo} ({itens.length})
-      </div>
-      <ul className="mt-1 space-y-0.5 pl-3 list-disc">
-        {itens.map((a, i) => renderItem(a, i))}
-      </ul>
-    </div>
-  );
+  const nomeDe = (a: PlanoAcao) => String((a.dados as any)?.nome ?? "(sem nome)");
 
   async function persistStatus(novo: "aprovada" | "cancelada", dadosExtra?: any) {
     if (!messageId) return;
@@ -1045,7 +1015,7 @@ function PlanoCard({
     if (dadosExtra) {
       payload.acao_dados = {
         tipo: "plano",
-        dados: { titulo: plano.titulo, acoes: plano.acoes, resultado: dadosExtra },
+        dados: { titulo: plano.titulo, resumo: plano.resumo, acoes: plano.acoes, resultado: dadosExtra },
       };
     }
     await supabase.from("mensagens_michele").update(payload).eq("id", messageId);
@@ -1083,46 +1053,72 @@ function PlanoCard({
         <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-            Plano proposto · {plano.acoes.length} ações
+            Plano de cadastro
           </div>
           <div className="text-sm font-medium text-foreground">{plano.titulo}</div>
         </div>
       </div>
 
-      <div className="space-y-2 pl-6">
-        {grupo("Construtoras", grupos.cadastrar_construtora)}
-        {grupo("Obras", grupos.cadastrar_obra)}
-        {grupo("Contatos", grupos.cadastrar_contato)}
-        {grupos.outros.length > 0 && grupo("Outros", grupos.outros)}
-      </div>
+      <ul className="pl-6 space-y-0.5 text-sm text-foreground">
+        {contagens.filter((c) => c.n > 0).map((c) => (
+          <li key={c.label}>• {c.n} {c.label}</li>
+        ))}
+      </ul>
 
-      {estado === "aprovada" && resultado && (
-        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs space-y-1">
-          <div className="font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-            <Check className="h-3.5 w-3.5" /> ✅ Plano executado
-          </div>
-          {resultado.resumo && <div className="text-muted-foreground">{resultado.resumo}</div>}
-          {Array.isArray(resultado.construtoras_criadas) && resultado.construtoras_criadas.length > 0 && (
-            <div><span className="font-medium">Construtoras criadas:</span> {resultado.construtoras_criadas.join(", ")}</div>
-          )}
-          {Array.isArray(resultado.obras_criadas) && resultado.obras_criadas.length > 0 && (
-            <div><span className="font-medium">Obras criadas:</span> {resultado.obras_criadas.join(", ")}</div>
-          )}
-          {Array.isArray(resultado.contatos_criados) && resultado.contatos_criados.length > 0 && (
-            <div><span className="font-medium">Contatos criados:</span> {resultado.contatos_criados.join(", ")}</div>
-          )}
-          {Array.isArray(resultado.reaproveitados) && resultado.reaproveitados.length > 0 && (
-            <div><span className="font-medium">Já existiam (reaproveitados):</span> {resultado.reaproveitados.join(", ")}</div>
-          )}
-          {Array.isArray(resultado.erros) && resultado.erros.length > 0 && (
-            <div className="text-destructive"><span className="font-medium">Erros:</span> {resultado.erros.join(" | ")}</div>
+      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
+        <div className="pl-6">
+          <button
+            type="button"
+            onClick={() => setAberto((v) => !v)}
+            className="text-xs text-muted-foreground underline hover:text-foreground"
+          >
+            {aberto ? "ocultar detalhes" : "ver detalhes"}
+          </button>
+          {aberto && (
+            <div className="mt-2 space-y-2 text-xs">
+              {grupos.cadastrar_construtora.length > 0 && (
+                <div>
+                  <div className="font-semibold text-amber-700 dark:text-amber-300">Construtoras</div>
+                  <ul className="list-disc pl-4">{grupos.cadastrar_construtora.map((a, i) => <li key={i}>{nomeDe(a)}</li>)}</ul>
+                </div>
+              )}
+              {grupos.cadastrar_obra.length > 0 && (
+                <div>
+                  <div className="font-semibold text-amber-700 dark:text-amber-300">Obras</div>
+                  <ul className="list-disc pl-4">{grupos.cadastrar_obra.map((a, i) => {
+                    const d = a.dados as any;
+                    const c = d.construtora_nome ?? d.construtora;
+                    return <li key={i}>{nomeDe(a)}{c ? ` — ${c}` : ""}</li>;
+                  })}</ul>
+                </div>
+              )}
+              {grupos.cadastrar_contato.length > 0 && (
+                <div>
+                  <div className="font-semibold text-amber-700 dark:text-amber-300">Contatos</div>
+                  <ul className="list-disc pl-4">{grupos.cadastrar_contato.map((a, i) => {
+                    const d = a.dados as any;
+                    const ref = d.obra_nome ?? d.construtora_nome ?? d.obra ?? d.construtora;
+                    return <li key={i}>{nomeDe(a)}{d.cargo ? ` (${d.cargo})` : ""}{ref ? ` — ${ref}` : ""}</li>;
+                  })}</ul>
+                </div>
+              )}
+              {grupos.outros.length > 0 && (
+                <div>
+                  <div className="font-semibold text-amber-700 dark:text-amber-300">Outros</div>
+                  <ul className="list-disc pl-4">{grupos.outros.map((a, i) => <li key={i}>{a.tipo}: {nomeDe(a)}</li>)}</ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {estado === "aprovada" && !resultado && (
+      {estado === "aprovada" && (
         <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-          <Check className="h-3.5 w-3.5" /> ✅ Plano executado
+          <Check className="h-3.5 w-3.5" />
+          {resultado?.resumo
+            ? `✅ ${resultado.resumo}`
+            : `✅ Cadastrado: ${resultado?.construtoras_criadas?.length ?? 0} construtoras, ${resultado?.obras_criadas?.length ?? 0} obras, ${resultado?.contatos_criados?.length ?? 0} contatos`}
         </div>
       )}
 
@@ -1149,7 +1145,7 @@ function PlanoCard({
             ) : (
               <Zap className="h-3.5 w-3.5 mr-1" />
             )}
-            {estado === "erro" ? "Tentar novamente" : "Aprovar tudo e executar"}
+            {estado === "erro" ? "Tentar novamente" : "Aprovar e cadastrar tudo"}
           </Button>
         </div>
       )}
