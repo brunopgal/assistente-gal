@@ -537,7 +537,7 @@ export default function Michele() {
           />
           <Button
             onClick={handleSend}
-            disabled={loading || (!input.trim() && !imageDataUrl)}
+            disabled={loading || (!input.trim() && !imageDataUrl && !planilha)}
             size="icon"
             className="h-[60px] w-[60px]"
           >
