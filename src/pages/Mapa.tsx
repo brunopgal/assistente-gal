@@ -526,26 +526,40 @@ export default function Mapa() {
                 Clique nos pinos do mapa e use o botão "Adicionar à rota" para montar sua sequência de visitas.
               </p>
             ) : (
-              selectedObras.map((o, i) => (
-                <div key={o.id} className="flex items-start gap-2 p-2 rounded border border-border bg-background">
-                  <div className="h-6 w-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                    {i + 1}
+              <>
+                {userLoc && (
+                  <div className="flex items-start gap-2 p-2 rounded border border-dashed border-primary/40 bg-primary/5">
+                    <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shrink-0">
+                      <Navigation className="h-3 w-3" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium">Sua localização</p>
+                      <p className="text-[10px] text-muted-foreground">Ponto de partida</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{o.nome || "Sem nome"}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{o.cidade}</p>
+                )}
+                {selectedObras.map((o, i) => (
+                  <div key={o.id} className="flex items-start gap-2 p-2 rounded border border-border bg-background">
+                    <div className="h-6 w-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{o.nome || "Sem nome"}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{o.cidade}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedIds((prev) => prev.filter((id) => id !== o.id))}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Remover"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setSelectedIds((prev) => prev.filter((id) => id !== o.id))}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Remover"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))
+                ))}
+              </>
             )}
           </div>
+
         </div>
       </div>
 
