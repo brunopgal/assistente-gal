@@ -495,11 +495,22 @@ export default function Michele() {
             </Button>
           </div>
         )}
+        {planilha && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <Paperclip className="h-5 w-5 text-primary" />
+            <span className="text-xs text-foreground flex-1 truncate">
+              📊 Planilha: <strong>{planilha.name}</strong> — vou ler e organizar.
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setPlanilha(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mt-3 flex gap-2 items-end">
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept="image/jpeg,image/png,image/gif,image/webp,.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
             className="hidden"
             onChange={handleFile}
           />
@@ -510,7 +521,7 @@ export default function Michele() {
             className="h-[60px] w-[60px] shrink-0"
             disabled={loading}
             onClick={() => fileInputRef.current?.click()}
-            title="Anexar imagem"
+            title="Anexar imagem ou planilha (.xlsx, .xls, .csv)"
           >
             <Paperclip className="h-5 w-5" />
           </Button>
