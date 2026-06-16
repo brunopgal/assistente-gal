@@ -1,12 +1,14 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeText } from "@/lib/normalize";
-import { Loader2, MapPin, RefreshCw } from "lucide-react";
+import { Loader2, MapPin, RefreshCw, Navigation, X, Sparkles, ExternalLink } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 interface GeoObra extends Obra {
   lat: number;
@@ -26,8 +28,6 @@ type GeocodeResult =
   | { status: "not_found" }
   | { status: "error" };
 
-// Distingue "não encontrado" (resposta vazia -> pode persistir not_found) de erro de
-// requisição (rede/HTTP -> NÃO persiste nada; será tentado de novo no próximo acesso).
 async function geocode(query: string): Promise<GeocodeResult> {
   try {
     const res = await fetch(
@@ -48,7 +48,6 @@ async function geocode(query: string): Promise<GeocodeResult> {
 
 const isUrl = (s: string) => /^https?:\/\//i.test((s || "").trim());
 
-// Mesma regra do backend (_shared/geocode.ts): localizacao só quando é texto, nunca URL.
 function buildQuery(obra: Obra): string {
   const locTxt = isUrl(obra.localizacao) ? "" : (obra.localizacao || "").trim();
   const cidade = (obra.cidade || "").trim();
@@ -63,7 +62,26 @@ function statusColor(status: string): string {
   return "hsl(221, 83%, 53%)";
 }
 
-function createColorIcon(color: string) {
+function createColorIcon(color: string, orderNumber?: number) {
+  if (orderNumber) {
+    return L.divIcon({
+      className: "custom-marker",
+      html: `<div style="
+        background-color: hsl(142, 76%, 36%);
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        display:flex;align-items:center;justify-content:center;
+        font-weight:bold;font-size:14px;font-family:sans-serif;
+      ">${orderNumber}</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16],
+    });
+  }
   return L.divIcon({
     className: "custom-marker",
     html: `<div style="
@@ -81,6 +99,20 @@ function createColorIcon(color: string) {
   });
 }
 
+// Haversine distance (km)
+function distKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat);
+  const la2 = toRad(b.lat);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+const TODOS = "__todos__";
+
 export default function Mapa() {
   const [obras, setObras] = useState<GeoObra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +122,21 @@ export default function Mapa() {
   const mapRef = useRef<L.Map | null>(null);
   const cancelRef = useRef(false);
 
-  // Initialize map once
+  const [filterCidade, setFilterCidade] = useState<string>(TODOS);
+  const [filterStatus, setFilterStatus] = useState<string>(TODOS);
+  const [filterProduto, setFilterProduto] = useState<string>(TODOS);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // expose toggle to popup buttons
+  useEffect(() => {
+    (window as any).__toggleRotaObra = (id: string) => {
+      setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
+    return () => {
+      delete (window as any).__toggleRotaObra;
+    };
+  }, []);
+
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
     mapRef.current = L.map(mapContainerRef.current).setView([-22.7288, -47.009], 10);
@@ -108,8 +154,6 @@ export default function Mapa() {
     setLoading(true);
     setObras([]);
     setProgress({ done: 0, total: 0 });
-
-    // Limpeza única do cache antigo da Fase 1 (substituído pela tabela do Supabase)
     try { localStorage.removeItem("obras-geocode-cache"); } catch { /* ignore */ }
 
     try {
@@ -139,18 +183,15 @@ export default function Mapa() {
         if (isValid) {
           ready.push({ ...obra, lat: row!.lat as number, lng: row!.lng as number });
         } else if (!isKnownNotFound || refreshNotFound) {
-          // sem registro, endereço mudou, ou usuário pediu para reprocessar falhas
           pending.push({ obra, query });
         }
       }
 
-      // Plota imediatamente tudo que já tem coordenada válida
       setObras(ready);
       setLoading(false);
 
       if (pending.length === 0) return;
 
-      // Backfill: geocodifica as pendentes em sequência e persiste no Supabase
       setGeocoding(true);
       setProgress({ done: 0, total: pending.length });
 
@@ -175,7 +216,7 @@ export default function Mapa() {
                 { obra_id: obra.id, query_normalizada: queryNorm, lat, lng, not_found: false },
                 { onConflict: "obra_id" }
               );
-            } catch { /* tabela ausente ou erro de rede: segue sem persistir */ }
+            } catch { /* ignore */ }
           }
         } else if (result.status === "not_found" && obra.id) {
           try {
@@ -185,7 +226,6 @@ export default function Mapa() {
             );
           } catch { /* ignore */ }
         }
-        // status === "error": não persiste nada — tenta de novo no próximo carregamento
 
         setProgress({ done: i + 1, total: pending.length });
         if (i < pending.length - 1) {
@@ -193,7 +233,7 @@ export default function Mapa() {
         }
       }
     } catch {
-      // listarObras falhou — mantém estado vazio
+      // ignore
     } finally {
       if (!cancelRef.current) {
         setLoading(false);
@@ -208,14 +248,52 @@ export default function Mapa() {
     return () => { cancelRef.current = true; };
   }, [carregar]);
 
-  // Add markers to map when obras change
+  // distinct filter options
+  const { cidades, statuses, produtos } = useMemo(() => {
+    const c = new Set<string>();
+    const s = new Set<string>();
+    const p = new Set<string>();
+    for (const o of obras) {
+      if (o.cidade) c.add(o.cidade.trim());
+      if (o.statusProspeccao) s.add(o.statusProspeccao.trim());
+      if (o.produtoOferecido) {
+        for (const pr of o.produtoOferecido.split(",")) {
+          const t = pr.trim();
+          if (t) p.add(t);
+        }
+      }
+    }
+    return {
+      cidades: [...c].sort(),
+      statuses: [...s].sort(),
+      produtos: [...p].sort(),
+    };
+  }, [obras]);
+
+  const filteredObras = useMemo(() => {
+    return obras.filter((o) => {
+      if (filterCidade !== TODOS && (o.cidade || "").trim() !== filterCidade) return false;
+      if (filterStatus !== TODOS && (o.statusProspeccao || "").trim() !== filterStatus) return false;
+      if (filterProduto !== TODOS) {
+        const list = (o.produtoOferecido || "").split(",").map((x) => x.trim());
+        if (!list.includes(filterProduto)) return false;
+      }
+      return true;
+    });
+  }, [obras, filterCidade, filterStatus, filterProduto]);
+
+  // markers
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || obras.length === 0) return;
+    if (!map) return;
 
     const markers: L.Marker[] = [];
 
-    obras.forEach((obra) => {
+    filteredObras.forEach((obra) => {
+      const id = obra.id || "";
+      const orderIdx = selectedIds.indexOf(id);
+      const isSelected = orderIdx >= 0;
+
       const phone = obra.telefone?.replace(/\D/g, "") || "";
       const whatsappUrl = phone ? `https://wa.me/55${phone}` : "";
       const locRaw = (obra.localizacao || "").trim();
@@ -227,22 +305,35 @@ export default function Mapa() {
           ? `https://www.google.com/maps?q=${encodeURIComponent(mapsQuery)}`
           : "";
 
+      const safeId = id.replace(/'/g, "\\'");
+      const btnLabel = isSelected ? `✓ Na rota (#${orderIdx + 1}) — remover` : "➕ Adicionar à rota";
+      const btnStyle = isSelected
+        ? "background:#16a34a;color:white"
+        : "background:#2563eb;color:white";
+
       const popupContent = `
-        <div style="min-width:200px">
+        <div style="min-width:220px">
           <h3 style="font-weight:bold;font-size:14px;margin:0 0 4px">${obra.nome || "Sem nome"}</h3>
           <p style="font-size:12px;color:#888;margin:0">${obra.construtora || "—"}</p>
           <p style="font-size:12px;margin:4px 0">${[locIsUrl ? "" : locRaw, obra.cidade].filter(Boolean).join(", ")}</p>
-          ${obra.statusProspeccao ? `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
+          <div style="font-size:11px;margin:4px 0;display:flex;flex-wrap:wrap;gap:4px">
+            ${obra.estagioObra ? `<span style="padding:2px 6px;border-radius:8px;background:#f3f4f6;color:#374151">Estágio: ${obra.estagioObra}</span>` : ""}
+            ${obra.produtoOferecido ? `<span style="padding:2px 6px;border-radius:8px;background:#fef3c7;color:#92400e">${obra.produtoOferecido}</span>` : ""}
+            ${obra.statusProspeccao ? `<span style="padding:2px 6px;border-radius:8px;background:#dbeafe;color:#1e40af">${obra.statusProspeccao}</span>` : ""}
+          </div>
+          ${id ? `<button onclick="window.__toggleRotaObra && window.__toggleRotaObra('${safeId}')" style="margin-top:6px;width:100%;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;${btnStyle}">${btnLabel}</button>` : ""}
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#2563eb">📍 Maps</a>` : ""}
             ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:12px;color:#16a34a">💬 WhatsApp</a>` : ""}
-            <a href="/atividades/${obra.id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>
+            ${id ? `<a href="/atividades/${id}" style="font-size:12px;color:#9333ea">📋 Detalhes</a>` : ""}
           </div>
         </div>
       `;
 
       const marker = L.marker([obra.lat, obra.lng], {
-        icon: createColorIcon(statusColor(obra.statusProspeccao)),
+        icon: isSelected
+          ? createColorIcon("", orderIdx + 1)
+          : createColorIcon(statusColor(obra.statusProspeccao)),
       })
         .bindPopup(popupContent)
         .addTo(map);
@@ -253,16 +344,46 @@ export default function Mapa() {
     return () => {
       markers.forEach((m) => m.remove());
     };
-  }, [obras]);
+  }, [filteredObras, selectedIds]);
 
-  // Ajusta o enquadramento após o lote inicial e novamente ao fim do backfill
-  // (evita o mapa "pular" a cada novo marcador durante a geocodificação)
+  // fit bounds
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || obras.length === 0 || loading || geocoding) return;
-    const bounds = L.latLngBounds(obras.map((o) => [o.lat, o.lng] as [number, number]));
+    if (!map || filteredObras.length === 0 || loading || geocoding) return;
+    const bounds = L.latLngBounds(filteredObras.map((o) => [o.lat, o.lng] as [number, number]));
     map.fitBounds(bounds, { padding: [50, 50] });
-  }, [obras, loading, geocoding]);
+  }, [filteredObras, loading, geocoding]);
+
+  const selectedObras = useMemo(() => {
+    const byId = new Map(obras.map((o) => [o.id || "", o]));
+    return selectedIds.map((id) => byId.get(id)).filter(Boolean) as GeoObra[];
+  }, [obras, selectedIds]);
+
+  const otimizarOrdem = () => {
+    if (selectedObras.length < 3) return;
+    const remaining = [...selectedObras];
+    const ordered = [remaining.shift()!];
+    while (remaining.length > 0) {
+      const last = ordered[ordered.length - 1];
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      remaining.forEach((o, i) => {
+        const d = distKm(last, o);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      });
+      ordered.push(remaining.splice(bestIdx, 1)[0]);
+    }
+    setSelectedIds(ordered.map((o) => o.id || ""));
+  };
+
+  const abrirRota = () => {
+    if (selectedObras.length === 0) return;
+    const coords = selectedObras.map((o) => `${o.lat},${o.lng}`);
+    const destination = coords[coords.length - 1];
+    const waypoints = coords.slice(0, -1).join("|");
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=driving`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -275,7 +396,7 @@ export default function Mapa() {
             Maps de Obras
           </h1>
           <p className="text-muted-foreground mt-1">
-            Visualize todas as obras cadastradas no mapa
+            Visualize obras e monte rotas de visita
           </p>
         </div>
         <Button
@@ -294,34 +415,115 @@ export default function Mapa() {
         <div className="space-y-1">
           <Progress value={progressPct} />
           <p className="text-xs text-muted-foreground">
-            Geocodificando {progress.done} de {progress.total} obra(s) nova(s)... As demais já estão no mapa.
+            Geocodificando {progress.done} de {progress.total} obra(s) nova(s)...
           </p>
         </div>
       )}
 
-      <div className="relative rounded-lg overflow-hidden border border-border" style={{ height: "calc(100vh - 220px)" }}>
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        )}
-
-        <div ref={mapContainerRef} style={{ height: "100%", width: "100%" }} />
-
-        {!loading && !geocoding && obras.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
-            <div className="text-center space-y-2">
-              <MapPin className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-              <p className="text-muted-foreground">Nenhuma obra com localização encontrada</p>
-              <p className="text-sm text-muted-foreground/70">Preencha os campos Cidade e Localização nas obras</p>
-            </div>
-          </div>
-        )}
+      {/* Filtros */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <Select value={filterCidade} onValueChange={setFilterCidade}>
+          <SelectTrigger><SelectValue placeholder="Cidade" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todas as cidades</SelectItem>
+            {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger><SelectValue placeholder="Status de prospecção" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todos os status</SelectItem>
+            {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterProduto} onValueChange={setFilterProduto}>
+          <SelectTrigger><SelectValue placeholder="Produto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todos os produtos</SelectItem>
+            {produtos.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
-      {!loading && !geocoding && obras.length > 0 && (
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="relative rounded-lg overflow-hidden border border-border" style={{ height: "calc(100vh - 320px)", minHeight: 400 }}>
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
+
+          <div ref={mapContainerRef} style={{ height: "100%", width: "100%" }} />
+
+          {!loading && !geocoding && filteredObras.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000] pointer-events-none">
+              <div className="text-center space-y-2">
+                <MapPin className="h-12 w-12 text-muted-foreground/50 mx-auto" />
+                <p className="text-muted-foreground">Nenhuma obra com localização para os filtros atuais</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Painel de rota */}
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3 flex flex-col" style={{ maxHeight: "calc(100vh - 320px)", minHeight: 400 }}>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <Navigation className="h-4 w-4" />
+              Rota de visita
+            </h2>
+            <Badge variant="secondary">{selectedObras.length}</Badge>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" variant="default" className="flex-1" onClick={abrirRota} disabled={selectedObras.length === 0}>
+              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+              Abrir no Maps
+            </Button>
+            <Button size="sm" variant="outline" onClick={otimizarOrdem} disabled={selectedObras.length < 3} title="Reordena pela proximidade a partir da 1ª obra">
+              <Sparkles className="h-3.5 w-3.5 mr-1" />
+              Otimizar
+            </Button>
+          </div>
+
+          {selectedObras.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="text-xs">
+              Limpar seleção
+            </Button>
+          )}
+
+          <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+            {selectedObras.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">
+                Clique nos pinos do mapa e use o botão "Adicionar à rota" para montar sua sequência de visitas.
+              </p>
+            ) : (
+              selectedObras.map((o, i) => (
+                <div key={o.id} className="flex items-start gap-2 p-2 rounded border border-border bg-background">
+                  <div className="h-6 w-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{o.nome || "Sem nome"}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{o.cidade}</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedIds((prev) => prev.filter((id) => id !== o.id))}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remover"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {!loading && !geocoding && filteredObras.length > 0 && (
         <p className="text-xs text-muted-foreground text-center">
-          {obras.length} obra(s) exibida(s) no mapa • Marcadores coloridos por status
+          {filteredObras.length} de {obras.length} obra(s) exibida(s) • Pinos verdes numerados são da sua rota
         </p>
       )}
     </div>
