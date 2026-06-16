@@ -471,7 +471,7 @@ Deno.serve(async (req) => {
             const blocks: any[] = Array.isArray(prev) ? [...prev] : [];
             blocks.push(docBlock);
             blocks.push({ type: "text", text: baseText });
-            anthropicMessages[i] = { role: "user", content: blocks };
+            anthropicMessages[i] = { role: "user", content: blocks as any };
           } else {
             anthropicMessages[i] = { role: "user", content: baseText };
           }
