@@ -360,14 +360,18 @@ export default function Michele() {
       }
       setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
 
-      // Parse acao/memoria from reply and persist with status
+      // Parse plano/acao/memoria from reply and persist with status
       const replyText = reply!;
       const { memoria } = parseMemoria(replyText);
-      const { acao } = parseAcao(replyText);
-      const acao_status = acao ? "pendente" : null;
-      const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
+      const { plano } = parsePlano(replyText);
+      const { acao } = plano ? { acao: null as null } : parseAcao(replyText);
+      const acao_status = plano || acao ? "pendente" : null;
+      const acao_dados = plano
+        ? { tipo: "plano", dados: { titulo: plano.titulo, acoes: plano.acoes } }
+        : acao ? { tipo: acao.tipo, dados: acao.dados } : null;
       const memoria_status = memoria ? "pendente" : null;
       const memoria_dados = memoria ?? null;
+
 
       const { data: insAss } = await supabase
         .from("mensagens_michele")
