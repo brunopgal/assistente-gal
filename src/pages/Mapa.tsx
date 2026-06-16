@@ -126,6 +126,9 @@ export default function Mapa() {
   const [filterStatus, setFilterStatus] = useState<string>(TODOS);
   const [filterProduto, setFilterProduto] = useState<string>(TODOS);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [otimizando, setOtimizando] = useState(false);
+
 
   // expose toggle to popup buttons
   useEffect(() => {
