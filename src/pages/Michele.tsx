@@ -12,7 +12,40 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
+const PLANO_RE = /\[PLANO\]([\s\S]*?)\[\/PLANO\]/i;
 const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote"]);
+
+type PlanoAcao = { tipo: string; dados: Record<string, unknown> };
+type PlanoSugerido = { titulo: string; acoes: PlanoAcao[] };
+
+function parsePlano(content: string): { texto: string; plano: PlanoSugerido | null } {
+  const m = content.match(PLANO_RE);
+  if (!m) return { texto: content, plano: null };
+  const bloco = m[1];
+  const tituloMatch = /titulo\s*:\s*(.+)/i.exec(bloco);
+  const acoesMatch = /acoes\s*:\s*([\s\S]+)/i.exec(bloco);
+  const titulo = tituloMatch ? tituloMatch[1].trim().replace(/^['"]|['"]$/g, "") : "Plano";
+  let acoes: PlanoAcao[] = [];
+  if (acoesMatch) {
+    const raw = acoesMatch[1].trim();
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) acoes = parsed;
+    } catch {
+      const jm = raw.match(/\[[\s\S]*\]/);
+      if (jm) {
+        try {
+          const parsed = JSON.parse(jm[0]);
+          if (Array.isArray(parsed)) acoes = parsed;
+        } catch { /* ignore */ }
+      }
+    }
+  }
+  const texto = content.replace(PLANO_RE, "").trim();
+  if (acoes.length === 0) return { texto: content, plano: null };
+  return { texto, plano: { titulo, acoes } };
+}
+
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -327,14 +360,18 @@ export default function Michele() {
       }
       setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
 
-      // Parse acao/memoria from reply and persist with status
+      // Parse plano/acao/memoria from reply and persist with status
       const replyText = reply!;
       const { memoria } = parseMemoria(replyText);
-      const { acao } = parseAcao(replyText);
-      const acao_status = acao ? "pendente" : null;
-      const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
+      const { plano } = parsePlano(replyText);
+      const { acao } = plano ? { acao: null as null } : parseAcao(replyText);
+      const acao_status = plano || acao ? "pendente" : null;
+      const acao_dados = plano
+        ? { tipo: "plano", dados: { titulo: plano.titulo, acoes: plano.acoes } }
+        : acao ? { tipo: acao.tipo, dados: acao.dados } : null;
       const memoria_status = memoria ? "pendente" : null;
       const memoria_dados = memoria ?? null;
+
 
       const { data: insAss } = await supabase
         .from("mensagens_michele")
@@ -471,10 +508,17 @@ export default function Michele() {
               );
             }
             const { texto: t1, memoria: memParsed } = parseMemoria(m.content);
-            const { texto, acao: acaoParsed } = parseAcao(t1);
+            const { texto: t2, plano: planoParsed } = parsePlano(t1);
+            const { texto, acao: acaoParsed } = planoParsed
+              ? { texto: t2, acao: null as null }
+              : parseAcao(t2);
             // Prefer persisted dados over parsed
             const memoria = m.memoria_dados ?? memParsed;
-            const acao = m.acao_dados ?? acaoParsed;
+            const persistedIsPlano = m.acao_dados && (m.acao_dados as any).tipo === "plano";
+            const plano = persistedIsPlano
+              ? ((m.acao_dados as any).dados as { titulo: string; acoes: PlanoAcao[]; resultado?: any })
+              : planoParsed;
+            const acao = !persistedIsPlano && m.acao_dados ? m.acao_dados : acaoParsed;
             return (
               <div key={m.id ?? i} className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
@@ -490,7 +534,14 @@ export default function Michele() {
                       initialStatus={(m.memoria_status ?? "pendente") as Exclude<MemoriaStatus, null>}
                     />
                   )}
-                  {acao && (
+                  {plano && (
+                    <PlanoCard
+                      messageId={m.id}
+                      plano={plano as PlanoSugerido & { resultado?: any }}
+                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
+                    />
+                  )}
+                  {!plano && acao && (
                     <AcaoCard
                       messageId={m.id}
                       acao={acao as AcaoSugerida}
@@ -501,6 +552,7 @@ export default function Michele() {
               </div>
             );
           })}
+
 
           {loading && (
             <div className="flex justify-start">
@@ -919,3 +971,188 @@ function ChatImage({ path }: { path: string }) {
 
 
 
+
+function PlanoCard({
+  plano,
+  messageId,
+  initialStatus,
+}: {
+  plano: PlanoSugerido & { resultado?: any };
+  messageId?: string;
+  initialStatus: "pendente" | "aprovada" | "cancelada";
+}) {
+  type UIEstado = "pendente" | "executando" | "aprovada" | "cancelada" | "erro";
+  const [estado, setEstado] = useState<UIEstado>(initialStatus);
+  const [resultado, setResultado] = useState<any>(plano.resultado ?? null);
+  const [erro, setErro] = useState<string>("");
+
+  const grupos = {
+    cadastrar_construtora: [] as PlanoAcao[],
+    cadastrar_obra: [] as PlanoAcao[],
+    cadastrar_contato: [] as PlanoAcao[],
+    outros: [] as PlanoAcao[],
+  };
+  for (const a of plano.acoes) {
+    if (a.tipo in grupos) (grupos as any)[a.tipo].push(a);
+    else grupos.outros.push(a);
+  }
+
+  const renderItem = (a: PlanoAcao, i: number) => {
+    const d = a.dados as any;
+    const nome = d.nome ?? "(sem nome)";
+    const detalhes: string[] = [];
+    if (a.tipo === "cadastrar_construtora") {
+      if (d.produto) detalhes.push(`produtos: ${d.produto}`);
+      if (d.cnpj) detalhes.push(`cnpj: ${d.cnpj}`);
+    } else if (a.tipo === "cadastrar_obra") {
+      const c = d.construtora_nome ?? d.construtora;
+      if (c) detalhes.push(`construtora: ${c}`);
+      if (d.cidade) detalhes.push(d.cidade);
+      if (d.produtoOferecido) detalhes.push(`produto: ${d.produtoOferecido}`);
+      if (d.estagioObra) detalhes.push(d.estagioObra);
+    } else if (a.tipo === "cadastrar_contato") {
+      if (d.cargo) detalhes.push(d.cargo);
+      if (d.whatsapp) detalhes.push(`wpp: ${d.whatsapp}`);
+      const c = d.construtora_nome ?? d.construtora;
+      const o = d.obra_nome ?? d.obra;
+      if (o) detalhes.push(`obra: ${o}`);
+      else if (c) detalhes.push(`construtora: ${c}`);
+    }
+    return (
+      <li key={i} className="text-xs text-foreground">
+        <span className="font-medium">{nome}</span>
+        {detalhes.length > 0 && (
+          <span className="text-muted-foreground"> — {detalhes.join(" · ")}</span>
+        )}
+      </li>
+    );
+  };
+
+  const grupo = (titulo: string, itens: PlanoAcao[]) => itens.length > 0 && (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+        {titulo} ({itens.length})
+      </div>
+      <ul className="mt-1 space-y-0.5 pl-3 list-disc">
+        {itens.map((a, i) => renderItem(a, i))}
+      </ul>
+    </div>
+  );
+
+  async function persistStatus(novo: "aprovada" | "cancelada", dadosExtra?: any) {
+    if (!messageId) return;
+    const payload: any = { acao_status: novo };
+    if (dadosExtra) {
+      payload.acao_dados = {
+        tipo: "plano",
+        dados: { titulo: plano.titulo, acoes: plano.acoes, resultado: dadosExtra },
+      };
+    }
+    await supabase.from("mensagens_michele").update(payload).eq("id", messageId);
+  }
+
+  async function handleCancelar() {
+    await persistStatus("cancelada");
+    setEstado("cancelada");
+  }
+
+  async function handleExecutar() {
+    setEstado("executando");
+    setErro("");
+    try {
+      const { data, error } = await supabase.functions.invoke("michele-executar-lote", {
+        body: { titulo: plano.titulo, acoes: plano.acoes },
+      });
+      if (error) throw error;
+      const r = data as any;
+      setResultado(r);
+      await persistStatus("aprovada", r);
+      setEstado("aprovada");
+      toast.success(r?.resumo ?? "Plano executado.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErro(msg);
+      setEstado("erro");
+      toast.error("Erro ao executar o plano.");
+    }
+  }
+
+  return (
+    <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/5 p-3 space-y-3">
+      <div className="flex items-start gap-2">
+        <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+            Plano proposto · {plano.acoes.length} ações
+          </div>
+          <div className="text-sm font-medium text-foreground">{plano.titulo}</div>
+        </div>
+      </div>
+
+      <div className="space-y-2 pl-6">
+        {grupo("Construtoras", grupos.cadastrar_construtora)}
+        {grupo("Obras", grupos.cadastrar_obra)}
+        {grupo("Contatos", grupos.cadastrar_contato)}
+        {grupos.outros.length > 0 && grupo("Outros", grupos.outros)}
+      </div>
+
+      {estado === "aprovada" && resultado && (
+        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs space-y-1">
+          <div className="font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+            <Check className="h-3.5 w-3.5" /> ✅ Plano executado
+          </div>
+          {resultado.resumo && <div className="text-muted-foreground">{resultado.resumo}</div>}
+          {Array.isArray(resultado.construtoras_criadas) && resultado.construtoras_criadas.length > 0 && (
+            <div><span className="font-medium">Construtoras criadas:</span> {resultado.construtoras_criadas.join(", ")}</div>
+          )}
+          {Array.isArray(resultado.obras_criadas) && resultado.obras_criadas.length > 0 && (
+            <div><span className="font-medium">Obras criadas:</span> {resultado.obras_criadas.join(", ")}</div>
+          )}
+          {Array.isArray(resultado.contatos_criados) && resultado.contatos_criados.length > 0 && (
+            <div><span className="font-medium">Contatos criados:</span> {resultado.contatos_criados.join(", ")}</div>
+          )}
+          {Array.isArray(resultado.reaproveitados) && resultado.reaproveitados.length > 0 && (
+            <div><span className="font-medium">Já existiam (reaproveitados):</span> {resultado.reaproveitados.join(", ")}</div>
+          )}
+          {Array.isArray(resultado.erros) && resultado.erros.length > 0 && (
+            <div className="text-destructive"><span className="font-medium">Erros:</span> {resultado.erros.join(" | ")}</div>
+          )}
+        </div>
+      )}
+
+      {estado === "aprovada" && !resultado && (
+        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+          <Check className="h-3.5 w-3.5" /> ✅ Plano executado
+        </div>
+      )}
+
+      {estado === "cancelada" && (
+        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+          <X className="h-3.5 w-3.5" /> Cancelado
+        </div>
+      )}
+
+      {estado === "erro" && (
+        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {erro || "Erro ao executar."}
+        </div>
+      )}
+
+      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
+        <div className="flex gap-2 justify-end">
+          <Button variant="ghost" size="sm" onClick={handleCancelar} disabled={estado === "executando"}>
+            <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+          </Button>
+          <Button size="sm" onClick={handleExecutar} disabled={estado === "executando"}>
+            {estado === "executando" ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+            ) : (
+              <Zap className="h-3.5 w-3.5 mr-1" />
+            )}
+            {estado === "erro" ? "Tentar novamente" : "Aprovar tudo e executar"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
