@@ -445,33 +445,8 @@ export default function Mapa() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <Select value={filterCidade} onValueChange={setFilterCidade}>
-          <SelectTrigger><SelectValue placeholder="Cidade" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todas as cidades</SelectItem>
-            {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger><SelectValue placeholder="Status de prospecção" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todos os status</SelectItem>
-            {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterProduto} onValueChange={setFilterProduto}>
-          <SelectTrigger><SelectValue placeholder="Produto" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todos os produtos</SelectItem>
-            {produtos.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <div className="relative rounded-lg overflow-hidden border border-border" style={{ height: "calc(100vh - 320px)", minHeight: 400 }}>
+        <div className="relative rounded-lg overflow-hidden border border-border" style={{ height: "calc(100vh - 260px)", minHeight: 400 }}>
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -480,8 +455,35 @@ export default function Mapa() {
 
           <div ref={mapContainerRef} style={{ height: "100%", width: "100%" }} />
 
+          {/* Filtros sobrepostos ao mapa */}
+          <div className="absolute top-3 left-3 right-3 sm:right-auto sm:max-w-[640px] z-[1000] pointer-events-none">
+            <div className="pointer-events-auto rounded-lg border border-border bg-card/95 backdrop-blur p-2 shadow-lg grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Select value={filterCidade} onValueChange={setFilterCidade}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Cidade" /></SelectTrigger>
+                <SelectContent className="z-[1500]">
+                  <SelectItem value={TODOS}>Todas as cidades</SelectItem>
+                  {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent className="z-[1500]">
+                  <SelectItem value={TODOS}>Todos os status</SelectItem>
+                  {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterProduto} onValueChange={setFilterProduto}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Produto" /></SelectTrigger>
+                <SelectContent className="z-[1500]">
+                  <SelectItem value={TODOS}>Todos os produtos</SelectItem>
+                  {produtos.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {!loading && !geocoding && filteredObras.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[1000] pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-[900] pointer-events-none">
               <div className="text-center space-y-2">
                 <MapPin className="h-12 w-12 text-muted-foreground/50 mx-auto" />
                 <p className="text-muted-foreground">Nenhuma obra com localização para os filtros atuais</p>
@@ -491,7 +493,7 @@ export default function Mapa() {
         </div>
 
         {/* Painel de rota */}
-        <div className="rounded-lg border border-border bg-card p-4 space-y-3 flex flex-col" style={{ maxHeight: "calc(100vh - 320px)", minHeight: 400 }}>
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3 flex flex-col" style={{ maxHeight: "calc(100vh - 260px)", minHeight: 400 }}>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-sm flex items-center gap-2">
               <Navigation className="h-4 w-4" />
@@ -505,11 +507,12 @@ export default function Mapa() {
               <ExternalLink className="h-3.5 w-3.5 mr-1" />
               Abrir no Maps
             </Button>
-            <Button size="sm" variant="outline" onClick={otimizarOrdem} disabled={selectedObras.length < 3} title="Reordena pela proximidade a partir da 1ª obra">
-              <Sparkles className="h-3.5 w-3.5 mr-1" />
+            <Button size="sm" variant="outline" onClick={otimizarOrdem} disabled={selectedObras.length < 2 || otimizando} title="Ordena pela sua localização atual">
+              {otimizando ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
               Otimizar
             </Button>
           </div>
+
 
           {selectedObras.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="text-xs">
