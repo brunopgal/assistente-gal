@@ -100,6 +100,7 @@ export default function Michele() {
   const [loading, setLoading] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [planilha, setPlanilha] = useState<{ name: string; base64: string } | null>(null);
+  const [documento, setDocumento] = useState<{ name: string; base64: string; mime: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,8 +113,12 @@ export default function Michele() {
     const nameLower = f.name.toLowerCase();
     const isSheet = /\.(xlsx|xls|csv)$/.test(nameLower) ||
       /spreadsheet|excel|csv/.test(f.type);
-    if (!isImage && !isSheet) {
-      toast.error("Envie imagem (JPG/PNG/GIF/WEBP) ou planilha (.xlsx, .xls, .csv).");
+    const isDoc = /\.(pdf|txt|md|docx|doc)$/.test(nameLower) ||
+      /^application\/pdf$/.test(f.type) ||
+      /^text\//.test(f.type) ||
+      /wordprocessingml|msword/.test(f.type);
+    if (!isImage && !isSheet && !isDoc) {
+      toast.error("Envie imagem, planilha (.xlsx/.xls/.csv) ou documento (.pdf/.txt/.md/.docx).");
       return;
     }
     if (f.size > 10 * 1024 * 1024) {
@@ -123,13 +128,23 @@ export default function Michele() {
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result);
+      const b64 = result.includes(",") ? result.split(",")[1] : result;
       if (isImage) {
         setImageDataUrl(result);
         setPlanilha(null);
-      } else {
-        const b64 = result.includes(",") ? result.split(",")[1] : result;
+        setDocumento(null);
+      } else if (isSheet) {
         setPlanilha({ name: f.name, base64: b64 });
         setImageDataUrl(null);
+        setDocumento(null);
+      } else {
+        const mime = f.type || (nameLower.endsWith(".pdf") ? "application/pdf"
+          : nameLower.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : nameLower.endsWith(".doc") ? "application/msword"
+          : "text/plain");
+        setDocumento({ name: f.name, base64: b64, mime });
+        setImageDataUrl(null);
+        setPlanilha(null);
       }
     };
     reader.readAsDataURL(f);
