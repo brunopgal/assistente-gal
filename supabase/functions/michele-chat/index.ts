@@ -421,6 +421,66 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Documento opcional: PDF como bloco "document"; .txt/.md/.docx como texto inline
+    const documento = body?.documento as { name?: string; base64?: string; mime?: string } | undefined;
+    if (documento?.base64 && anthropicMessages.length > 0) {
+      const nameLower = (documento.name ?? "").toLowerCase();
+      const mime = documento.mime ?? "";
+      const isPdf = mime === "application/pdf" || nameLower.endsWith(".pdf");
+      const isTxt = mime.startsWith("text/") || nameLower.endsWith(".txt") || nameLower.endsWith(".md");
+      const isDocx = nameLower.endsWith(".docx") ||
+        mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+      let docBlock: any = null;
+      let inlineText: string | null = null;
+
+      try {
+        if (isPdf) {
+          docBlock = {
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: documento.base64 },
+          };
+        } else if (isTxt) {
+          const bin = atob(documento.base64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const text = new TextDecoder("utf-8").decode(bytes).slice(0, 200_000);
+          inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${text}\n--- fim do documento ---`;
+        } else if (isDocx) {
+          const mammoth = await import("https://esm.sh/mammoth@1.8.0?target=deno");
+          const bin = atob(documento.base64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const result = await (mammoth as any).extractRawText({ arrayBuffer: bytes.buffer });
+          const text = String(result?.value ?? "").slice(0, 200_000);
+          inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${text}\n--- fim do documento ---`;
+        } else {
+          inlineText = `\n\n[documento "${documento.name}" anexo — formato não suportado para leitura automática]`;
+        }
+      } catch (e) {
+        console.error("Erro processando documento:", e);
+        inlineText = `\n\n[falha ao ler o documento "${documento.name}"]`;
+      }
+
+      for (let i = anthropicMessages.length - 1; i >= 0; i--) {
+        if (anthropicMessages[i].role === "user") {
+          const prev = anthropicMessages[i].content;
+          const prevText = typeof prev === "string" ? prev : "";
+          const baseText = (prevText || `Analise o documento "${documento.name}".`) + (inlineText ?? "");
+          if (docBlock) {
+            const blocks: any[] = Array.isArray(prev) ? [...prev] : [];
+            blocks.push(docBlock);
+            blocks.push({ type: "text", text: baseText });
+            anthropicMessages[i] = { role: "user", content: blocks as any };
+          } else {
+            anthropicMessages[i] = { role: "user", content: baseText };
+          }
+          break;
+        }
+      }
+    }
+
+
     if (anthropicMessages.length === 0) {
       return new Response(
         JSON.stringify({ error: "Nenhuma mensagem válida para enviar à Michele." }),

@@ -100,6 +100,7 @@ export default function Michele() {
   const [loading, setLoading] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [planilha, setPlanilha] = useState<{ name: string; base64: string } | null>(null);
+  const [documento, setDocumento] = useState<{ name: string; base64: string; mime: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,8 +113,12 @@ export default function Michele() {
     const nameLower = f.name.toLowerCase();
     const isSheet = /\.(xlsx|xls|csv)$/.test(nameLower) ||
       /spreadsheet|excel|csv/.test(f.type);
-    if (!isImage && !isSheet) {
-      toast.error("Envie imagem (JPG/PNG/GIF/WEBP) ou planilha (.xlsx, .xls, .csv).");
+    const isDoc = /\.(pdf|txt|md|docx|doc)$/.test(nameLower) ||
+      /^application\/pdf$/.test(f.type) ||
+      /^text\//.test(f.type) ||
+      /wordprocessingml|msword/.test(f.type);
+    if (!isImage && !isSheet && !isDoc) {
+      toast.error("Envie imagem, planilha (.xlsx/.xls/.csv) ou documento (.pdf/.txt/.md/.docx).");
       return;
     }
     if (f.size > 10 * 1024 * 1024) {
@@ -123,13 +128,23 @@ export default function Michele() {
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result);
+      const b64 = result.includes(",") ? result.split(",")[1] : result;
       if (isImage) {
         setImageDataUrl(result);
         setPlanilha(null);
-      } else {
-        const b64 = result.includes(",") ? result.split(",")[1] : result;
+        setDocumento(null);
+      } else if (isSheet) {
         setPlanilha({ name: f.name, base64: b64 });
         setImageDataUrl(null);
+        setDocumento(null);
+      } else {
+        const mime = f.type || (nameLower.endsWith(".pdf") ? "application/pdf"
+          : nameLower.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : nameLower.endsWith(".doc") ? "application/msword"
+          : "text/plain");
+        setDocumento({ name: f.name, base64: b64, mime });
+        setImageDataUrl(null);
+        setPlanilha(null);
       }
     };
     reader.readAsDataURL(f);
@@ -228,15 +243,20 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if ((!text && !imageDataUrl && !planilha) || loading) return;
+    if ((!text && !imageDataUrl && !planilha && !documento) || loading) return;
 
     setLoading(true);
     const currentPlanilha = planilha;
-    const userText = text || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]` : (imageDataUrl ? "[imagem anexa]" : ""));
+    const currentDocumento = documento;
+    const userText = text
+      || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]`
+      : (currentDocumento ? `[documento: ${currentDocumento.name}]`
+      : (imageDataUrl ? "[imagem anexa]" : "")));
     const currentImage = imageDataUrl;
     setInput("");
     setImageDataUrl(null);
     setPlanilha(null);
+    setDocumento(null);
 
     // Upload da imagem (se houver) antes de pintar a mensagem
     let imagemPath: string | null = null;
@@ -276,7 +296,7 @@ export default function Michele() {
         });
       if (insUserErr) console.error(insUserErr);
 
-      // Branch: planilha → importar; senão → chat normal
+      // Branch: planilha → importar; senão → chat normal (com doc opcional)
       let reply: string | undefined;
       if (currentPlanilha) {
         const { data, error } = await supabase.functions.invoke("michele-importar-planilha", {
@@ -290,7 +310,13 @@ export default function Michele() {
         }
       } else {
         const { data, error } = await supabase.functions.invoke("michele-chat", {
-          body: { messages: next, image: currentImage },
+          body: {
+            messages: next,
+            image: currentImage,
+            documento: currentDocumento
+              ? { name: currentDocumento.name, base64: currentDocumento.base64, mime: currentDocumento.mime }
+              : undefined,
+          },
         });
         if (error) throw error;
         reply = (data as { text?: string; error?: string })?.text;
@@ -506,11 +532,22 @@ export default function Michele() {
             </Button>
           </div>
         )}
+        {documento && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <Paperclip className="h-5 w-5 text-primary" />
+            <span className="text-xs text-foreground flex-1 truncate">
+              📄 Documento: <strong>{documento.name}</strong>
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setDocumento(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mt-3 flex gap-2 items-end">
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp,.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            accept="image/jpeg,image/png,image/gif,image/webp,.xlsx,.xls,.csv,.pdf,.txt,.md,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
             className="hidden"
             onChange={handleFile}
           />
@@ -521,7 +558,7 @@ export default function Michele() {
             className="h-[60px] w-[60px] shrink-0"
             disabled={loading}
             onClick={() => fileInputRef.current?.click()}
-            title="Anexar imagem ou planilha (.xlsx, .xls, .csv)"
+            title="Anexar imagem, planilha ou documento (PDF, TXT, DOCX)"
           >
             <Paperclip className="h-5 w-5" />
           </Button>
@@ -537,7 +574,7 @@ export default function Michele() {
           />
           <Button
             onClick={handleSend}
-            disabled={loading || (!input.trim() && !imageDataUrl && !planilha)}
+            disabled={loading || (!input.trim() && !imageDataUrl && !planilha && !documento)}
             size="icon"
             className="h-[60px] w-[60px]"
           >
