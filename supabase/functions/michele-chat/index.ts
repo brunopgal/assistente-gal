@@ -421,7 +421,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Documento opcional: PDF como bloco "document"; .txt/.md/.docx como texto inline
+    // Documento opcional: extrai TEXTO de PDF/DOCX/TXT e injeta no contexto.
+    // PDF também vai como bloco "document" nativo (caso a extração falhe ou seja parcial).
     const documento = body?.documento as { name?: string; base64?: string; mime?: string } | undefined;
     if (documento?.base64 && anthropicMessages.length > 0) {
       const nameLower = (documento.name ?? "").toLowerCase();
@@ -430,9 +431,19 @@ Deno.serve(async (req) => {
       const isTxt = mime.startsWith("text/") || nameLower.endsWith(".txt") || nameLower.endsWith(".md");
       const isDocx = nameLower.endsWith(".docx") ||
         mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const isDocLegacy = nameLower.endsWith(".doc") && !isDocx;
+
+      const b64ToBytes = (b64: string) => {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+      };
 
       let docBlock: any = null;
       let inlineText: string | null = null;
+      const FALHA_MSG =
+        `\n\n[Não consegui ler o arquivo "${documento.name}", pode colar o texto ou tentar outro formato?]`;
 
       try {
         if (isPdf) {
@@ -440,26 +451,40 @@ Deno.serve(async (req) => {
             type: "document",
             source: { type: "base64", media_type: "application/pdf", data: documento.base64 },
           };
+          try {
+            const { extractText, getDocumentProxy } = await import("npm:unpdf@0.12.1");
+            const pdf = await getDocumentProxy(b64ToBytes(documento.base64));
+            const { text } = await extractText(pdf, { mergePages: true });
+            const clean = String(text ?? "").trim().slice(0, 200_000);
+            if (clean.length >= 20) {
+              inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${clean}\n--- fim do documento ---`;
+            } else {
+              inlineText = `\n\n[o PDF "${documento.name}" parece ser escaneado (imagem) — não consegui extrair texto. Vou tentar interpretar como documento; se não der, me cole o texto.]`;
+            }
+          } catch (e) {
+            console.error("Erro extraindo texto do PDF:", e);
+          }
         } else if (isTxt) {
-          const bin = atob(documento.base64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const text = new TextDecoder("utf-8").decode(bytes).slice(0, 200_000);
+          const text = new TextDecoder("utf-8").decode(b64ToBytes(documento.base64)).slice(0, 200_000);
           inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${text}\n--- fim do documento ---`;
         } else if (isDocx) {
-          const mammoth = await import("https://esm.sh/mammoth@1.8.0?target=deno");
-          const bin = atob(documento.base64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const mammoth = await import("npm:mammoth@1.8.0");
+          const bytes = b64ToBytes(documento.base64);
           const result = await (mammoth as any).extractRawText({ arrayBuffer: bytes.buffer });
-          const text = String(result?.value ?? "").slice(0, 200_000);
-          inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${text}\n--- fim do documento ---`;
+          const text = String(result?.value ?? "").trim().slice(0, 200_000);
+          if (text.length === 0) {
+            inlineText = FALHA_MSG;
+          } else {
+            inlineText = `\n\n--- conteúdo do documento "${documento.name}" ---\n${text}\n--- fim do documento ---`;
+          }
+        } else if (isDocLegacy) {
+          inlineText = `\n\n[o arquivo "${documento.name}" está no formato antigo .doc, que não consigo ler. Salve como .docx ou cole o texto.]`;
         } else {
           inlineText = `\n\n[documento "${documento.name}" anexo — formato não suportado para leitura automática]`;
         }
       } catch (e) {
         console.error("Erro processando documento:", e);
-        inlineText = `\n\n[falha ao ler o documento "${documento.name}"]`;
+        inlineText = FALHA_MSG;
       }
 
       for (let i = anthropicMessages.length - 1; i >= 0; i--) {
@@ -479,6 +504,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
 
     if (anthropicMessages.length === 0) {
