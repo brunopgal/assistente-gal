@@ -228,15 +228,17 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if ((!text && !imageDataUrl) || loading) return;
+    if ((!text && !imageDataUrl && !planilha) || loading) return;
 
     setLoading(true);
-    const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
+    const currentPlanilha = planilha;
+    const userText = text || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]` : (imageDataUrl ? "[imagem anexa]" : ""));
     const currentImage = imageDataUrl;
     setInput("");
     setImageDataUrl(null);
+    setPlanilha(null);
 
-    // Upload da imagem (se houver) antes de pintar a mensagem, para já ter URL persistida
+    // Upload da imagem (se houver) antes de pintar a mensagem
     let imagemPath: string | null = null;
     if (currentImage) {
       imagemPath = await uploadImagem(currentImage);
@@ -274,18 +276,30 @@ export default function Michele() {
         });
       if (insUserErr) console.error(insUserErr);
 
-      // Call Michele
-      const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: next, image: currentImage },
-      });
-      if (error) throw error;
-      const reply = (data as { text?: string; error?: string })?.text;
-      if (!reply) {
-        const errMsg = (data as { error?: string })?.error ?? "Sem resposta da Michele.";
-        toast.error(errMsg);
-        return;
+      // Branch: planilha → importar; senão → chat normal
+      let reply: string | undefined;
+      if (currentPlanilha) {
+        const { data, error } = await supabase.functions.invoke("michele-importar-planilha", {
+          body: { base64: currentPlanilha.base64, filename: currentPlanilha.name },
+        });
+        if (error) throw error;
+        reply = (data as { text?: string; error?: string })?.text;
+        if (!reply) {
+          toast.error((data as { error?: string })?.error ?? "Falha ao importar planilha.");
+          return;
+        }
+      } else {
+        const { data, error } = await supabase.functions.invoke("michele-chat", {
+          body: { messages: next, image: currentImage },
+        });
+        if (error) throw error;
+        reply = (data as { text?: string; error?: string })?.text;
+        if (!reply) {
+          toast.error((data as { error?: string })?.error ?? "Sem resposta da Michele.");
+          return;
+        }
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
 
       // Parse acao/memoria from reply and persist with status
       const { memoria } = parseMemoria(reply);
