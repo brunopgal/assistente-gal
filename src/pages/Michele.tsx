@@ -692,6 +692,15 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
     push("Construtora", "codigoConstrutora");
     push("Obra atual", "codigoObraAtual");
     push("Anexar à observação", "observacoes");
+  } else if (tipo === "cadastrar_obras_lote") {
+    const novas = Array.isArray((dados as any).novas) ? (dados as any).novas : [];
+    const dup = Array.isArray((dados as any).duplicatas_resumo) ? (dados as any).duplicatas_resumo : [];
+    entries.push({ label: "Novas obras", value: String(novas.length) });
+    if (dup.length > 0) entries.push({ label: "Possíveis duplicatas", value: String(dup.length) });
+    const amostra = novas.slice(0, 8).map((o: any) =>
+      `${o.nome ?? "—"}${o.construtora ? ` (${o.construtora})` : ""}${o.cidade ? ` · ${o.cidade}` : ""}`,
+    ).join("\n");
+    if (amostra) entries.push({ label: "Amostra", value: amostra + (novas.length > 8 ? `\n…+${novas.length - 8}` : "") });
   } else {
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
