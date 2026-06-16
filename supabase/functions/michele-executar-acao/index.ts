@@ -9,6 +9,7 @@ const corsHeaders = {
 const ALLOWED = new Set([
   "criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra",
   "cadastrar_construtora", "cadastrar_contato", "atualizar_contato",
+  "cadastrar_obras_lote",
 ]);
 
 const OBRA_FIELDS = new Set([
@@ -95,6 +96,134 @@ Deno.serve(async (req) => {
 
   if (!ALLOWED.has(tipo)) {
     return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
+  }
+
+  // cadastrar_obras_lote: cadastra várias obras de uma vez,
+  // criando construtoras que não existem por nome (fuzzy).
+  if (tipo === "cadastrar_obras_lote") {
+    const novas = Array.isArray((dados as any).novas) ? (dados as any).novas : [];
+    if (novas.length === 0) return json({ error: "Nenhuma obra para cadastrar" }, 400);
+
+    // Próximo OBRA000000000
+    const { data: ultObras } = await sb
+      .from("obras").select("codigoObra")
+      .ilike("codigoObra", "OBRA%")
+      .order("codigoObra", { ascending: false }).limit(50);
+    let maxObra = 0;
+    for (const r of (ultObras as any[]) ?? []) {
+      const m = /OBRA0*(\d+)/i.exec(String(r.codigoObra ?? ""));
+      if (m) maxObra = Math.max(maxObra, Number(m[1]));
+    }
+
+    // Próximo CT
+    const { data: ultCT } = await sb
+      .from("construtoras").select("codigo")
+      .ilike("codigo", "CT%")
+      .order("codigo", { ascending: false }).limit(50);
+    let maxCT = 0;
+    for (const r of (ultCT as any[]) ?? []) {
+      const m = /CT0*(\d+)/i.exec(String(r.codigo ?? ""));
+      if (m) maxCT = Math.max(maxCT, Number(m[1]));
+    }
+
+    const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    const cacheCT = new Map<string, string>(); // nomeNormalizado -> codigo
+    const obrasInseridas: { codigoObra: string; nome: string }[] = [];
+    const construtorasCriadas: { codigo: string; nome: string }[] = [];
+    const erros: string[] = [];
+
+    for (const item of novas) {
+      try {
+        const nome = String(item?.nome ?? "").trim();
+        if (!nome) continue;
+
+        let codigoConstrutora: string | null = null;
+        const cNome = String(item?.construtora ?? "").trim();
+        if (cNome) {
+          const key = cNome.toLowerCase();
+          if (cacheCT.has(key)) {
+            codigoConstrutora = cacheCT.get(key)!;
+          } else {
+            // fuzzy
+            const { data: matches } = await sb.rpc("buscar_construtoras_fuzzy", {
+              termo: cNome, limite: 1,
+            });
+            const top = ((matches as any[]) ?? [])[0];
+            if (top && (top.score ?? 0) >= 0.6) {
+              codigoConstrutora = top.codigo;
+            } else {
+              maxCT += 1;
+              const novoCT = "CT" + String(maxCT).padStart(9, "0");
+              const { error: ctErr } = await sb.from("construtoras").insert({
+                codigo: novoCT, nome: cNome, status: "Prospecção",
+              });
+              if (ctErr) {
+                erros.push(`construtora "${cNome}": ${ctErr.message}`);
+                maxCT -= 1;
+              } else {
+                codigoConstrutora = novoCT;
+                construtorasCriadas.push({ codigo: novoCT, nome: cNome });
+              }
+            }
+            if (codigoConstrutora) cacheCT.set(key, codigoConstrutora);
+          }
+        }
+
+        maxObra += 1;
+        const novoCodigo = "OBRA" + String(maxObra).padStart(9, "0");
+        const insert: Record<string, unknown> = {
+          codigoObra: novoCodigo,
+          gerenciada_michele: true,
+          dataCadastro: hoje,
+          nome,
+        };
+        if (cNome) insert.construtora = cNome;
+        if (codigoConstrutora) insert.codigoConstrutora = codigoConstrutora;
+        for (const k of ["cidade", "localizacao", "responsavel", "telefone", "email", "produtoOferecido", "estagioObra", "observacoes"]) {
+          const v = (item as any)[k];
+          if (v !== undefined && v !== null && String(v).trim() !== "") insert[k] = v;
+        }
+
+        const { error: insErr } = await sb.from("obras").insert(insert);
+        if (insErr) {
+          erros.push(`obra "${nome}": ${insErr.message}`);
+          maxObra -= 1;
+        } else {
+          obrasInseridas.push({ codigoObra: novoCodigo, nome });
+          await sb.from("log_automacao").insert({
+            codigoObra: novoCodigo, tipo_acao: "cadastrar_obra",
+            descricao: `Obra cadastrada via planilha: ${nome}`,
+            sucesso: true, dados_json: item, criado_por: "michele",
+          });
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        erros.push(msg);
+      }
+    }
+
+    await sb.from("log_automacao").insert({
+      tipo_acao: "cadastrar_obras_lote",
+      descricao: `Lote: ${obrasInseridas.length} obra(s) cadastrada(s), ${construtorasCriadas.length} construtora(s) criada(s)${erros.length ? `, ${erros.length} erro(s)` : ""}`,
+      sucesso: erros.length === 0,
+      mensagem_erro: erros.length ? erros.slice(0, 10).join(" | ") : null,
+      dados_json: { obras: obrasInseridas, construtoras: construtorasCriadas, erros },
+      criado_por: "michele",
+    });
+
+    const partes = [
+      `${obrasInseridas.length} obra(s) cadastrada(s)`,
+      construtorasCriadas.length > 0 ? `${construtorasCriadas.length} construtora(s) nova(s)` : null,
+      erros.length > 0 ? `${erros.length} erro(s)` : null,
+    ].filter(Boolean).join(" · ");
+
+    return json({
+      ok: erros.length === 0,
+      resumo: `Lote processado: ${partes}.`,
+      error: erros.length > 0 ? erros.slice(0, 5).join(" | ") : undefined,
+      obras: obrasInseridas,
+      construtoras: construtorasCriadas,
+    });
   }
 
   // cadastrar_obra: gera novo codigoObra e insere

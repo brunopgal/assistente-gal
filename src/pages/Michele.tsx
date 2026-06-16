@@ -12,7 +12,7 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato"]);
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote"]);
 
 function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
   const m = content.match(MEMORIA_RE);
@@ -66,6 +66,7 @@ const ACAO_LABEL: Record<string, string> = {
   cadastrar_construtora: "Cadastrar nova construtora",
   cadastrar_contato: "Cadastrar novo contato",
   atualizar_contato: "Atualizar contato",
+  cadastrar_obras_lote: "Cadastrar obras em lote",
 };
 
 
@@ -98,6 +99,7 @@ export default function Michele() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [planilha, setPlanilha] = useState<{ name: string; base64: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,16 +108,30 @@ export default function Michele() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (!/^image\/(jpeg|png|gif|webp)$/.test(f.type)) {
-      toast.error("Use JPG, PNG, GIF ou WEBP.");
+    const isImage = /^image\/(jpeg|png|gif|webp)$/.test(f.type);
+    const nameLower = f.name.toLowerCase();
+    const isSheet = /\.(xlsx|xls|csv)$/.test(nameLower) ||
+      /spreadsheet|excel|csv/.test(f.type);
+    if (!isImage && !isSheet) {
+      toast.error("Envie imagem (JPG/PNG/GIF/WEBP) ou planilha (.xlsx, .xls, .csv).");
       return;
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx 5MB).");
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 10MB).");
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setImageDataUrl(String(reader.result));
+    reader.onload = () => {
+      const result = String(reader.result);
+      if (isImage) {
+        setImageDataUrl(result);
+        setPlanilha(null);
+      } else {
+        const b64 = result.includes(",") ? result.split(",")[1] : result;
+        setPlanilha({ name: f.name, base64: b64 });
+        setImageDataUrl(null);
+      }
+    };
     reader.readAsDataURL(f);
   }
 
@@ -212,15 +228,17 @@ export default function Michele() {
 
   async function handleSend() {
     const text = input.trim();
-    if ((!text && !imageDataUrl) || loading) return;
+    if ((!text && !imageDataUrl && !planilha) || loading) return;
 
     setLoading(true);
-    const userText = text || (imageDataUrl ? "[imagem anexa]" : "");
+    const currentPlanilha = planilha;
+    const userText = text || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]` : (imageDataUrl ? "[imagem anexa]" : ""));
     const currentImage = imageDataUrl;
     setInput("");
     setImageDataUrl(null);
+    setPlanilha(null);
 
-    // Upload da imagem (se houver) antes de pintar a mensagem, para já ter URL persistida
+    // Upload da imagem (se houver) antes de pintar a mensagem
     let imagemPath: string | null = null;
     if (currentImage) {
       imagemPath = await uploadImagem(currentImage);
@@ -258,22 +276,35 @@ export default function Michele() {
         });
       if (insUserErr) console.error(insUserErr);
 
-      // Call Michele
-      const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: next, image: currentImage },
-      });
-      if (error) throw error;
-      const reply = (data as { text?: string; error?: string })?.text;
-      if (!reply) {
-        const errMsg = (data as { error?: string })?.error ?? "Sem resposta da Michele.";
-        toast.error(errMsg);
-        return;
+      // Branch: planilha → importar; senão → chat normal
+      let reply: string | undefined;
+      if (currentPlanilha) {
+        const { data, error } = await supabase.functions.invoke("michele-importar-planilha", {
+          body: { base64: currentPlanilha.base64, filename: currentPlanilha.name },
+        });
+        if (error) throw error;
+        reply = (data as { text?: string; error?: string })?.text;
+        if (!reply) {
+          toast.error((data as { error?: string })?.error ?? "Falha ao importar planilha.");
+          return;
+        }
+      } else {
+        const { data, error } = await supabase.functions.invoke("michele-chat", {
+          body: { messages: next, image: currentImage },
+        });
+        if (error) throw error;
+        reply = (data as { text?: string; error?: string })?.text;
+        if (!reply) {
+          toast.error((data as { error?: string })?.error ?? "Sem resposta da Michele.");
+          return;
+        }
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
 
       // Parse acao/memoria from reply and persist with status
-      const { memoria } = parseMemoria(reply);
-      const { acao } = parseAcao(reply);
+      const replyText = reply!;
+      const { memoria } = parseMemoria(replyText);
+      const { acao } = parseAcao(replyText);
       const acao_status = acao ? "pendente" : null;
       const acao_dados = acao ? { tipo: acao.tipo, dados: acao.dados } : null;
       const memoria_status = memoria ? "pendente" : null;
@@ -284,7 +315,7 @@ export default function Michele() {
         .insert({
           conversa_id: conversaId,
           role: "assistant",
-          content: reply,
+          content: replyText,
           acao_status,
           acao_dados: acao_dados as unknown as never,
           memoria_status,
@@ -464,11 +495,22 @@ export default function Michele() {
             </Button>
           </div>
         )}
+        {planilha && (
+          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <Paperclip className="h-5 w-5 text-primary" />
+            <span className="text-xs text-foreground flex-1 truncate">
+              📊 Planilha: <strong>{planilha.name}</strong> — vou ler e organizar.
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setPlanilha(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mt-3 flex gap-2 items-end">
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept="image/jpeg,image/png,image/gif,image/webp,.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
             className="hidden"
             onChange={handleFile}
           />
@@ -479,7 +521,7 @@ export default function Michele() {
             className="h-[60px] w-[60px] shrink-0"
             disabled={loading}
             onClick={() => fileInputRef.current?.click()}
-            title="Anexar imagem"
+            title="Anexar imagem ou planilha (.xlsx, .xls, .csv)"
           >
             <Paperclip className="h-5 w-5" />
           </Button>
@@ -495,7 +537,7 @@ export default function Michele() {
           />
           <Button
             onClick={handleSend}
-            disabled={loading || (!input.trim() && !imageDataUrl)}
+            disabled={loading || (!input.trim() && !imageDataUrl && !planilha)}
             size="icon"
             className="h-[60px] w-[60px]"
           >
@@ -650,6 +692,15 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
     push("Construtora", "codigoConstrutora");
     push("Obra atual", "codigoObraAtual");
     push("Anexar à observação", "observacoes");
+  } else if (tipo === "cadastrar_obras_lote") {
+    const novas = Array.isArray((dados as any).novas) ? (dados as any).novas : [];
+    const dup = Array.isArray((dados as any).duplicatas_resumo) ? (dados as any).duplicatas_resumo : [];
+    entries.push({ label: "Novas obras", value: String(novas.length) });
+    if (dup.length > 0) entries.push({ label: "Possíveis duplicatas", value: String(dup.length) });
+    const amostra = novas.slice(0, 8).map((o: any) =>
+      `${o.nome ?? "—"}${o.construtora ? ` (${o.construtora})` : ""}${o.cidade ? ` · ${o.cidade}` : ""}`,
+    ).join("\n");
+    if (amostra) entries.push({ label: "Amostra", value: amostra + (novas.length > 8 ? `\n…+${novas.length - 8}` : "") });
   } else {
     for (const [k, v] of Object.entries(dados)) {
       if (k === "codigoObra") continue;
