@@ -166,6 +166,9 @@ export default function Pessoas() {
             <Plus className="h-4 w-4 mr-1" /> Nova pessoa
           </Button>
         </div>
+      </div>
+
+
 
 
       {/* Filtros */}
