@@ -37,11 +37,14 @@ import {
   CalendarClock,
   ClipboardList,
   Info,
+  Download,
 } from "lucide-react";
 import ObraInfoDialog from "@/components/ObraInfoDialog";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
 import { normalizeText } from "@/lib/normalize";
+import { exportarParaExcel } from "@/lib/exportXlsx";
+
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
@@ -175,13 +178,27 @@ export default function Obras() {
             Acompanhe todas as obras e abra o histórico de atividades de cada uma
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <a href={SHEETS_EXTERNAL_URL} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4 mr-1" />
-            Abrir planilha
-          </a>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportarParaExcel(filtradas as unknown as Record<string, unknown>[], "obras", "Obras")}
+            disabled={loading || obras.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Exportar Excel
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={SHEETS_EXTERNAL_URL} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4 mr-1" />
+              Abrir planilha
+            </a>
+          </Button>
+        </div>
       </div>
+
+
+
 
       <Card>
         <CardContent className="p-4">

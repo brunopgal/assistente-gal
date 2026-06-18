@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Edit3, Trash2, Loader2, Users } from "lucide-react";
+import { Plus, Search, Edit3, Trash2, Loader2, Users, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarPessoas, criarPessoa, atualizarPessoa, excluirPessoa,
@@ -22,6 +22,8 @@ import {
 } from "@/services/pessoasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
 import { normalizeText } from "@/lib/normalize";
+import { exportarParaExcel } from "@/lib/exportXlsx";
+
 
 const EMPTY: Pessoa = {
   codigoConstrutora: "",
@@ -134,10 +136,40 @@ export default function Pessoas() {
           <h1 className="text-2xl font-bold">Pessoas</h1>
           <Badge variant="secondary">{pessoas.length}</Badge>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Nova pessoa
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const { listarObras } = await import("@/services/obrasService");
+                const obras = await listarObras().catch(() => []);
+                const obraByCodigo = new Map<string, string>();
+                obras.forEach((o) => {
+                  const key = o.codigoObra || o.id || "";
+                  if (key) obraByCodigo.set(key, o.nome || "");
+                });
+                const rows = filtradas.map((p) => ({
+                  ...p,
+                  construtoraNome: ctByCodigo.get(p.codigoConstrutora)?.nome || "",
+                  obraNome: obraByCodigo.get(p.codigoObraAtual || "") || "",
+                }));
+                exportarParaExcel(rows as unknown as Record<string, unknown>[], "contatos", "Contatos");
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+            disabled={loading || pessoas.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1" /> Exportar Excel
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> Nova pessoa
+          </Button>
+        </div>
       </div>
+
+
+
 
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap items-center">

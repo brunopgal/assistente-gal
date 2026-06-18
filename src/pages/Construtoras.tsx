@@ -30,11 +30,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
 import { normalizeText } from "@/lib/normalize";
+import { exportarParaExcel } from "@/lib/exportXlsx";
+
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
 const STATUS_OPCOES = ["Já Cliente", "Prospecção"] as const;
@@ -325,13 +327,24 @@ export default function Construtoras() {
             Cadastre construtoras, produtos oferecidos e acompanhe atividades, visitas e reuniões
           </p>
         </div>
-        <Dialog open={openNew} onOpenChange={setOpenNew}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-1" /> Nova Construtora
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportarParaExcel(filtradas as unknown as Record<string, unknown>[], "construtoras", "Construtoras")}
+            disabled={loading || items.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Exportar Excel
+          </Button>
+          <Dialog open={openNew} onOpenChange={setOpenNew}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-1" /> Nova Construtora
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+
             <DialogHeader>
               <DialogTitle>Nova Construtora</DialogTitle>
             </DialogHeader>
@@ -402,8 +415,10 @@ export default function Construtoras() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
+
 
       <Card>
         <CardContent className="p-4">
