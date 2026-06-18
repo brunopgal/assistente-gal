@@ -193,6 +193,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (req.method === 'DELETE') {
+      if (!isIdAction) throw new Error('ID da obra obrigatório');
+      const id = decodeURIComponent(action);
+      const res = await fetch(`${REST}?codigoObra=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers: sbHeaders(),
+      });
+      if (!res.ok) throw new Error(`Supabase error: ${await res.text()}`);
+      // Limpa coordenadas associadas (best effort)
+      try {
+        await fetch(`${SUPA_URL}/rest/v1/obras_coordenadas?codigoObra=eq.${encodeURIComponent(id)}`, {
+          method: 'DELETE', headers: sbHeaders(),
+        });
+      } catch (_) { /* ignore */ }
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,6 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listarObras, type Obra } from "@/services/obrasService";
+import { listarObras, excluirObra, type Obra } from "@/services/obrasService";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +32,7 @@ import {
   ExternalLink,
   ListChecks,
   Pencil,
+  Trash2,
   FileText,
   CalendarClock,
   ClipboardList,
@@ -83,6 +88,8 @@ export default function Obras() {
   const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
   const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Obra | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -372,6 +379,17 @@ export default function Obras() {
                                 Atividades
                               </Link>
                             </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmDelete(o)}
+                              title="Excluir obra"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -397,6 +415,46 @@ export default function Obras() {
         obraId={infoObra?.codigoObra || infoObra?.id || ""}
         obraInicial={infoObra}
       />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && !deleting && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A obra{" "}
+              <strong>{confirmDelete?.nome || confirmDelete?.codigoObra}</strong> será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!confirmDelete) return;
+                const id = confirmDelete.id || confirmDelete.codigoObra || "";
+                setDeleting(true);
+                try {
+                  await excluirObra(id);
+                  setObras((prev) => prev.filter((x) => (x.id || x.codigoObra) !== id));
+                  toast({ title: "Obra excluída" });
+                  setConfirmDelete(null);
+                } catch (err) {
+                  toast({
+                    title: "Erro ao excluir",
+                    description: err instanceof Error ? err.message : "Tente novamente",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
