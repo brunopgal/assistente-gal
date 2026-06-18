@@ -30,11 +30,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
 import { normalizeText } from "@/lib/normalize";
+import { exportarParaExcel } from "@/lib/exportXlsx";
+
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
 const STATUS_OPCOES = ["Já Cliente", "Prospecção"] as const;
