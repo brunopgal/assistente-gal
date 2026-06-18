@@ -178,13 +178,24 @@ export default function Obras() {
             Acompanhe todas as obras e abra o histórico de atividades de cada uma
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <a href={SHEETS_EXTERNAL_URL} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4 mr-1" />
-            Abrir planilha
-          </a>
-        </Button>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportarParaExcel(filtradas as unknown as Record<string, unknown>[], "obras", "Obras")}
+            disabled={loading || obras.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Exportar Excel
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={SHEETS_EXTERNAL_URL} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4 mr-1" />
+              Abrir planilha
+            </a>
+          </Button>
+        </div>
+
 
       <Card>
         <CardContent className="p-4">
