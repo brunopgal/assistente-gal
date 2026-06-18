@@ -1,6 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listarObras, type Obra } from "@/services/obrasService";
+import { listarObras, excluirObra, type Obra } from "@/services/obrasService";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +32,7 @@ import {
   ExternalLink,
   ListChecks,
   Pencil,
+  Trash2,
   FileText,
   CalendarClock,
   ClipboardList,

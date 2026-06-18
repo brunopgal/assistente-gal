@@ -67,6 +67,10 @@ export async function listarObras(): Promise<Obra[]> {
   return request("GET");
 }
 
+export async function excluirObra(id: string): Promise<void> {
+  await request("DELETE", undefined, id);
+}
+
 export async function limparFollowUp(id: string): Promise<void> {
   await request("PATCH", { field: "proximoContato", value: "" }, id);
 }
