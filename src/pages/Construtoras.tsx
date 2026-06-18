@@ -415,8 +415,10 @@ export default function Construtoras() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
+
 
       <Card>
         <CardContent className="p-4">
