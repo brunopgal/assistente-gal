@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Edit3, Trash2, Loader2, Users } from "lucide-react";
+import { Plus, Search, Edit3, Trash2, Loader2, Users, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarPessoas, criarPessoa, atualizarPessoa, excluirPessoa,
@@ -22,6 +22,8 @@ import {
 } from "@/services/pessoasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
 import { normalizeText } from "@/lib/normalize";
+import { exportarParaExcel } from "@/lib/exportXlsx";
+
 
 const EMPTY: Pessoa = {
   codigoConstrutora: "",
