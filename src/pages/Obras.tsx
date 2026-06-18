@@ -379,6 +379,17 @@ export default function Obras() {
                                 Atividades
                               </Link>
                             </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmDelete(o)}
+                              title="Excluir obra"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -404,6 +415,46 @@ export default function Obras() {
         obraId={infoObra?.codigoObra || infoObra?.id || ""}
         obraInicial={infoObra}
       />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && !deleting && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A obra{" "}
+              <strong>{confirmDelete?.nome || confirmDelete?.codigoObra}</strong> será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!confirmDelete) return;
+                const id = confirmDelete.id || confirmDelete.codigoObra || "";
+                setDeleting(true);
+                try {
+                  await excluirObra(id);
+                  setObras((prev) => prev.filter((x) => (x.id || x.codigoObra) !== id));
+                  toast({ title: "Obra excluída" });
+                  setConfirmDelete(null);
+                } catch (err) {
+                  toast({
+                    title: "Erro ao excluir",
+                    description: err instanceof Error ? err.message : "Tente novamente",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
