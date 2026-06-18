@@ -88,6 +88,8 @@ export default function Obras() {
   const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
   const [pautaObra, setPautaObra] = useState<Obra | null>(null);
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Obra | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
