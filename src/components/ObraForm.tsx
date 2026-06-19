@@ -36,17 +36,21 @@ const STATUS_OPTIONS = [
   "Perdido",
 ] as const;
 
-const CLASSIFICACAO_OPTIONS = ["Baixo", "Médio", "Médio/Alto", "Alto"] as const;
+const CLASSIFICACAO_OPTIONS = [
+  "Baixo Padrão",
+  "Médio Padrão",
+  "Médio/Alto Padrão",
+  "Alto Padrão",
+] as const;
 const PRODUTO_OPTIONS = ["IMAB", "RHODEN", "PRADO", "Nenhum"] as const;
 const VISITA_OPTIONS = ["Visitado", "Não visitado"] as const;
 const REUNIAO_OPTIONS = ["Sim", "Não"] as const;
 const ESTAGIO_OPTIONS = [
-  "Fundação",
-  "Estrutura",
-  "Alvenaria",
-  "Acabamento",
+  "Não Iniciado",
+  "Inicial",
+  "Médio",
+  "Final",
   "Finalizado",
-  "Não iniciado",
 ] as const;
 
 const obraSchema = z.object({

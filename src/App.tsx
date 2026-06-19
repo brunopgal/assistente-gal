@@ -19,6 +19,7 @@ import ProspeccaoIA from "./pages/ProspeccaoIA";
 import Pessoas from "./pages/Pessoas";
 import Relatorios from "./pages/Relatorios";
 import Michele from "./pages/Michele";
+import MicheleChat from "./pages/MicheleChat";
 import Prospeccao from "./pages/Prospeccao";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,7 @@ const App = () => (
                     <Route path="/pessoas" element={<Pessoas />} />
                     <Route path="/relatorios" element={<Relatorios />} />
                     <Route path="/michele" element={<Michele />} />
+                    <Route path="/michele/chat" element={<MicheleChat />} />
                     <Route path="/prospeccao" element={<Prospeccao />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />

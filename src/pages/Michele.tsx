@@ -1,1161 +1,604 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Loader2, Plus, MessageSquare, BookmarkPlus, X, Check, Zap, AlertTriangle, Paperclip } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
+import {
+  Bot, MessageSquare, Save, Loader2, RefreshCw, Clock,
+  Trash2, Eye, EyeOff, Shield, Zap, Brain, AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-type MemoriaTipo = "preferencia" | "cliente" | "correcao" | "geral";
-type MemoriaSugerida = { tipo: MemoriaTipo; escopo: string; conteudo: string };
-type AcaoTipo = "criar_followup" | "mudar_fase" | "atualizar_obra" | string;
-type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
-const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
-const PLANO_RE = /\[PLANO\]([\s\S]*?)\[\/PLANO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote", "enviar_email"]);
-
-type PlanoAcao = { tipo: string; dados: Record<string, unknown> };
-type PlanoSugerido = { titulo: string; resumo?: string; acoes: PlanoAcao[] };
-
-function parsePlano(content: string): { texto: string; plano: PlanoSugerido | null } {
-  const m = content.match(PLANO_RE);
-  if (!m) return { texto: content, plano: null };
-  const bloco = m[1];
-  const tituloMatch = /titulo\s*:\s*(.+)/i.exec(bloco);
-  const resumoMatch = /resumo\s*:\s*(.+)/i.exec(bloco);
-  const acoesMatch = /acoes\s*:\s*([\s\S]+)/i.exec(bloco);
-  const titulo = tituloMatch ? tituloMatch[1].trim().replace(/^['"]|['"]$/g, "") : "Plano";
-  const resumo = resumoMatch ? resumoMatch[1].trim().replace(/^['"]|['"]$/g, "") : "";
-  let acoes: PlanoAcao[] = [];
-  if (acoesMatch) {
-    const raw = acoesMatch[1].trim();
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) acoes = parsed;
-    } catch {
-      const jm = raw.match(/\[[\s\S]*\]/);
-      if (jm) {
-        try {
-          const parsed = JSON.parse(jm[0]);
-          if (Array.isArray(parsed)) acoes = parsed;
-        } catch { /* ignore */ }
-      }
-    }
-  }
-  const texto = content.replace(PLANO_RE, "").trim();
-  if (acoes.length === 0) return { texto: content, plano: null };
-  return { texto, plano: { titulo, resumo, acoes } };
-}
-
-
-function parseMemoria(content: string): { texto: string; memoria: MemoriaSugerida | null } {
-  const m = content.match(MEMORIA_RE);
-  if (!m) return { texto: content, memoria: null };
-  const bloco = m[1];
-  const get = (k: string) => {
-    const r = new RegExp(`${k}\\s*:\\s*(.+)`, "i").exec(bloco);
-    return r ? r[1].trim().replace(/^['"]|['"]$/g, "") : "";
-  };
-  const tipoRaw = get("tipo").toLowerCase() as MemoriaTipo;
-  const tipo: MemoriaTipo = ["preferencia", "cliente", "correcao", "geral"].includes(tipoRaw)
-    ? tipoRaw
-    : "geral";
-  const escopo = get("escopo") || "global";
-  const conteudo = get("conteudo");
-  const texto = content.replace(MEMORIA_RE, "").trim();
-  if (!conteudo) return { texto: content, memoria: null };
-  return { texto, memoria: { tipo, escopo, conteudo } };
-}
-
-function parseAcao(content: string): { texto: string; acao: AcaoSugerida | null } {
-  const m = content.match(ACAO_RE);
-  if (!m) return { texto: content, acao: null };
-  const bloco = m[1];
-  const tipoMatch = /tipo\s*:\s*(.+)/i.exec(bloco);
-  const dadosMatch = /dados\s*:\s*([\s\S]+)/i.exec(bloco);
-  const tipo = tipoMatch ? tipoMatch[1].trim() : "";
-  let dados: Record<string, unknown> = {};
-  if (dadosMatch) {
-    const raw = dadosMatch[1].trim();
-    try {
-      dados = JSON.parse(raw);
-    } catch {
-      // try extracting just the JSON object
-      const jm = raw.match(/\{[\s\S]*\}/);
-      if (jm) {
-        try { dados = JSON.parse(jm[0]); } catch { dados = {}; }
-      }
-    }
-  }
-  const texto = content.replace(ACAO_RE, "").trim();
-  if (!tipo) return { texto: content, acao: null };
-  return { texto, acao: { tipo, dados } };
-}
-
-const ACAO_LABEL: Record<string, string> = {
-  criar_followup: "Criar follow-up",
-  mudar_fase: "Mudar fase da obra",
-  atualizar_obra: "Atualizar dados da obra",
-  cadastrar_obra: "Cadastrar nova obra",
-  cadastrar_construtora: "Cadastrar nova construtora",
-  cadastrar_contato: "Cadastrar novo contato",
-  atualizar_contato: "Atualizar contato",
-  cadastrar_obras_lote: "Cadastrar obras em lote",
-  enviar_email: "Enviar e-mail de prospecção",
+type Memoria = {
+  id: string;
+  tipo: "preferencia" | "cliente" | "correcao" | "geral";
+  escopo: string;
+  conteudo: string;
+  ativo: boolean;
+  created_at: string;
 };
 
+const DIAS_SEMANA = [
+  { key: "seg", label: "Seg" },
+  { key: "ter", label: "Ter" },
+  { key: "qua", label: "Qua" },
+  { key: "qui", label: "Qui" },
+  { key: "sex", label: "Sex" },
+  { key: "sab", label: "Sáb" },
+  { key: "dom", label: "Dom" },
+];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-type AcaoStatus = "pendente" | "aprovada" | "cancelada" | null;
-type MemoriaStatus = "pendente" | "guardada" | "descartada" | null;
-type Message = {
-  id?: string;
-  role: "user" | "assistant";
-  content: string;
-  acao_status?: AcaoStatus;
-  acao_dados?: { tipo: string; dados: Record<string, unknown> } | null;
-  memoria_status?: MemoriaStatus;
-  memoria_dados?: MemoriaSugerida | null;
-  imagem_url?: string | null;
-};
-type Conversa = { id: string; titulo: string; updated_at: string };
-
-const ACTIVE_KEY = "michele:active-conversa";
-
-function makeTitulo(text: string) {
-  const t = text.trim().replace(/\s+/g, " ");
-  return t.length > 40 ? t.slice(0, 40) + "…" : t || "Nova conversa";
+async function getConfig(chave: string): Promise<string> {
+  const { data } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", chave)
+    .maybeSingle();
+  return data?.valor ?? "";
 }
 
-export default function Michele() {
-  const [conversas, setConversas] = useState<Conversa[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
-  const [planilha, setPlanilha] = useState<{ name: string; base64: string } | null>(null);
-  const [documento, setDocumento] = useState<{ name: string; base64: string; mime: string } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+async function setConfig(chave: string, valor: string): Promise<void> {
+  const { error } = await supabase
+    .from("configuracoes")
+    .upsert({ chave, valor }, { onConflict: "chave" });
+  if (error) throw error;
+}
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
-    const isImage = /^image\/(jpeg|png|gif|webp)$/.test(f.type);
-    const nameLower = f.name.toLowerCase();
-    const isSheet = /\.(xlsx|xls|csv)$/.test(nameLower) ||
-      /spreadsheet|excel|csv/.test(f.type);
-    const isDoc = /\.(pdf|txt|md|docx|doc)$/.test(nameLower) ||
-      /^application\/pdf$/.test(f.type) ||
-      /^text\//.test(f.type) ||
-      /wordprocessingml|msword/.test(f.type);
-    if (!isImage && !isSheet && !isDoc) {
-      toast.error("Envie imagem, planilha (.xlsx/.xls/.csv) ou documento (.pdf/.txt/.md/.docx).");
-      return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx 10MB).");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result);
-      const b64 = result.includes(",") ? result.split(",")[1] : result;
-      if (isImage) {
-        setImageDataUrl(result);
-        setPlanilha(null);
-        setDocumento(null);
-      } else if (isSheet) {
-        setPlanilha({ name: f.name, base64: b64 });
-        setImageDataUrl(null);
-        setDocumento(null);
-      } else {
-        const mime = f.type || (nameLower.endsWith(".pdf") ? "application/pdf"
-          : nameLower.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : nameLower.endsWith(".doc") ? "application/msword"
-          : "text/plain");
-        setDocumento({ name: f.name, base64: b64, mime });
-        setImageDataUrl(null);
-        setPlanilha(null);
-      }
-    };
-    reader.readAsDataURL(f);
-  }
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [activeId]);
-
-  const loadConversas = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("conversas_michele")
-      .select("id,titulo,updated_at")
-      .order("updated_at", { ascending: false });
-    if (error) {
-      console.error(error);
-      return [] as Conversa[];
-    }
-    const list = (data ?? []) as Conversa[];
-    setConversas(list);
-    return list;
-  }, []);
-
-  const loadMessages = useCallback(async (conversaId: string) => {
-    const { data, error } = await supabase
-      .from("mensagens_michele")
-      .select("id,role,content,acao_status,acao_dados,memoria_status,memoria_dados,imagem_url")
-      .eq("conversa_id", conversaId)
-      .order("created_at", { ascending: true });
-    if (error) {
-      console.error(error);
-      setMessages([]);
-      return;
-    }
-    setMessages((data ?? []) as unknown as Message[]);
-  }, []);
-
-  // Initial load: list + restore last active conversation
-  useEffect(() => {
-    (async () => {
-      const list = await loadConversas();
-      const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
-      const pick = stored && list.find((c) => c.id === stored) ? stored : list[0]?.id ?? null;
-      if (pick) {
-        setActiveId(pick);
-        await loadMessages(pick);
-      }
-    })();
-  }, [loadConversas, loadMessages]);
-
-  function selectConversa(id: string) {
-    if (id === activeId) return;
-    setActiveId(id);
-    localStorage.setItem(ACTIVE_KEY, id);
-    loadMessages(id);
-  }
-
-  function novaConversa() {
-    setActiveId(null);
-    setMessages([]);
-    localStorage.removeItem(ACTIVE_KEY);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
-
-  async function uploadImagem(dataUrl: string): Promise<string | null> {
-    try {
-      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
-      if (!m) return null;
-      const mime = m[1];
-      const b64 = m[2];
-      const ext = mime.split("/")[1] || "png";
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: mime });
-      const { data: u } = await supabase.auth.getUser();
-      const userId = u?.user?.id ?? "anon";
-      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage
-        .from("michele-uploads")
-        .upload(path, blob, { contentType: mime, upsert: false });
-      if (error) {
-        console.error("upload error", error);
-        return null;
-      }
-      return path;
-    } catch (e) {
-      console.error("uploadImagem", e);
-      return null;
-    }
-  }
-
-  async function handleSend() {
-    const text = input.trim();
-    if ((!text && !imageDataUrl && !planilha && !documento) || loading) return;
-
-    setLoading(true);
-    const currentPlanilha = planilha;
-    const currentDocumento = documento;
-    const userText = text
-      || (currentPlanilha ? `[planilha: ${currentPlanilha.name}]`
-      : (currentDocumento ? `[documento: ${currentDocumento.name}]`
-      : (imageDataUrl ? "[imagem anexa]" : "")));
-    const currentImage = imageDataUrl;
-    setInput("");
-    setImageDataUrl(null);
-    setPlanilha(null);
-    setDocumento(null);
-
-    // Upload da imagem (se houver) antes de pintar a mensagem
-    let imagemPath: string | null = null;
-    if (currentImage) {
-      imagemPath = await uploadImagem(currentImage);
-      if (!imagemPath) toast.error("Não consegui salvar a imagem (segui sem ela).");
-    }
-
-    const userMsg: Message = { role: "user", content: userText, imagem_url: imagemPath };
-    const next: Message[] = [...messages, userMsg];
-    setMessages(next);
-
-    try {
-      // Ensure a conversation exists
-      let conversaId = activeId;
-      if (!conversaId) {
-        const { data: conv, error: convErr } = await supabase
-          .from("conversas_michele")
-          .insert({ titulo: makeTitulo(userText) })
-          .select("id,titulo,updated_at")
-          .single();
-        if (convErr || !conv) throw convErr ?? new Error("Falha ao criar conversa");
-        conversaId = conv.id;
-        setActiveId(conversaId);
-        localStorage.setItem(ACTIVE_KEY, conversaId);
-        setConversas((prev) => [conv as Conversa, ...prev]);
-      }
-
-      // Persist user message
-      const { error: insUserErr } = await supabase
-        .from("mensagens_michele")
-        .insert({
-          conversa_id: conversaId,
-          role: "user",
-          content: userText,
-          imagem_url: imagemPath,
-        });
-      if (insUserErr) console.error(insUserErr);
-
-      // Branch: planilha → importar; senão → chat normal (com doc opcional)
-      let reply: string | undefined;
-      if (currentPlanilha) {
-        const { data, error } = await supabase.functions.invoke("michele-importar-planilha", {
-          body: { base64: currentPlanilha.base64, filename: currentPlanilha.name },
-        });
-        if (error) throw error;
-        reply = (data as { text?: string; error?: string })?.text;
-        if (!reply) {
-          toast.error((data as { error?: string })?.error ?? "Falha ao importar planilha.");
-          return;
-        }
-      } else {
-        const { data, error } = await supabase.functions.invoke("michele-chat", {
-          body: {
-            messages: next,
-            image: currentImage,
-            documento: currentDocumento
-              ? { name: currentDocumento.name, base64: currentDocumento.base64, mime: currentDocumento.mime }
-              : undefined,
-          },
-        });
-        if (error) throw error;
-        reply = (data as { text?: string; error?: string })?.text;
-        if (!reply) {
-          toast.error((data as { error?: string })?.error ?? "Sem resposta da Michele.");
-          return;
-        }
-      }
-      setMessages((prev) => [...prev, { role: "assistant", content: reply! }]);
-
-      // Parse plano/acao/memoria from reply and persist with status
-      const replyText = reply!;
-      const { memoria } = parseMemoria(replyText);
-      const { plano } = parsePlano(replyText);
-      const { acao } = plano ? { acao: null as null } : parseAcao(replyText);
-      const acao_status = plano || acao ? "pendente" : null;
-      const acao_dados = plano
-        ? { tipo: "plano", dados: { titulo: plano.titulo, acoes: plano.acoes } }
-        : acao ? { tipo: acao.tipo, dados: acao.dados } : null;
-      const memoria_status = memoria ? "pendente" : null;
-      const memoria_dados = memoria ?? null;
-
-
-      const { data: insAss } = await supabase
-        .from("mensagens_michele")
-        .insert({
-          conversa_id: conversaId,
-          role: "assistant",
-          content: replyText,
-          acao_status,
-          acao_dados: acao_dados as unknown as never,
-          memoria_status,
-          memoria_dados: memoria_dados as unknown as never,
-        })
-        .select("id")
-        .single();
-
-      if (insAss?.id) {
-        setMessages((prev) => {
-          const copy = [...prev];
-          for (let i = copy.length - 1; i >= 0; i--) {
-            if (copy[i].role === "assistant" && !copy[i].id) {
-              copy[i] = {
-                ...copy[i],
-                id: insAss.id,
-                acao_status,
-                acao_dados,
-                memoria_status,
-                memoria_dados,
-              };
-              break;
-            }
-          }
-          return copy;
-        });
-      }
-
-      await supabase
-        .from("conversas_michele")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", conversaId);
-      loadConversas();
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao falar com a Michele. Tente novamente.");
-    } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
+function SectionHeader({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description?: string }) {
   return (
-    <div className="flex gap-4 h-[calc(100vh-8rem)] max-w-6xl mx-auto">
-      {/* Sidebar */}
-      <aside className="w-64 shrink-0 hidden md:flex flex-col border rounded-lg bg-card">
-        <div className="p-3 border-b">
-          <Button onClick={novaConversa} className="w-full" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Nova conversa
-          </Button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversas.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4 px-2">
-              Nenhuma conversa ainda.
-            </p>
-          )}
-          {conversas.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => selectConversa(c.id)}
-              className={`w-full text-left text-sm px-3 py-2 rounded-md flex items-start gap-2 transition-colors ${
-                c.id === activeId
-                  ? "bg-primary/10 text-foreground"
-                  : "hover:bg-muted text-muted-foreground"
-              }`}
-            >
-              <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span className="truncate">{c.titulo}</span>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      {/* Chat */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Michele
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Assistente de prospecção · Gal Representações
-              </p>
-            </div>
-          </div>
-          <Button onClick={novaConversa} variant="outline" size="sm" className="md:hidden">
-            <Plus className="h-4 w-4 mr-1" />
-            Nova
-          </Button>
-        </div>
-
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto rounded-lg border bg-card p-4 space-y-3"
-        >
-          {messages.length === 0 && (
-            <div className="text-center text-muted-foreground text-sm py-12">
-              Comece a conversa com a Michele.
-            </div>
-          )}
-          {messages.map((m, i) => {
-            if (m.role === "user") {
-              return (
-                <div key={m.id ?? i} className="flex justify-end">
-                  <div className="max-w-[80%] space-y-2">
-                    {m.imagem_url && <ChatImage path={m.imagem_url} />}
-                    {m.content && m.content !== "[imagem anexa]" && (
-                      <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-primary text-primary-foreground">
-                        {m.content}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-            const { texto: t1, memoria: memParsed } = parseMemoria(m.content);
-            const { texto: t2, plano: planoParsed } = parsePlano(t1);
-            const { texto, acao: acaoParsed } = planoParsed
-              ? { texto: t2, acao: null as null }
-              : parseAcao(t2);
-            // Prefer persisted dados over parsed
-            const memoria = m.memoria_dados ?? memParsed;
-            const persistedIsPlano = m.acao_dados && (m.acao_dados as any).tipo === "plano";
-            const plano = persistedIsPlano
-              ? ((m.acao_dados as any).dados as { titulo: string; acoes: PlanoAcao[]; resultado?: any })
-              : planoParsed;
-            const acao = !persistedIsPlano && m.acao_dados ? m.acao_dados : acaoParsed;
-            return (
-              <div key={m.id ?? i} className="flex justify-start">
-                <div className="max-w-[80%] space-y-2">
-                  {texto && (
-                    <div className="rounded-2xl px-4 py-2 whitespace-pre-wrap text-sm bg-muted text-foreground">
-                      {texto}
-                    </div>
-                  )}
-                  {memoria && (
-                    <MemoriaCard
-                      messageId={m.id}
-                      memoria={memoria as MemoriaSugerida}
-                      initialStatus={(m.memoria_status ?? "pendente") as Exclude<MemoriaStatus, null>}
-                    />
-                  )}
-                  {plano && (
-                    <PlanoCard
-                      messageId={m.id}
-                      plano={plano as PlanoSugerido & { resultado?: any }}
-                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
-                    />
-                  )}
-                  {!plano && acao && (
-                    <AcaoCard
-                      messageId={m.id}
-                      acao={acao as AcaoSugerida}
-                      initialStatus={(m.acao_status ?? "pendente") as Exclude<AcaoStatus, null>}
-                    />
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-2xl px-4 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Michele está pensando…
-              </div>
-            </div>
-          )}
-        </div>
-
-        {imageDataUrl && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-            <img src={imageDataUrl} alt="anexo" className="h-16 w-16 rounded object-cover" />
-            <span className="text-xs text-muted-foreground flex-1">Imagem pronta para enviar</span>
-            <Button variant="ghost" size="sm" onClick={() => setImageDataUrl(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {planilha && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-            <Paperclip className="h-5 w-5 text-primary" />
-            <span className="text-xs text-foreground flex-1 truncate">
-              📊 Planilha: <strong>{planilha.name}</strong> — vou ler e organizar.
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setPlanilha(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {documento && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-            <Paperclip className="h-5 w-5 text-primary" />
-            <span className="text-xs text-foreground flex-1 truncate">
-              📄 Documento: <strong>{documento.name}</strong>
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setDocumento(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        <div className="mt-3 flex gap-2 items-end">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp,.xlsx,.xls,.csv,.pdf,.txt,.md,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-            className="hidden"
-            onChange={handleFile}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-[60px] w-[60px] shrink-0"
-            disabled={loading}
-            onClick={() => fileInputRef.current?.click()}
-            title="Anexar imagem, planilha ou documento (PDF, TXT, DOCX)"
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
-          <Textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escreva uma mensagem para a Michele…"
-            rows={2}
-            className="resize-none"
-            disabled={loading}
-          />
-          <Button
-            onClick={handleSend}
-            disabled={loading || (!input.trim() && !imageDataUrl && !planilha && !documento)}
-            size="icon"
-            className="h-[60px] w-[60px]"
-          >
-            <Send className="h-5 w-5" />
-          </Button>
-        </div>
-
+    <div className="flex items-start gap-3 mb-4">
+      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+        <Icon className="h-5 w-5 text-primary" />
+      </div>
+      <div>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
       </div>
     </div>
   );
 }
 
-function MemoriaCard({
-  memoria,
-  messageId,
-  initialStatus,
-}: {
-  memoria: MemoriaSugerida;
-  messageId?: string;
-  initialStatus: "pendente" | "guardada" | "descartada";
-}) {
-  const [estado, setEstado] = useState<"pendente" | "guardada" | "descartada">(initialStatus);
+// ── 1. System Prompt ──────────────────────────────────────────────────────────
+
+function SecaoPersonalidade() {
+  const [valor, setValor] = useState("");
+  const [original, setOriginal] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  if (estado === "descartada") return null;
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    const v = await getConfig("system_prompt_michele");
+    setValor(v);
+    setOriginal(v);
+    setLoading(false);
+  }, []);
 
-  if (estado === "guardada") {
-    return (
-      <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-        <Check className="h-3.5 w-3.5 text-primary" />
-        📌 Guardado
-      </div>
-    );
-  }
+  useEffect(() => { carregar(); }, [carregar]);
 
-  async function updateStatus(novo: "guardada" | "descartada") {
-    if (!messageId) return;
-    await supabase
-      .from("mensagens_michele")
-      .update({ memoria_status: novo })
-      .eq("id", messageId);
-  }
-
-  async function handleGuardar() {
+  async function salvar() {
     setSaving(true);
-    const { error } = await supabase.from("memoria_michele").insert({
-      tipo: memoria.tipo,
-      escopo: memoria.escopo || "global",
-      conteudo: memoria.conteudo,
-    });
-    setSaving(false);
-    if (error) {
-      console.error(error);
-      toast.error("Não consegui guardar agora.");
-      return;
+    try {
+      await setConfig("system_prompt_michele", valor);
+      setOriginal(valor);
+      toast.success("System prompt salvo!");
+    } catch {
+      toast.error("Erro ao salvar.");
+    } finally {
+      setSaving(false);
     }
-    await updateStatus("guardada");
-    setEstado("guardada");
   }
 
-  async function handleDescartar() {
-    await updateStatus("descartada");
-    setEstado("descartada");
-  }
+  const alterado = valor !== original;
 
   return (
-    <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 space-y-2">
-      <div className="flex items-start gap-2">
-        <BookmarkPlus className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-        <div className="text-xs space-y-1">
-          <div className="text-muted-foreground">
-            <span className="font-medium text-foreground">{memoria.tipo}</span>
-            {" · "}
-            <span>{memoria.escopo}</span>
+    <Card>
+      <CardHeader className="pb-3">
+        <SectionHeader
+          icon={Bot}
+          title="Personalidade e instruções"
+          description="Edite o system prompt que define o comportamento da Michele. Salve para aplicar imediatamente."
+        />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-          <p className="text-sm text-foreground">{memoria.conteudo}</p>
-        </div>
-      </div>
-      <div className="flex gap-2 justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDescartar}
-          disabled={saving}
-        >
-          <X className="h-3.5 w-3.5 mr-1" />
-          Descartar
-        </Button>
-        <Button size="sm" onClick={handleGuardar} disabled={saving}>
-          {saving ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-          ) : (
-            <BookmarkPlus className="h-3.5 w-3.5 mr-1" />
-          )}
-          Guardar na memória
-        </Button>
-      </div>
-    </div>
+        ) : (
+          <>
+            <Textarea
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              rows={12}
+              className="font-mono text-sm resize-y"
+              placeholder="Digite as instruções da Michele aqui…"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {valor.length} caracteres
+                {alterado && <span className="ml-2 text-amber-600 font-medium">• alterações não salvas</span>}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={carregar} disabled={loading || saving}>
+                  <RefreshCw className="h-4 w-4 mr-1" />Recarregar
+                </Button>
+                <Button size="sm" onClick={salvar} disabled={saving || !alterado}>
+                  {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-function formatarDados(tipo: string, dados: Record<string, unknown>): { label: string; value: string }[] {
-  const entries: { label: string; value: string }[] = [];
-  const push = (label: string, key: string) => {
-    const v = dados[key];
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      entries.push({ label, value: String(v) });
-    }
-  };
-  if (dados.codigoObra) entries.push({ label: "Obra", value: String(dados.codigoObra) });
-  if (tipo === "criar_followup") {
-    push("Descrição", "descricao");
-    push("Data", "data_prevista");
-    push("Tipo", "tipo");
-    push("Canal", "canal_sugerido");
-    push("Prioridade", "prioridade");
-    push("Responsável", "responsavel");
-  } else if (tipo === "mudar_fase") {
-    push("Nova fase", "fase_michele");
-    push("Temperatura", "temperatura");
-  } else if (tipo === "cadastrar_obra") {
-    push("Nome", "nome");
-    push("Construtora", "construtora");
-    push("Cidade", "cidade");
-    push("Endereço", "localizacao");
-    push("Estágio", "estagioObra");
-    push("Produto", "produtoOferecido");
-    push("Responsável", "responsavel");
-    push("Telefone", "telefone");
-    push("Email", "email");
-    push("Observações", "observacoes");
-  } else if (tipo === "cadastrar_construtora") {
-    push("Nome", "nome");
-    push("CNPJ", "cnpj");
-    push("Produto", "produto");
-    push("Status", "status");
-    push("Observações", "observacoes");
-  } else if (tipo === "cadastrar_contato") {
-    push("Nome", "nome");
-    push("Cargo", "cargo");
-    push("WhatsApp", "whatsapp");
-    push("Email", "email");
-    push("Construtora", "codigoConstrutora");
-    push("Obra atual", "codigoObraAtual");
-    push("Observações", "observacoes");
-  } else if (tipo === "atualizar_contato") {
-    push("Contato", "codigoPessoa");
-    push("Nome", "nome");
-    push("Cargo", "cargo");
-    push("WhatsApp", "whatsapp");
-    push("Email", "email");
-    push("Construtora", "codigoConstrutora");
-    push("Obra atual", "codigoObraAtual");
-    push("Anexar à observação", "observacoes");
-  } else if (tipo === "enviar_email") {
-    push("Destinatário", "destinatario_nome");
-    push("E-mail", "destinatario_email");
-    push("Assunto", "assunto");
-    const corpo = String(dados.corpo_html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    if (corpo) entries.push({ label: "Prévia", value: corpo.slice(0, 280) + (corpo.length > 280 ? "…" : "") });
-  } else if (tipo === "cadastrar_obras_lote") {
-    const novas = Array.isArray((dados as any).novas) ? (dados as any).novas : [];
-    const dup = Array.isArray((dados as any).duplicatas_resumo) ? (dados as any).duplicatas_resumo : [];
-    entries.push({ label: "Novas obras", value: String(novas.length) });
-    if (dup.length > 0) entries.push({ label: "Possíveis duplicatas", value: String(dup.length) });
-    const amostra = novas.slice(0, 8).map((o: any) =>
-      `${o.nome ?? "—"}${o.construtora ? ` (${o.construtora})` : ""}${o.cidade ? ` · ${o.cidade}` : ""}`,
-    ).join("\n");
-    if (amostra) entries.push({ label: "Amostra", value: amostra + (novas.length > 8 ? `\n…+${novas.length - 8}` : "") });
-  } else {
-    for (const [k, v] of Object.entries(dados)) {
-      if (k === "codigoObra") continue;
-      if (v === undefined || v === null || String(v).trim() === "") continue;
-      entries.push({ label: k, value: typeof v === "object" ? JSON.stringify(v) : String(v) });
-    }
-  }
-  return entries;
-}
+// ── 2. Horários ───────────────────────────────────────────────────────────────
 
-function AcaoCard({
-  acao,
-  messageId,
-  initialStatus,
-}: {
-  acao: AcaoSugerida;
-  messageId?: string;
-  initialStatus: "pendente" | "aprovada" | "cancelada";
-}) {
-  type UIEstado = "pendente" | "executando" | "aprovada" | "cancelada" | "erro";
-  const [estado, setEstado] = useState<UIEstado>(initialStatus);
-  const [resumo, setResumo] = useState<string>("");
-  const [erro, setErro] = useState<string>("");
-  const disponivel = ACOES_DISPONIVEIS.has(acao.tipo);
-  const label = ACAO_LABEL[acao.tipo] ?? acao.tipo;
-  const entries = formatarDados(acao.tipo, acao.dados);
+const HORARIO_KEYS = {
+  manha_inicio: "horario_inicio_manha",
+  manha_fim: "horario_fim_manha",
+  tarde_inicio: "horario_inicio_tarde",
+  tarde_fim: "horario_fim_tarde",
+  dias: "dias_semana_prospeccao",
+};
 
-  async function persistStatus(novo: "aprovada" | "cancelada") {
-    if (!messageId) return;
-    await supabase
-      .from("mensagens_michele")
-      .update({ acao_status: novo })
-      .eq("id", messageId);
+type HorarioState = {
+  manha_inicio: string;
+  manha_fim: string;
+  tarde_inicio: string;
+  tarde_fim: string;
+  dias: string;
+};
+
+function SecaoHorarios() {
+  const [vals, setVals] = useState<HorarioState>({ manha_inicio: "08:00", manha_fim: "12:00", tarde_inicio: "13:00", tarde_fim: "18:00", dias: "seg,ter,qua,qui,sex" });
+  const [original, setOriginal] = useState<HorarioState>(vals);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [mi, mf, ti, tf, dias] = await Promise.all([
+        getConfig(HORARIO_KEYS.manha_inicio),
+        getConfig(HORARIO_KEYS.manha_fim),
+        getConfig(HORARIO_KEYS.tarde_inicio),
+        getConfig(HORARIO_KEYS.tarde_fim),
+        getConfig(HORARIO_KEYS.dias),
+      ]);
+      const s: HorarioState = {
+        manha_inicio: mi || "08:00",
+        manha_fim: mf || "12:00",
+        tarde_inicio: ti || "13:00",
+        tarde_fim: tf || "18:00",
+        dias: dias || "seg,ter,qua,qui,sex",
+      };
+      setVals(s);
+      setOriginal(s);
+      setLoading(false);
+    })();
+  }, []);
+
+  function toggleDia(key: string) {
+    const atual = vals.dias.split(",").filter(Boolean);
+    const next = atual.includes(key) ? atual.filter((d) => d !== key) : [...atual, key];
+    setVals((v) => ({ ...v, dias: next.join(",") }));
   }
 
-  async function handleCancelar() {
-    await persistStatus("cancelada");
-    setEstado("cancelada");
-  }
-
-  async function handleExecutar() {
-    setEstado("executando");
-    setErro("");
+  async function salvar() {
+    setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("michele-executar-acao", {
-        body: { tipo: acao.tipo, dados: acao.dados },
-      });
-      if (error) throw error;
-      const r = data as { ok?: boolean; resumo?: string; error?: string };
-      if (!r?.ok) {
-        setErro(r?.error ?? "Não foi possível executar.");
-        setEstado("erro");
-        return;
-      }
-      setResumo(r.resumo ?? "Ação executada.");
-      await persistStatus("aprovada");
-      setEstado("aprovada");
-      toast.success("Feito! ✅");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErro(msg);
-      setEstado("erro");
-      toast.error("Erro ao executar a ação.");
+      await Promise.all([
+        setConfig(HORARIO_KEYS.manha_inicio, vals.manha_inicio),
+        setConfig(HORARIO_KEYS.manha_fim, vals.manha_fim),
+        setConfig(HORARIO_KEYS.tarde_inicio, vals.tarde_inicio),
+        setConfig(HORARIO_KEYS.tarde_fim, vals.tarde_fim),
+        setConfig(HORARIO_KEYS.dias, vals.dias),
+      ]);
+      setOriginal(vals);
+      toast.success("Horários salvos!");
+    } catch {
+      toast.error("Erro ao salvar horários.");
+    } finally {
+      setSaving(false);
     }
   }
+
+  const diasSelecionados = vals.dias.split(",").filter(Boolean);
+  const alterado = JSON.stringify(vals) !== JSON.stringify(original);
 
   return (
-    <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/5 p-3 space-y-3">
-      <div className="flex items-start gap-2">
-        <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-            Ação proposta
-          </div>
-          <div className="text-sm font-medium text-foreground">{label}</div>
-          {!disponivel && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="h-3 w-3" />
-              Ação ainda não disponível.
+    <Card>
+      <CardHeader className="pb-3">
+        <SectionHeader
+          icon={Clock}
+          title="Horários de prospecção"
+          description="Defina os horários em que a Michele pode enviar e-mails e fazer prospecções automáticas."
+        />
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Manhã — início</label>
+                <Input type="time" value={vals.manha_inicio} onChange={(e) => setVals((v) => ({ ...v, manha_inicio: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Manhã — fim</label>
+                <Input type="time" value={vals.manha_fim} onChange={(e) => setVals((v) => ({ ...v, manha_fim: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Tarde — início</label>
+                <Input type="time" value={vals.tarde_inicio} onChange={(e) => setVals((v) => ({ ...v, tarde_inicio: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Tarde — fim</label>
+                <Input type="time" value={vals.tarde_fim} onChange={(e) => setVals((v) => ({ ...v, tarde_fim: e.target.value }))} />
+              </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {entries.length > 0 && (
-        <dl className="text-xs space-y-1 pl-6">
-          {entries.map((e) => (
-            <div key={e.label} className="flex gap-2">
-              <dt className="text-muted-foreground min-w-[80px]">{e.label}:</dt>
-              <dd className="text-foreground break-words flex-1">{e.value}</dd>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Dias da semana</label>
+              <div className="flex flex-wrap gap-2">
+                {DIAS_SEMANA.map(({ key, label }) => {
+                  const ativo = diasSelecionados.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => toggleDia(key)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        ativo
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={salvar} disabled={saving || !alterado}>
+                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                Salvar horários
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 3. Limites ────────────────────────────────────────────────────────────────
+
+function SecaoLimites() {
+  const [limiteEmail, setLimiteEmail] = useState("20");
+  const [limiteWpp, setLimiteWpp] = useState("0");
+  const [originalEmail, setOriginalEmail] = useState("20");
+  const [originalWpp, setOriginalWpp] = useState("0");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [e, w] = await Promise.all([
+        getConfig("limite_diario_email"),
+        getConfig("limite_diario_whatsapp"),
+      ]);
+      const ev = e || "20"; const wv = w || "0";
+      setLimiteEmail(ev); setOriginalEmail(ev);
+      setLimiteWpp(wv); setOriginalWpp(wv);
+      setLoading(false);
+    })();
+  }, []);
+
+  async function salvar() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        setConfig("limite_diario_email", limiteEmail),
+        setConfig("limite_diario_whatsapp", limiteWpp),
+      ]);
+      setOriginalEmail(limiteEmail); setOriginalWpp(limiteWpp);
+      toast.success("Limites salvos!");
+    } catch {
+      toast.error("Erro ao salvar limites.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const alterado = limiteEmail !== originalEmail || limiteWpp !== originalWpp;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <SectionHeader
+          icon={Shield}
+          title="Limites de envio"
+          description="Controle o máximo de mensagens automáticas por dia. Defina 0 para desativar."
+        />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Limite diário de e-mails</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={limiteEmail}
+                  onChange={(e) => setLimiteEmail(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Máximo de e-mails que a Michele pode enviar por dia.</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  Limite diário de WhatsApp
+                  <Badge variant="outline" className="text-xs">em breve</Badge>
+                </label>
+                <Input type="number" min={0} max={500} value={limiteWpp} onChange={(e) => setLimiteWpp(e.target.value)} disabled />
+                <p className="text-xs text-muted-foreground">Integração com WhatsApp ainda não implementada.</p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={salvar} disabled={saving || !alterado}>
+                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                Salvar limites
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 4. Memória ────────────────────────────────────────────────────────────────
+
+const TIPO_COLOR: Record<string, string> = {
+  preferencia: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  cliente: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  correcao: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+  geral: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20",
+};
+
+function SecaoMemoria() {
+  const [memorias, setMemorias] = useState<Memoria[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<"todos" | Memoria["tipo"]>("todos");
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("memoria_michele")
+      .select("id,tipo,escopo,conteudo,ativo,created_at")
+      .order("created_at", { ascending: false });
+    if (error) { console.error(error); toast.error("Erro ao carregar memórias."); }
+    else setMemorias((data ?? []) as Memoria[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function toggleAtivo(m: Memoria) {
+    setTogglingId(m.id);
+    const { error } = await supabase.from("memoria_michele").update({ ativo: !m.ativo }).eq("id", m.id);
+    if (error) toast.error("Erro ao atualizar.");
+    else setMemorias((prev) => prev.map((x) => x.id === m.id ? { ...x, ativo: !m.ativo } : x));
+    setTogglingId(null);
+  }
+
+  async function excluir(id: string) {
+    setDeletingId(id);
+    const { error } = await supabase.from("memoria_michele").delete().eq("id", id);
+    if (error) toast.error("Erro ao excluir.");
+    else { setMemorias((prev) => prev.filter((x) => x.id !== id)); toast.success("Memória excluída."); }
+    setDeletingId(null);
+  }
+
+  const filtradas = filtro === "todos" ? memorias : memorias.filter((m) => m.tipo === filtro);
+  const contagem = { todos: memorias.length, preferencia: memorias.filter((m) => m.tipo === "preferencia").length, cliente: memorias.filter((m) => m.tipo === "cliente").length, correcao: memorias.filter((m) => m.tipo === "correcao").length, geral: memorias.filter((m) => m.tipo === "geral").length };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <SectionHeader
+          icon={Brain}
+          title="Memória"
+          description="Veja o que a Michele aprendeu. Ative, desative ou exclua aprendizados conforme necessário."
+        />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Filtros */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(["todos", "preferencia", "cliente", "correcao", "geral"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setFiltro(t)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filtro === t ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {t === "todos" ? "Todos" : t} ({contagem[t]})
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" onClick={carregar} className="ml-auto h-7">
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />Recarregar
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+        ) : filtradas.length === 0 ? (
+          <p className="text-center text-muted-foreground text-sm py-8">Nenhuma memória {filtro !== "todos" ? `do tipo "${filtro}" ` : ""}encontrada.</p>
+        ) : (
+          <div className="space-y-2">
+            {filtradas.map((m) => (
+              <div
+                key={m.id}
+                className={`rounded-lg border p-3 flex items-start gap-3 transition-opacity ${!m.ativo ? "opacity-50" : ""}`}
+              >
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${TIPO_COLOR[m.tipo]}`}>
+                      {m.tipo}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{m.escopo}</span>
+                    {!m.ativo && <Badge variant="outline" className="text-xs">inativo</Badge>}
+                  </div>
+                  <p className="text-sm text-foreground break-words">{m.conteudo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(m.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title={m.ativo ? "Desativar" : "Ativar"}
+                    disabled={togglingId === m.id}
+                    onClick={() => toggleAtivo(m)}
+                  >
+                    {togglingId === m.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : m.ativo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    title="Excluir"
+                    disabled={deletingId === m.id}
+                    onClick={() => excluir(m.id)}
+                  >
+                    {deletingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 5. Regras automáticas (somente leitura) ───────────────────────────────────
+
+function SecaoRegras() {
+  const regras = [
+    {
+      icone: CheckCircle2,
+      cor: "text-emerald-600 dark:text-emerald-400",
+      titulo: "Checar resposta após envio",
+      desc: "Quando um e-mail de prospecção é enviado, o sistema cria automaticamente um follow-up de verificação em 2 dias úteis. Se não houver resposta, um novo follow-up de reenvio é sugerido.",
+    },
+    {
+      icone: Zap,
+      cor: "text-amber-500",
+      titulo: "Cliente quente — abertura de e-mail",
+      desc: "Se o destinatário abrir o e-mail enviado pela Michele, o sistema detecta e classifica automaticamente como 'cliente quente', criando um follow-up prioritário de contato.",
+    },
+    {
+      icone: AlertCircle,
+      cor: "text-blue-500",
+      titulo: "Ações estratégicas — aprovação manual",
+      desc: "Follow-ups que envolvem julgamento (mudar abordagem, propor reunião, escalar para visita) NÃO são criados automaticamente. A Michele os sugere e você aprova. Só os mecânicos e óbvios são automáticos.",
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <SectionHeader
+          icon={Zap}
+          title="Regras de follow-up automático"
+          description="Estas automações estão ativas. São somente informativas — não podem ser editadas aqui."
+        />
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {regras.map((r, i) => (
+            <div key={i} className="flex gap-3">
+              <r.icone className={`h-5 w-5 shrink-0 mt-0.5 ${r.cor}`} />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">{r.titulo}</p>
+                <p className="text-sm text-muted-foreground">{r.desc}</p>
+              </div>
             </div>
           ))}
-        </dl>
-      )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-      {estado === "aprovada" && (
-        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-foreground flex items-start gap-2">
-          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function Michele() {
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Bot className="h-6 w-6 text-primary" />
+          </div>
           <div>
-            <div className="font-medium text-emerald-700 dark:text-emerald-300">
-              ✅ Aprovado e executado
-            </div>
-            {resumo && <div className="text-muted-foreground mt-0.5">{resumo}</div>}
+            <h1
+              className="text-2xl font-bold text-foreground flex items-center gap-2"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              Michele
+              <Badge variant="secondary" className="text-xs font-normal">Configurações</Badge>
+            </h1>
+            <p className="text-sm text-muted-foreground">Assistente de prospecção · Gal Representações</p>
           </div>
         </div>
-      )}
-
-      {estado === "cancelada" && (
-        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-          <X className="h-3.5 w-3.5" />
-          Cancelado
-        </div>
-      )}
-
-      {estado === "erro" && (
-        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {erro || "Erro ao executar."}
-        </div>
-      )}
-
-      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
-        <div className="flex gap-2 justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCancelar}
-            disabled={estado === "executando"}
-          >
-            <X className="h-3.5 w-3.5 mr-1" />
-            Cancelar
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleExecutar}
-            disabled={!disponivel || estado === "executando"}
-          >
-            {estado === "executando" ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-            ) : (
-              <Zap className="h-3.5 w-3.5 mr-1" />
-            )}
-            {estado === "erro" ? "Tentar novamente" : "Aprovar e executar"}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChatImage({ path }: { path: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const { data, error } = await supabase.storage
-        .from("michele-uploads")
-        .createSignedUrl(path, 60 * 60);
-      if (alive && !error) setUrl(data?.signedUrl ?? null);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [path]);
-  if (!url) {
-    return (
-      <div className="h-40 w-40 rounded-lg bg-muted animate-pulse" />
-    );
-  }
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="block">
-      <img
-        src={url}
-        alt="anexo"
-        className="max-h-64 max-w-full rounded-lg border object-cover hover:opacity-90 transition"
-      />
-    </a>
-  );
-}
-
-
-
-
-function PlanoCard({
-  plano,
-  messageId,
-  initialStatus,
-}: {
-  plano: PlanoSugerido & { resultado?: any };
-  messageId?: string;
-  initialStatus: "pendente" | "aprovada" | "cancelada";
-}) {
-  type UIEstado = "pendente" | "executando" | "aprovada" | "cancelada" | "erro";
-  const [estado, setEstado] = useState<UIEstado>(initialStatus);
-  const [resultado, setResultado] = useState<any>(plano.resultado ?? null);
-  const [erro, setErro] = useState<string>("");
-  const [aberto, setAberto] = useState(false);
-
-  const grupos = {
-    cadastrar_construtora: [] as PlanoAcao[],
-    cadastrar_obra: [] as PlanoAcao[],
-    cadastrar_contato: [] as PlanoAcao[],
-    outros: [] as PlanoAcao[],
-  };
-  for (const a of plano.acoes) {
-    if (a.tipo in grupos) (grupos as any)[a.tipo].push(a);
-    else grupos.outros.push(a);
-  }
-
-  const contagens: Array<{ label: string; n: number }> = [
-    { label: "construtoras novas", n: grupos.cadastrar_construtora.length },
-    { label: "obras", n: grupos.cadastrar_obra.length },
-    { label: "contatos", n: grupos.cadastrar_contato.length },
-  ];
-  if (grupos.outros.length > 0) contagens.push({ label: "outras ações", n: grupos.outros.length });
-
-  const nomeDe = (a: PlanoAcao) => String((a.dados as any)?.nome ?? "(sem nome)");
-
-  async function persistStatus(novo: "aprovada" | "cancelada", dadosExtra?: any) {
-    if (!messageId) return;
-    const payload: any = { acao_status: novo };
-    if (dadosExtra) {
-      payload.acao_dados = {
-        tipo: "plano",
-        dados: { titulo: plano.titulo, resumo: plano.resumo, acoes: plano.acoes, resultado: dadosExtra },
-      };
-    }
-    await supabase.from("mensagens_michele").update(payload).eq("id", messageId);
-  }
-
-  async function handleCancelar() {
-    await persistStatus("cancelada");
-    setEstado("cancelada");
-  }
-
-  async function handleExecutar() {
-    setEstado("executando");
-    setErro("");
-    try {
-      const { data, error } = await supabase.functions.invoke("michele-executar-lote", {
-        body: { titulo: plano.titulo, acoes: plano.acoes },
-      });
-      if (error) throw error;
-      const r = data as any;
-      setResultado(r);
-      await persistStatus("aprovada", r);
-      setEstado("aprovada");
-      toast.success(r?.resumo ?? "Plano executado.");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErro(msg);
-      setEstado("erro");
-      toast.error("Erro ao executar o plano.");
-    }
-  }
-
-  return (
-    <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/5 p-3 space-y-3">
-      <div className="flex items-start gap-2">
-        <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-            Plano de cadastro
-          </div>
-          <div className="text-sm font-medium text-foreground">{plano.titulo}</div>
-        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/michele/chat">
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Abrir chat
+          </Link>
+        </Button>
       </div>
 
-      <ul className="pl-6 space-y-0.5 text-sm text-foreground">
-        {contagens.filter((c) => c.n > 0).map((c) => (
-          <li key={c.label}>• {c.n} {c.label}</li>
-        ))}
-      </ul>
+      <Separator />
 
-      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
-        <div className="pl-6">
-          <button
-            type="button"
-            onClick={() => setAberto((v) => !v)}
-            className="text-xs text-muted-foreground underline hover:text-foreground"
-          >
-            {aberto ? "ocultar detalhes" : "ver detalhes"}
-          </button>
-          {aberto && (
-            <div className="mt-2 space-y-2 text-xs">
-              {grupos.cadastrar_construtora.length > 0 && (
-                <div>
-                  <div className="font-semibold text-amber-700 dark:text-amber-300">Construtoras</div>
-                  <ul className="list-disc pl-4">{grupos.cadastrar_construtora.map((a, i) => <li key={i}>{nomeDe(a)}</li>)}</ul>
-                </div>
-              )}
-              {grupos.cadastrar_obra.length > 0 && (
-                <div>
-                  <div className="font-semibold text-amber-700 dark:text-amber-300">Obras</div>
-                  <ul className="list-disc pl-4">{grupos.cadastrar_obra.map((a, i) => {
-                    const d = a.dados as any;
-                    const c = d.construtora_nome ?? d.construtora;
-                    return <li key={i}>{nomeDe(a)}{c ? ` — ${c}` : ""}</li>;
-                  })}</ul>
-                </div>
-              )}
-              {grupos.cadastrar_contato.length > 0 && (
-                <div>
-                  <div className="font-semibold text-amber-700 dark:text-amber-300">Contatos</div>
-                  <ul className="list-disc pl-4">{grupos.cadastrar_contato.map((a, i) => {
-                    const d = a.dados as any;
-                    const ref = d.obra_nome ?? d.construtora_nome ?? d.obra ?? d.construtora;
-                    return <li key={i}>{nomeDe(a)}{d.cargo ? ` (${d.cargo})` : ""}{ref ? ` — ${ref}` : ""}</li>;
-                  })}</ul>
-                </div>
-              )}
-              {grupos.outros.length > 0 && (
-                <div>
-                  <div className="font-semibold text-amber-700 dark:text-amber-300">Outros</div>
-                  <ul className="list-disc pl-4">{grupos.outros.map((a, i) => <li key={i}>{a.tipo}: {nomeDe(a)}</li>)}</ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {estado === "aprovada" && (
-        <div className="rounded-md bg-emerald-500/15 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-          <Check className="h-3.5 w-3.5" />
-          {resultado?.resumo
-            ? `✅ ${resultado.resumo}`
-            : `✅ Cadastrado: ${resultado?.construtoras_criadas?.length ?? 0} construtoras, ${resultado?.obras_criadas?.length ?? 0} obras, ${resultado?.contatos_criados?.length ?? 0} contatos`}
-        </div>
-      )}
-
-      {estado === "cancelada" && (
-        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-          <X className="h-3.5 w-3.5" /> Cancelado
-        </div>
-      )}
-
-      {estado === "erro" && (
-        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {erro || "Erro ao executar."}
-        </div>
-      )}
-
-      {(estado === "pendente" || estado === "executando" || estado === "erro") && (
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" onClick={handleCancelar} disabled={estado === "executando"}>
-            <X className="h-3.5 w-3.5 mr-1" /> Cancelar
-          </Button>
-          <Button size="sm" onClick={handleExecutar} disabled={estado === "executando"}>
-            {estado === "executando" ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-            ) : (
-              <Zap className="h-3.5 w-3.5 mr-1" />
-            )}
-            {estado === "erro" ? "Tentar novamente" : "Aprovar e cadastrar tudo"}
-          </Button>
-        </div>
-      )}
+      {/* Sections */}
+      <SecaoPersonalidade />
+      <SecaoHorarios />
+      <SecaoLimites />
+      <SecaoMemoria />
+      <SecaoRegras />
     </div>
   );
 }

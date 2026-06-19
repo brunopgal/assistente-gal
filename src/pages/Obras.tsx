@@ -1,10 +1,16 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listarObras, excluirObra, type Obra } from "@/services/obrasService";
+import { listarObras, excluirObra, criarObra, atualizarObra, buscarObra, type Obra } from "@/services/obrasService";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,8 +44,10 @@ import {
   ClipboardList,
   Info,
   Download,
+  PlusCircle,
 } from "lucide-react";
 import ObraInfoDialog from "@/components/ObraInfoDialog";
+import ObraForm, { type ObraFormValues } from "@/components/ObraForm";
 import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
 import { normalizeText } from "@/lib/normalize";
@@ -93,7 +101,66 @@ export default function Obras() {
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Obra | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // ── Nova/Editar Obra Modal ───────────────────────────────────────────
+  const [obraModalOpen, setObraModalOpen] = useState(false);
+  const [obraModalEdit, setObraModalEdit] = useState<Obra | null>(null);
+  const [modalDefaults, setModalDefaults] = useState<Partial<ObraFormValues> | undefined>();
+  const [modalLoading, setModalLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  function openNovaObra() {
+    setObraModalEdit(null);
+    setModalDefaults(undefined);
+    setObraModalOpen(true);
+  }
+
+  async function openEditObra(o: Obra) {
+    const id = o.id || o.codigoObra || "";
+    setObraModalEdit(o);
+    setModalDefaults(o as unknown as Partial<ObraFormValues>);
+    setObraModalOpen(true);
+    if (id && /^OBRA\d{9}$/i.test(id)) {
+      setModalLoading(true);
+      try {
+        const data = await buscarObra(id);
+        setModalDefaults(data as unknown as Partial<ObraFormValues>);
+      } catch {
+        // usa dados da lista como fallback
+      } finally {
+        setModalLoading(false);
+      }
+    }
+  }
+
+  async function handleObraSubmit(values: ObraFormValues) {
+    setIsSubmitting(true);
+    try {
+      const editId = obraModalEdit?.id || obraModalEdit?.codigoObra || "";
+      if (editId) {
+        await atualizarObra(editId, values as never);
+        toast({ title: "Obra atualizada com sucesso" });
+        setObras((prev) =>
+          prev.map((x) =>
+            (x.id || x.codigoObra) === editId ? { ...x, ...values } as Obra : x
+          )
+        );
+      } else {
+        const created = await criarObra(values as never);
+        toast({ title: `Obra criada (${created.codigoObra || created.id})` });
+        setObras((prev) => [created, ...prev]);
+      }
+      setObraModalOpen(false);
+    } catch (err) {
+      toast({
+        title: "Erro ao salvar obra",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -193,6 +260,10 @@ export default function Obras() {
               <ExternalLink className="h-4 w-4 mr-1" />
               Abrir planilha
             </a>
+          </Button>
+          <Button size="sm" onClick={openNovaObra}>
+            <PlusCircle className="h-4 w-4 mr-1" />
+            Nova Obra
           </Button>
         </div>
       </div>
@@ -368,11 +439,14 @@ export default function Obras() {
                                   {orc.label}
                                 </Button>
                               ))}
-                            <Button asChild variant="ghost" size="sm" className="h-8">
-                              <Link to={`/nova-obra?id=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
-                                <Pencil className="h-3.5 w-3.5 mr-1" />
-                                Editar
-                              </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => openEditObra(o)}
+                            >
+                              <Pencil className="h-3.5 w-3.5 mr-1" />
+                              Editar
                             </Button>
                             <Button asChild variant="outline" size="sm" className="h-8">
                               <Link to={`/visitas?obra=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
@@ -418,6 +492,30 @@ export default function Obras() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Modal Nova/Editar Obra ── */}
+      <Dialog open={obraModalOpen} onOpenChange={(o) => !o && !isSubmitting && setObraModalOpen(false)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {obraModalEdit ? `Editar Obra — ${obraModalEdit.codigoObra || obraModalEdit.id}` : "Nova Obra"}
+            </DialogTitle>
+          </DialogHeader>
+          {modalLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ObraForm
+              key={(obraModalEdit?.id || obraModalEdit?.codigoObra || "new") + ":" + obraModalOpen}
+              defaultValues={modalDefaults}
+              onSubmit={handleObraSubmit}
+              isSubmitting={isSubmitting}
+              isEdit={!!obraModalEdit}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <PautaReuniaoDialog
         open={!!pautaObra}
