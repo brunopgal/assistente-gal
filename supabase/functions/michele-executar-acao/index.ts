@@ -9,7 +9,7 @@ const corsHeaders = {
 const ALLOWED = new Set([
   "criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra",
   "cadastrar_construtora", "cadastrar_contato", "atualizar_contato",
-  "cadastrar_obras_lote",
+  "cadastrar_obras_lote", "enviar_email",
 ]);
 
 const OBRA_FIELDS = new Set([
@@ -124,6 +124,21 @@ Deno.serve(async (req) => {
 
   if (!ALLOWED.has(tipo)) {
     return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
+  }
+
+  // enviar_email: delega para a função michele-enviar-email
+  if (tipo === "enviar_email") {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/michele-enviar-email`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        apikey: ANON,
+      },
+      body: JSON.stringify(dados),
+    });
+    const data = await res.json().catch(() => ({}));
+    return json(data, res.status);
   }
 
   // cadastrar_obras_lote: cadastra várias obras de uma vez,
