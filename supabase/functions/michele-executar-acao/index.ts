@@ -126,6 +126,21 @@ Deno.serve(async (req) => {
     return json({ error: `Ação "${tipo}" ainda não disponível.` }, 400);
   }
 
+  // enviar_email: delega para a função michele-enviar-email
+  if (tipo === "enviar_email") {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/michele-enviar-email`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        apikey: ANON,
+      },
+      body: JSON.stringify(dados),
+    });
+    const data = await res.json().catch(() => ({}));
+    return json(data, res.status);
+  }
+
   // cadastrar_obras_lote: cadastra várias obras de uma vez,
   // criando construtoras que não existem por nome (fuzzy).
   if (tipo === "cadastrar_obras_lote") {
