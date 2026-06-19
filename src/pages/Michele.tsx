@@ -13,7 +13,7 @@ type AcaoSugerida = { tipo: AcaoTipo; dados: Record<string, unknown> };
 const MEMORIA_RE = /\[MEMORIA\]([\s\S]*?)\[\/MEMORIA\]/i;
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
 const PLANO_RE = /\[PLANO\]([\s\S]*?)\[\/PLANO\]/i;
-const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote"]);
+const ACOES_DISPONIVEIS = new Set(["criar_followup", "mudar_fase", "atualizar_obra", "cadastrar_obra", "cadastrar_construtora", "cadastrar_contato", "atualizar_contato", "cadastrar_obras_lote", "enviar_email"]);
 
 type PlanoAcao = { tipo: string; dados: Record<string, unknown> };
 type PlanoSugerido = { titulo: string; resumo?: string; acoes: PlanoAcao[] };
@@ -102,6 +102,7 @@ const ACAO_LABEL: Record<string, string> = {
   cadastrar_contato: "Cadastrar novo contato",
   atualizar_contato: "Atualizar contato",
   cadastrar_obras_lote: "Cadastrar obras em lote",
+  enviar_email: "Enviar e-mail de prospecção",
 };
 
 
@@ -783,6 +784,12 @@ function formatarDados(tipo: string, dados: Record<string, unknown>): { label: s
     push("Construtora", "codigoConstrutora");
     push("Obra atual", "codigoObraAtual");
     push("Anexar à observação", "observacoes");
+  } else if (tipo === "enviar_email") {
+    push("Destinatário", "destinatario_nome");
+    push("E-mail", "destinatario_email");
+    push("Assunto", "assunto");
+    const corpo = String(dados.corpo_html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (corpo) entries.push({ label: "Prévia", value: corpo.slice(0, 280) + (corpo.length > 280 ? "…" : "") });
   } else if (tipo === "cadastrar_obras_lote") {
     const novas = Array.isArray((dados as any).novas) ? (dados as any).novas : [];
     const dup = Array.isArray((dados as any).duplicatas_resumo) ? (dados as any).duplicatas_resumo : [];
