@@ -250,72 +250,83 @@ export default function Prospeccao() {
   }, [obras, busca, statusFiltro]);
 
   // ============ E-mail flow ============
-  async function abrirModalEmail(obra: Obra) {
+  async function carregarModelos() {
+    const { data, error } = await supabase
+      .from("modelos_email")
+      .select("id,nome,assunto,corpo_html")
+      .order("nome", { ascending: true });
+    if (!error) setModelos((data ?? []) as Modelo[]);
+  }
+
+  useEffect(() => {
+    carregarModelos();
+  }, []);
+
+  function abrirModalEmail(obra: Obra) {
     setEmailObra(obra);
+    setModeloSel("");
     setEmailDraft({
       destinatario_nome: obra.responsavel || "",
       destinatario_email: obra.email || "",
       assunto: "",
       corpo_html: "",
     });
-    setGerandoEmail(true);
+  }
 
+  function aplicarModelo(id: string) {
+    setModeloSel(id);
+    const m = modelos.find((x) => x.id === id);
+    if (!m) return;
+    setEmailDraft((d) => ({
+      ...d,
+      assunto: m.assunto || d.assunto,
+      corpo_html: m.corpo_html || d.corpo_html,
+    }));
+  }
+
+  function inserirLinkRastreado() {
+    if (!emailObra) return;
+    const codigo = emailObra.codigoObra || (emailObra as any).id;
+    const link = `https://galrepresentacoes.lovable.app?ref=${encodeURIComponent(codigo)}`;
+    const snippet = `<p><a href="${link}">Conheça a Gal Representações</a></p>`;
+    setEmailDraft((d) =>
+      d.corpo_html.includes(link)
+        ? d
+        : { ...d, corpo_html: (d.corpo_html || "") + (d.corpo_html ? "\n" : "") + snippet },
+    );
+    toast({ title: "Link inserido no corpo do e-mail" });
+  }
+
+  async function salvarComoModelo() {
+    const nome = nomeNovoModelo.trim();
+    if (!nome) {
+      toast({ title: "Dê um nome para o modelo", variant: "destructive" });
+      return;
+    }
+    if (!emailDraft.assunto && !emailDraft.corpo_html) {
+      toast({ title: "Modelo vazio", variant: "destructive" });
+      return;
+    }
+    setSalvandoModelo(true);
     try {
-      const codigo = obra.codigoObra || (obra as any).id;
-      const prompt = [
-        `Escreva um e-mail de prospecção Fase 1 para a obra abaixo e responda APENAS com o bloco [ACAO] tipo enviar_email (sem texto extra antes ou depois).`,
-        ``,
-        `Obra: ${obra.nome}`,
-        `Código: ${codigo}`,
-        `Construtora: ${obra.construtora || "—"}`,
-        `Cidade: ${obra.cidade || "—"}`,
-        `Produto ofertado: ${obra.produtoOferecido || "—"}`,
-        `Responsável (contato): ${obra.responsavel || "—"}`,
-        `E-mail do contato: ${obra.email || "—"}`,
-        ``,
-        `Use destinatario_nome="${obra.responsavel || ""}" e destinatario_email="${obra.email || ""}".`,
-        `Inclua no corpo o link https://galrepresentacoes.lovable.app?ref=${codigo}.`,
-      ].join("\n");
-
-      const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: [{ role: "user", content: prompt }] },
+      const { error } = await supabase.from("modelos_email").insert({
+        nome,
+        assunto: emailDraft.assunto,
+        corpo_html: emailDraft.corpo_html,
       });
       if (error) throw error;
-
-      const reply =
-        (data?.content?.[0]?.text as string) ||
-        (data?.reply as string) ||
-        (data?.text as string) ||
-        "";
-
-      const parsed = parseEnviarEmail(reply);
-      if (parsed) {
-        setEmailDraft({
-          destinatario_nome: String(parsed.destinatario_nome ?? obra.responsavel ?? ""),
-          destinatario_email: String(parsed.destinatario_email ?? obra.email ?? ""),
-          assunto: String(parsed.assunto ?? ""),
-          corpo_html: String(parsed.corpo_html ?? ""),
-        });
-      } else {
-        // Fallback: usar resposta crua como corpo
-        setEmailDraft((d) => ({
-          ...d,
-          assunto: d.assunto || `Apresentação Gal Representações — ${obra.nome}`,
-          corpo_html: reply || "<p>(A Michele não retornou um rascunho. Escreva o e-mail manualmente.)</p>",
-        }));
-        toast({
-          title: "Rascunho parcial",
-          description: "A Michele não devolveu o formato esperado. Revise antes de enviar.",
-        });
-      }
+      toast({ title: "Modelo salvo", description: nome });
+      setNomeNovoModelo("");
+      setShowSalvarModelo(false);
+      await carregarModelos();
     } catch (e) {
       toast({
-        title: "Erro ao gerar e-mail",
+        title: "Erro ao salvar modelo",
         description: e instanceof Error ? e.message : String(e),
         variant: "destructive",
       });
     } finally {
-      setGerandoEmail(false);
+      setSalvandoModelo(false);
     }
   }
 
