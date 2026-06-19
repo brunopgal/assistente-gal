@@ -574,6 +574,33 @@ export type Database = {
           },
         ]
       }
+      modelos_email: {
+        Row: {
+          assunto: string
+          corpo_html: string
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          assunto?: string
+          corpo_html?: string
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          assunto?: string
+          corpo_html?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       obras: {
         Row: {
           cidade: string
