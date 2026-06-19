@@ -133,6 +133,10 @@ export default function Prospeccao() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>("todos");
 
+  // Detalhes de Acessos ao site
+  const [acessosLista, setAcessosLista] = useState<any[]>([]);
+  const [obraAcessosOpen, setObraAcessosOpen] = useState<Obra | null>(null);
+
   // Modal e-mail
   const [emailObra, setEmailObra] = useState<Obra | null>(null);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -187,7 +191,7 @@ export default function Prospeccao() {
             .in("codigoObra", codigos),
           supabase
             .from("acessos_site")
-            .select("codigoObra,created_at")
+            .select("id,codigoObra,pagina,created_at")
             .in("codigoObra", codigos),
         ]);
 
@@ -219,6 +223,7 @@ export default function Prospeccao() {
             s.ultimoEvento = a.created_at;
           }
         }
+        setAcessosLista(ac ?? []);
       }
 
       setStats(novos);
@@ -545,10 +550,13 @@ export default function Prospeccao() {
                         {teveEvento && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                              <button
+                                onClick={() => setObraAcessosOpen(o)}
+                                className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:underline focus:outline-none"
+                              >
                                 <Eye className="h-3.5 w-3.5" />
                                 abriu há {recente}
-                              </span>
+                              </button>
                             </TooltipTrigger>
                             <TooltipContent>
                               {s.emailsAbertos > 0 && <div>{s.emailsAbertos} aberturas de e-mail</div>}
@@ -784,6 +792,47 @@ export default function Prospeccao() {
                 Enviar
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal Acessos ao site */}
+        <Dialog open={!!obraAcessosOpen} onOpenChange={(o) => { if (!o) setObraAcessosOpen(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="h-5 w-5 text-emerald-600" />
+                Acessos ao site
+              </DialogTitle>
+              <DialogDescription>
+                {obraAcessosOpen?.nome}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 max-h-80 overflow-auto pr-2">
+              {acessosLista
+                .filter((a) => a.codigoObra === (obraAcessosOpen?.codigoObra || (obraAcessosOpen as any)?.id))
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((a) => (
+                  <div key={a.id} className="p-3 bg-muted/40 rounded-md border text-sm">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-semibold text-foreground/80">Página: {a.pagina || "Home"}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                        {new Date(a.created_at).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                        })}{" "}
+                        às{" "}
+                        {new Date(a.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              {acessosLista.filter((a) => a.codigoObra === (obraAcessosOpen?.codigoObra || (obraAcessosOpen as any)?.id)).length === 0 && (
+                <div className="text-sm text-muted-foreground text-center py-4">Nenhum acesso detalhado encontrado.</div>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       </div>
