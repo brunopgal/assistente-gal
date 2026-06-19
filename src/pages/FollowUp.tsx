@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { listarObras, limparFollowUp, atualizarFollowUp, type Obra } from "@/services/obrasService";
 import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import {
@@ -69,6 +70,11 @@ function calculateDaysOverdue(targetDateStr: string, todayStr: string): number {
 interface FollowUpObra extends Obra {
   followUpDate: string; // comparable yyyy-mm-dd
   ultimaAtividade?: Atividade | null;
+  isTableFollowUp?: boolean;
+  followUpId?: string;
+  followUpType?: string;
+  followUpDescricao?: string;
+  followUpPrioridade?: string;
 }
 
 function statusColor(status: string) {
@@ -95,9 +101,14 @@ function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling, today
 
   const isOverdue = obra.followUpDate < todayStr;
   const daysOverdue = isOverdue ? calculateDaysOverdue(obra.followUpDate, todayStr) : 0;
+  const isHighPriority = obra.followUpPrioridade === "alta";
 
   return (
-    <Card className={`border-border/50 bg-card transition-colors ${isOverdue ? 'border-destructive/30 hover:border-destructive/60' : 'hover:border-primary/30'}`}>
+    <Card className={`border-border/50 bg-card transition-colors ${
+      isHighPriority ? 'border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.2)] hover:border-red-500' :
+      isOverdue ? 'border-destructive/30 hover:border-destructive/60' : 
+      'hover:border-primary/30'
+    }`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1 min-w-0">
@@ -150,6 +161,26 @@ function FollowUpCard({ obra, onDone, onReschedule, loading, rescheduling, today
             </span>
           )}
         </div>
+
+        {obra.isTableFollowUp && (
+          <div className={`text-sm rounded p-2 space-y-1 ${isHighPriority ? 'bg-red-500/10' : 'bg-muted/50'}`}>
+            <div className="flex items-center justify-between gap-2 mb-1 border-b border-border/50 pb-1">
+               <span className={`text-[10px] font-bold uppercase tracking-wider ${isHighPriority ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                 Ação Necessária
+               </span>
+               {obra.followUpType && (
+                 <Badge variant="outline" className={`text-[10px] h-4 px-1.5 capitalize bg-background ${isHighPriority ? 'border-red-500/50 text-red-600 dark:text-red-400' : ''}`}>
+                   {obra.followUpType.replace(/_/g, ' ')}
+                 </Badge>
+               )}
+            </div>
+            {obra.followUpDescricao && (
+              <p className={`line-clamp-3 text-xs leading-relaxed ${isHighPriority ? 'text-red-700 dark:text-red-300 font-medium' : 'text-foreground/90'}`}>
+                {obra.followUpDescricao}
+              </p>
+            )}
+          </div>
+        )}
 
         {obra.ultimaAtividade && (obra.ultimaAtividade.comentario || obra.ultimaAtividade.status || obra.ultimaAtividade.tipoContato) && (
           <div className="text-sm bg-muted/50 rounded p-2 space-y-1">
@@ -237,10 +268,37 @@ export default function FollowUp() {
     setLoading(true);
     try {
       const all = await listarObras();
+      
+      const { data: dbFollowUps } = await supabase
+        .from("follow_ups")
+        .select("*")
+        .eq("status", "pendente");
+
       const withFollowUp: FollowUpObra[] = all
         .filter((o) => o.proximoContato && parseDate(o.proximoContato))
-        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato), ultimaAtividade: null }))
-        .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+        .map((o) => ({ ...o, followUpDate: dateToCompare(o.proximoContato), ultimaAtividade: null }));
+
+      if (dbFollowUps) {
+        dbFollowUps.forEach((dbFup) => {
+          const obraId = dbFup.codigoObra;
+          if (!obraId) return;
+          const relatedObra = all.find(o => o.codigoObra === obraId || o.id === obraId);
+          if (relatedObra) {
+            withFollowUp.push({
+              ...relatedObra,
+              followUpDate: dbFup.data_prevista || (dbFup.created_at ? dateToCompare(dbFup.created_at) : todayStr()),
+              isTableFollowUp: true,
+              followUpId: dbFup.id,
+              followUpType: dbFup.tipo,
+              followUpDescricao: dbFup.descricao,
+              followUpPrioridade: dbFup.prioridade,
+              ultimaAtividade: null,
+            });
+          }
+        });
+      }
+
+      withFollowUp.sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
       setObras(withFollowUp);
       setLoading(false);
 
@@ -317,10 +375,15 @@ export default function FollowUp() {
   }, []);
 
   const handleDone = async (obra: FollowUpObra) => {
-    setMarkingId(obra.id!);
+    setMarkingId(obra.id! + (obra.followUpId || ""));
     try {
-      await limparFollowUp(obra.id!);
-      setObras((prev) => prev.filter((o) => o.id !== obra.id));
+      if (obra.isTableFollowUp && obra.followUpId) {
+        await supabase.from("follow_ups").update({ status: "concluido" }).eq("id", obra.followUpId);
+        setObras((prev) => prev.filter((o) => o.followUpId !== obra.followUpId));
+      } else {
+        await limparFollowUp(obra.id!);
+        setObras((prev) => prev.filter((o) => o.id !== obra.id || o.isTableFollowUp));
+      }
       toast({ title: `Follow-up de "${obra.nome}" marcado como feito` });
     } catch {
       toast({ title: "Erro ao atualizar", variant: "destructive" });
@@ -330,18 +393,33 @@ export default function FollowUp() {
   };
 
   const handleReschedule = async (obra: FollowUpObra, newDateBR: string) => {
-    setReschedulingId(obra.id!);
+    setReschedulingId(obra.id! + (obra.followUpId || ""));
     try {
-      await atualizarFollowUp(obra.id!, newDateBR);
-      setObras((prev) =>
-        prev
-          .map((o) =>
-            o.id === obra.id
-              ? { ...o, proximoContato: newDateBR, followUpDate: dateToCompare(newDateBR) }
-              : o,
-          )
-          .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
-      );
+      if (obra.isTableFollowUp && obra.followUpId) {
+        const [d, m, y] = newDateBR.split("/");
+        const isoDate = `${y}-${m}-${d}`;
+        await supabase.from("follow_ups").update({ data_prevista: isoDate }).eq("id", obra.followUpId);
+        setObras((prev) =>
+          prev
+            .map((o) =>
+              o.followUpId === obra.followUpId
+                ? { ...o, followUpDate: isoDate }
+                : o,
+            )
+            .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
+        );
+      } else {
+        await atualizarFollowUp(obra.id!, newDateBR);
+        setObras((prev) =>
+          prev
+            .map((o) =>
+              o.id === obra.id && !o.isTableFollowUp
+                ? { ...o, proximoContato: newDateBR, followUpDate: dateToCompare(newDateBR) }
+                : o,
+            )
+            .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate)),
+        );
+      }
       toast({ title: `Follow-up de "${obra.nome}" reagendado para ${newDateBR}` });
     } catch {
       toast({ title: "Erro ao reagendar", variant: "destructive" });
@@ -444,12 +522,12 @@ export default function FollowUp() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {items.map((obra) => (
             <FollowUpCard
-              key={obra.id}
+              key={obra.followUpId || obra.id}
               obra={obra}
               onDone={() => handleDone(obra)}
               onReschedule={(newDate) => handleReschedule(obra, newDate)}
-              loading={markingId === obra.id}
-              rescheduling={reschedulingId === obra.id}
+              loading={markingId === (obra.id! + (obra.followUpId || ""))}
+              rescheduling={reschedulingId === (obra.id! + (obra.followUpId || ""))}
               todayStr={today}
             />
           ))}

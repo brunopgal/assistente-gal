@@ -166,8 +166,34 @@ Deno.serve(async (req) => {
       proximoContato: "",
       comentario: `E-mail enviado para ${destinatario_nome || destinatario_email} <${destinatario_email}> — Assunto: ${assunto}${emailId ? ` · resend_id: ${emailId}` : ""}`,
     });
+
+    // Cria follow-up automático se não existir um pendente do mesmo tipo
+    const { data: existingFollowUp } = await sb
+      .from("follow_ups")
+      .select("id")
+      .eq("codigoObra", codigoObra)
+      .eq("tipo", "checar_resposta_email")
+      .eq("status", "pendente")
+      .maybeSingle();
+
+    if (!existingFollowUp) {
+      const date2Days = new Date();
+      date2Days.setDate(date2Days.getDate() + 2);
+      const data_prevista = date2Days.toISOString().split("T")[0]; // formato YYYY-MM-DD
+
+      await sb.from("follow_ups").insert({
+        codigoObra,
+        tipo: "checar_resposta_email",
+        descricao: "Verificar se respondeu o e-mail enviado",
+        data_prevista,
+        canal_sugerido: "email",
+        prioridade: "normal",
+        responsavel: "michele",
+        status: "pendente",
+      });
+    }
   } catch (e) {
-    console.warn("Falha ao registrar atividade:", e);
+    console.warn("Falha ao registrar atividade ou criar follow-up:", e);
   }
 
   await sb.from("log_automacao").insert({

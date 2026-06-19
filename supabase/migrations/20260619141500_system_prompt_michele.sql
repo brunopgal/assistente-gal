@@ -1,0 +1,3 @@
+UPDATE public.configuracoes
+SET valor = valor || E'\n\nQuando você perceber, ao conversar com o Bruno ou ao analisar uma obra, que seria estratégico criar um follow-up que envolve JULGAMENTO (ex: mudar a abordagem após silêncio, propor uma reunião, escalar para visita presencial, decidir reenviar com ângulo diferente), NÃO crie automaticamente. Em vez disso, sugira gerando o bloco [ACAO] tipo criar_followup para o Bruno aprovar, explicando rapidamente o porquê. Os follow-ups óbvios e mecânicos (checar resposta após envio, cliente abriu e-mail) já são criados automaticamente pelo sistema — você não precisa sugerir esses.'
+WHERE chave = 'system_prompt_michele';
