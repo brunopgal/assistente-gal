@@ -674,73 +674,114 @@ export default function Prospeccao() {
               <DialogDescription>
                 {emailObra?.nome} {emailObra?.construtora ? `· ${emailObra.construtora}` : ""}
                 <br />
-                Revise o rascunho que a Michele escreveu antes de aprovar o envio.
+                Você escreve o e-mail. A Michele apenas envia e acompanha (abertura, clique, follow-up).
               </DialogDescription>
             </DialogHeader>
 
-            {gerandoEmail ? (
-              <div className="py-12 flex flex-col items-center text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin mb-2" />
-                Michele está escrevendo…
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Destinatário</Label>
-                    <Input
-                      value={emailDraft.destinatario_nome}
-                      onChange={(e) =>
-                        setEmailDraft((d) => ({ ...d, destinatario_nome: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">E-mail</Label>
-                    <Input
-                      type="email"
-                      value={emailDraft.destinatario_email}
-                      onChange={(e) =>
-                        setEmailDraft((d) => ({ ...d, destinatario_email: e.target.value }))
-                      }
-                    />
-                  </div>
+            <div className="space-y-3">
+              {/* Seletor de modelo */}
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Label className="text-xs">Modelo salvo (opcional)</Label>
+                  <Select value={modeloSel} onValueChange={aplicarModelo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={modelos.length ? "Escolher modelo…" : "Nenhum modelo salvo ainda"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelos.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSalvarModelo((v) => !v)}
+                >
+                  {showSalvarModelo ? "Cancelar" : "Salvar como modelo"}
+                </Button>
+              </div>
+
+              {showSalvarModelo && (
+                <div className="flex items-end gap-2 p-3 rounded-md border bg-muted/30">
+                  <div className="flex-1">
+                    <Label className="text-xs">Nome do modelo</Label>
+                    <Input
+                      value={nomeNovoModelo}
+                      onChange={(e) => setNomeNovoModelo(e.target.value)}
+                      placeholder="Ex: Apresentação Rohden"
+                    />
+                  </div>
+                  <Button size="sm" disabled={salvandoModelo} onClick={salvarComoModelo}>
+                    {salvandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Assunto</Label>
+                  <Label className="text-xs">Destinatário</Label>
                   <Input
-                    value={emailDraft.assunto}
-                    onChange={(e) => setEmailDraft((d) => ({ ...d, assunto: e.target.value }))}
+                    value={emailDraft.destinatario_nome}
+                    onChange={(e) =>
+                      setEmailDraft((d) => ({ ...d, destinatario_nome: e.target.value }))
+                    }
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Corpo (HTML)</Label>
-                  <Textarea
-                    rows={14}
-                    value={emailDraft.corpo_html}
+                  <Label className="text-xs">E-mail</Label>
+                  <Input
+                    type="email"
+                    value={emailDraft.destinatario_email}
                     onChange={(e) =>
-                      setEmailDraft((d) => ({ ...d, corpo_html: e.target.value }))
+                      setEmailDraft((d) => ({ ...d, destinatario_email: e.target.value }))
                     }
-                    className="font-mono text-xs"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    O link de rastreio será adicionado automaticamente se não estiver presente.
-                  </p>
                 </div>
               </div>
-            )}
+              <div>
+                <Label className="text-xs">Assunto</Label>
+                <Input
+                  value={emailDraft.assunto}
+                  onChange={(e) => setEmailDraft((d) => ({ ...d, assunto: e.target.value }))}
+                  placeholder="Escreva o assunto do e-mail"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Corpo (HTML)</Label>
+                  <Button type="button" variant="ghost" size="sm" onClick={inserirLinkRastreado}>
+                    Inserir link rastreado
+                  </Button>
+                </div>
+                <Textarea
+                  rows={14}
+                  value={emailDraft.corpo_html}
+                  onChange={(e) =>
+                    setEmailDraft((d) => ({ ...d, corpo_html: e.target.value }))
+                  }
+                  className="font-mono text-xs"
+                  placeholder="Escreva o e-mail aqui (HTML)…"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se você não inserir, o link de rastreio é adicionado automaticamente no envio.
+                </p>
+              </div>
+            </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setEmailObra(null)} disabled={enviandoEmail}>
                 Cancelar
               </Button>
-              <Button onClick={aprovarEEnviar} disabled={gerandoEmail || enviandoEmail}>
+              <Button onClick={aprovarEEnviar} disabled={enviandoEmail}>
                 {enviandoEmail ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                 ) : (
                   <Send className="h-4 w-4 mr-1.5" />
                 )}
-                Aprovar e enviar
+                Enviar
               </Button>
             </DialogFooter>
           </DialogContent>
