@@ -449,7 +449,7 @@ export default function Prospeccao() {
                 Michele · Prospecção
               </h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie obras em prospecção pelo clique. A Michele escreve, você aprova.
+                Gerencie obras em prospecção pelo clique. Você escreve o e-mail; a Michele envia e acompanha.
               </p>
             </div>
           </div>
