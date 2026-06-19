@@ -585,7 +585,7 @@ export default function Prospeccao() {
                         size="sm"
                         onClick={() => abrirModalEmail(o)}
                         disabled={!o.email && !o.responsavel}
-                        title={!o.email ? "Sem e-mail cadastrado na obra" : "Gerar e-mail de prospecção"}
+                        title={!o.email ? "Sem e-mail cadastrado na obra" : "Escrever e-mail de prospecção"}
                       >
                         <Mail className="h-4 w-4 mr-1.5" />
                         E-mail
