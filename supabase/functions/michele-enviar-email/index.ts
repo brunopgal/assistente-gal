@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
           { name: "codigoObra", value: codigoObra },
           { name: "origem", value: "michele" },
         ],
-        tracking: { opens: true, clicks: true },
+        tracking: { opens: false, clicks: false },
       }),
     });
     resendData = await resendRes.json().catch(() => ({}));
