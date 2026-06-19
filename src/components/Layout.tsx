@@ -17,6 +17,7 @@ import {
   Target,
   ChevronDown,
   ChevronRight,
+  ListChecks,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,6 +78,7 @@ const navStructure: NavEntry[] = [
         { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded },
         { title: "Visita/Reunião", path: "/visitas", icon: CalendarClock },
         { title: "Agenda", path: "/agenda", icon: Calendar },
+        { title: "Atividades Gerais", path: "/atividades-gerais", icon: ListChecks },
       ],
     },
   },

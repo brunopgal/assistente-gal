@@ -365,6 +365,7 @@ export default function Dashboard() {
           value={totalAtividades}
           color="text-purple-500"
           bgColor="bg-purple-500/10"
+          href="/atividades-gerais"
         />
       </div>
 

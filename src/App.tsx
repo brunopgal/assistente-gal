@@ -15,6 +15,7 @@ import FollowUp from "./pages/FollowUp";
 import Visitas from "./pages/Visitas";
 import Construtoras from "./pages/Construtoras";
 import Atividades from "./pages/Atividades";
+import AtividadesGerais from "./pages/AtividadesGerais";
 import ProspeccaoIA from "./pages/ProspeccaoIA";
 import Pessoas from "./pages/Pessoas";
 import Relatorios from "./pages/Relatorios";
@@ -47,6 +48,7 @@ const App = () => (
                     <Route path="/visitas" element={<Visitas />} />
                     <Route path="/construtoras" element={<Construtoras />} />
                     <Route path="/atividades/:id" element={<Atividades />} />
+                    <Route path="/atividades-gerais" element={<AtividadesGerais />} />
                     <Route path="/pessoas" element={<Pessoas />} />
                     <Route path="/relatorios" element={<Relatorios />} />
                     <Route path="/michele" element={<Michele />} />
