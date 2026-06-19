@@ -135,7 +135,6 @@ export default function Prospeccao() {
 
   // Modal e-mail
   const [emailObra, setEmailObra] = useState<Obra | null>(null);
-  const [gerandoEmail, setGerandoEmail] = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [emailDraft, setEmailDraft] = useState({
     destinatario_nome: "",
@@ -143,6 +142,14 @@ export default function Prospeccao() {
     assunto: "",
     corpo_html: "",
   });
+
+  // Modelos de e-mail
+  type Modelo = { id: string; nome: string; assunto: string; corpo_html: string };
+  const [modelos, setModelos] = useState<Modelo[]>([]);
+  const [modeloSel, setModeloSel] = useState<string>("");
+  const [salvandoModelo, setSalvandoModelo] = useState(false);
+  const [nomeNovoModelo, setNomeNovoModelo] = useState("");
+  const [showSalvarModelo, setShowSalvarModelo] = useState(false);
 
   // Follow-up popover por obra
   const [followObra, setFollowObra] = useState<Obra | null>(null);
