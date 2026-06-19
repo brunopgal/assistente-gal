@@ -135,7 +135,6 @@ export default function Prospeccao() {
 
   // Modal e-mail
   const [emailObra, setEmailObra] = useState<Obra | null>(null);
-  const [gerandoEmail, setGerandoEmail] = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [emailDraft, setEmailDraft] = useState({
     destinatario_nome: "",
@@ -143,6 +142,14 @@ export default function Prospeccao() {
     assunto: "",
     corpo_html: "",
   });
+
+  // Modelos de e-mail
+  type Modelo = { id: string; nome: string; assunto: string; corpo_html: string };
+  const [modelos, setModelos] = useState<Modelo[]>([]);
+  const [modeloSel, setModeloSel] = useState<string>("");
+  const [salvandoModelo, setSalvandoModelo] = useState(false);
+  const [nomeNovoModelo, setNomeNovoModelo] = useState("");
+  const [showSalvarModelo, setShowSalvarModelo] = useState(false);
 
   // Follow-up popover por obra
   const [followObra, setFollowObra] = useState<Obra | null>(null);
@@ -243,72 +250,83 @@ export default function Prospeccao() {
   }, [obras, busca, statusFiltro]);
 
   // ============ E-mail flow ============
-  async function abrirModalEmail(obra: Obra) {
+  async function carregarModelos() {
+    const { data, error } = await supabase
+      .from("modelos_email")
+      .select("id,nome,assunto,corpo_html")
+      .order("nome", { ascending: true });
+    if (!error) setModelos((data ?? []) as Modelo[]);
+  }
+
+  useEffect(() => {
+    carregarModelos();
+  }, []);
+
+  function abrirModalEmail(obra: Obra) {
     setEmailObra(obra);
+    setModeloSel("");
     setEmailDraft({
       destinatario_nome: obra.responsavel || "",
       destinatario_email: obra.email || "",
       assunto: "",
       corpo_html: "",
     });
-    setGerandoEmail(true);
+  }
 
+  function aplicarModelo(id: string) {
+    setModeloSel(id);
+    const m = modelos.find((x) => x.id === id);
+    if (!m) return;
+    setEmailDraft((d) => ({
+      ...d,
+      assunto: m.assunto || d.assunto,
+      corpo_html: m.corpo_html || d.corpo_html,
+    }));
+  }
+
+  function inserirLinkRastreado() {
+    if (!emailObra) return;
+    const codigo = emailObra.codigoObra || (emailObra as any).id;
+    const link = `https://galrepresentacoes.lovable.app?ref=${encodeURIComponent(codigo)}`;
+    const snippet = `<p><a href="${link}">Conheça a Gal Representações</a></p>`;
+    setEmailDraft((d) =>
+      d.corpo_html.includes(link)
+        ? d
+        : { ...d, corpo_html: (d.corpo_html || "") + (d.corpo_html ? "\n" : "") + snippet },
+    );
+    toast({ title: "Link inserido no corpo do e-mail" });
+  }
+
+  async function salvarComoModelo() {
+    const nome = nomeNovoModelo.trim();
+    if (!nome) {
+      toast({ title: "Dê um nome para o modelo", variant: "destructive" });
+      return;
+    }
+    if (!emailDraft.assunto && !emailDraft.corpo_html) {
+      toast({ title: "Modelo vazio", variant: "destructive" });
+      return;
+    }
+    setSalvandoModelo(true);
     try {
-      const codigo = obra.codigoObra || (obra as any).id;
-      const prompt = [
-        `Escreva um e-mail de prospecção Fase 1 para a obra abaixo e responda APENAS com o bloco [ACAO] tipo enviar_email (sem texto extra antes ou depois).`,
-        ``,
-        `Obra: ${obra.nome}`,
-        `Código: ${codigo}`,
-        `Construtora: ${obra.construtora || "—"}`,
-        `Cidade: ${obra.cidade || "—"}`,
-        `Produto ofertado: ${obra.produtoOferecido || "—"}`,
-        `Responsável (contato): ${obra.responsavel || "—"}`,
-        `E-mail do contato: ${obra.email || "—"}`,
-        ``,
-        `Use destinatario_nome="${obra.responsavel || ""}" e destinatario_email="${obra.email || ""}".`,
-        `Inclua no corpo o link https://galrepresentacoes.lovable.app?ref=${codigo}.`,
-      ].join("\n");
-
-      const { data, error } = await supabase.functions.invoke("michele-chat", {
-        body: { messages: [{ role: "user", content: prompt }] },
+      const { error } = await supabase.from("modelos_email").insert({
+        nome,
+        assunto: emailDraft.assunto,
+        corpo_html: emailDraft.corpo_html,
       });
       if (error) throw error;
-
-      const reply =
-        (data?.content?.[0]?.text as string) ||
-        (data?.reply as string) ||
-        (data?.text as string) ||
-        "";
-
-      const parsed = parseEnviarEmail(reply);
-      if (parsed) {
-        setEmailDraft({
-          destinatario_nome: String(parsed.destinatario_nome ?? obra.responsavel ?? ""),
-          destinatario_email: String(parsed.destinatario_email ?? obra.email ?? ""),
-          assunto: String(parsed.assunto ?? ""),
-          corpo_html: String(parsed.corpo_html ?? ""),
-        });
-      } else {
-        // Fallback: usar resposta crua como corpo
-        setEmailDraft((d) => ({
-          ...d,
-          assunto: d.assunto || `Apresentação Gal Representações — ${obra.nome}`,
-          corpo_html: reply || "<p>(A Michele não retornou um rascunho. Escreva o e-mail manualmente.)</p>",
-        }));
-        toast({
-          title: "Rascunho parcial",
-          description: "A Michele não devolveu o formato esperado. Revise antes de enviar.",
-        });
-      }
+      toast({ title: "Modelo salvo", description: nome });
+      setNomeNovoModelo("");
+      setShowSalvarModelo(false);
+      await carregarModelos();
     } catch (e) {
       toast({
-        title: "Erro ao gerar e-mail",
+        title: "Erro ao salvar modelo",
         description: e instanceof Error ? e.message : String(e),
         variant: "destructive",
       });
     } finally {
-      setGerandoEmail(false);
+      setSalvandoModelo(false);
     }
   }
 
@@ -431,7 +449,7 @@ export default function Prospeccao() {
                 Michele · Prospecção
               </h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie obras em prospecção pelo clique. A Michele escreve, você aprova.
+                Gerencie obras em prospecção pelo clique. Você escreve o e-mail; a Michele envia e acompanha.
               </p>
             </div>
           </div>
@@ -567,7 +585,7 @@ export default function Prospeccao() {
                         size="sm"
                         onClick={() => abrirModalEmail(o)}
                         disabled={!o.email && !o.responsavel}
-                        title={!o.email ? "Sem e-mail cadastrado na obra" : "Gerar e-mail de prospecção"}
+                        title={!o.email ? "Sem e-mail cadastrado na obra" : "Escrever e-mail de prospecção"}
                       >
                         <Mail className="h-4 w-4 mr-1.5" />
                         E-mail
@@ -656,73 +674,114 @@ export default function Prospeccao() {
               <DialogDescription>
                 {emailObra?.nome} {emailObra?.construtora ? `· ${emailObra.construtora}` : ""}
                 <br />
-                Revise o rascunho que a Michele escreveu antes de aprovar o envio.
+                Você escreve o e-mail. A Michele apenas envia e acompanha (abertura, clique, follow-up).
               </DialogDescription>
             </DialogHeader>
 
-            {gerandoEmail ? (
-              <div className="py-12 flex flex-col items-center text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin mb-2" />
-                Michele está escrevendo…
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Destinatário</Label>
-                    <Input
-                      value={emailDraft.destinatario_nome}
-                      onChange={(e) =>
-                        setEmailDraft((d) => ({ ...d, destinatario_nome: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">E-mail</Label>
-                    <Input
-                      type="email"
-                      value={emailDraft.destinatario_email}
-                      onChange={(e) =>
-                        setEmailDraft((d) => ({ ...d, destinatario_email: e.target.value }))
-                      }
-                    />
-                  </div>
+            <div className="space-y-3">
+              {/* Seletor de modelo */}
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Label className="text-xs">Modelo salvo (opcional)</Label>
+                  <Select value={modeloSel} onValueChange={aplicarModelo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={modelos.length ? "Escolher modelo…" : "Nenhum modelo salvo ainda"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelos.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSalvarModelo((v) => !v)}
+                >
+                  {showSalvarModelo ? "Cancelar" : "Salvar como modelo"}
+                </Button>
+              </div>
+
+              {showSalvarModelo && (
+                <div className="flex items-end gap-2 p-3 rounded-md border bg-muted/30">
+                  <div className="flex-1">
+                    <Label className="text-xs">Nome do modelo</Label>
+                    <Input
+                      value={nomeNovoModelo}
+                      onChange={(e) => setNomeNovoModelo(e.target.value)}
+                      placeholder="Ex: Apresentação Rohden"
+                    />
+                  </div>
+                  <Button size="sm" disabled={salvandoModelo} onClick={salvarComoModelo}>
+                    {salvandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Assunto</Label>
+                  <Label className="text-xs">Destinatário</Label>
                   <Input
-                    value={emailDraft.assunto}
-                    onChange={(e) => setEmailDraft((d) => ({ ...d, assunto: e.target.value }))}
+                    value={emailDraft.destinatario_nome}
+                    onChange={(e) =>
+                      setEmailDraft((d) => ({ ...d, destinatario_nome: e.target.value }))
+                    }
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Corpo (HTML)</Label>
-                  <Textarea
-                    rows={14}
-                    value={emailDraft.corpo_html}
+                  <Label className="text-xs">E-mail</Label>
+                  <Input
+                    type="email"
+                    value={emailDraft.destinatario_email}
                     onChange={(e) =>
-                      setEmailDraft((d) => ({ ...d, corpo_html: e.target.value }))
+                      setEmailDraft((d) => ({ ...d, destinatario_email: e.target.value }))
                     }
-                    className="font-mono text-xs"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    O link de rastreio será adicionado automaticamente se não estiver presente.
-                  </p>
                 </div>
               </div>
-            )}
+              <div>
+                <Label className="text-xs">Assunto</Label>
+                <Input
+                  value={emailDraft.assunto}
+                  onChange={(e) => setEmailDraft((d) => ({ ...d, assunto: e.target.value }))}
+                  placeholder="Escreva o assunto do e-mail"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Corpo (HTML)</Label>
+                  <Button type="button" variant="ghost" size="sm" onClick={inserirLinkRastreado}>
+                    Inserir link rastreado
+                  </Button>
+                </div>
+                <Textarea
+                  rows={14}
+                  value={emailDraft.corpo_html}
+                  onChange={(e) =>
+                    setEmailDraft((d) => ({ ...d, corpo_html: e.target.value }))
+                  }
+                  className="font-mono text-xs"
+                  placeholder="Escreva o e-mail aqui (HTML)…"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se você não inserir, o link de rastreio é adicionado automaticamente no envio.
+                </p>
+              </div>
+            </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setEmailObra(null)} disabled={enviandoEmail}>
                 Cancelar
               </Button>
-              <Button onClick={aprovarEEnviar} disabled={gerandoEmail || enviandoEmail}>
+              <Button onClick={aprovarEEnviar} disabled={enviandoEmail}>
                 {enviandoEmail ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                 ) : (
                   <Send className="h-4 w-4 mr-1.5" />
                 )}
-                Aprovar e enviar
+                Enviar
               </Button>
             </DialogFooter>
           </DialogContent>
