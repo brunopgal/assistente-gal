@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart, Bot } from "lucide-react";
+import { Building2, Building, Calendar, MapPin, Menu, X, PlusCircle, PhoneForwarded, CalendarClock, LogOut, Sparkles, Users, LayoutDashboard, FileBarChart, Bot, Target } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ const navItems = [
   { title: "Maps", path: "/mapa", icon: MapPin, iconClassName: "text-[#EA4335] fill-[#EA4335]" },
   { title: "Relatórios", path: "/relatorios", icon: FileBarChart, iconClassName: "" },
   { title: "Prospecção IA", path: "/prospeccao-ia", icon: Sparkles, iconClassName: "" },
+  { title: "Prospecção", path: "/prospeccao", icon: Target, iconClassName: "text-primary" },
   { title: "Michele", path: "/michele", icon: Bot, iconClassName: "text-primary" },
   { title: "Nova Obra", path: "/nova-obra", icon: PlusCircle, iconClassName: "" },
 ];
