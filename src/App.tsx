@@ -19,6 +19,7 @@ import ProspeccaoIA from "./pages/ProspeccaoIA";
 import Pessoas from "./pages/Pessoas";
 import Relatorios from "./pages/Relatorios";
 import Michele from "./pages/Michele";
+import Prospeccao from "./pages/Prospeccao";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
                     <Route path="/pessoas" element={<Pessoas />} />
                     <Route path="/relatorios" element={<Relatorios />} />
                     <Route path="/michele" element={<Michele />} />
+                    <Route path="/prospeccao" element={<Prospeccao />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
                     <Route path="*" element={<NotFound />} />
