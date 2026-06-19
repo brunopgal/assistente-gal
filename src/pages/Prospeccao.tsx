@@ -587,7 +587,7 @@ export default function Prospeccao() {
                       </Tooltip>
 
                       <Popover
-                        open={followObra && (followObra.codigoObra || (followObra as any).id) === codigo}
+                        open={!!followObra && (followObra.codigoObra || (followObra as any).id) === codigo}
                         onOpenChange={(open) => {
                           if (open) {
                             setFollowObra(o);
