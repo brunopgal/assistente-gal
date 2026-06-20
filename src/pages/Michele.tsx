@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { getConfig, setConfig } from "@/services/configuracoesService";
+import { listarObras, type Obra } from "@/services/obrasService";
+import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,22 +40,6 @@ const DIAS_SEMANA = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function getConfig(chave: string): Promise<string> {
-  const { data } = await supabase
-    .from("configuracoes")
-    .select("valor")
-    .eq("chave", chave)
-    .maybeSingle();
-  return data?.valor ?? "";
-}
-
-async function setConfig(chave: string, valor: string): Promise<void> {
-  const { error } = await supabase
-    .from("configuracoes")
-    .upsert({ chave, valor }, { onConflict: "chave" });
-  if (error) throw error;
-}
 
 function SectionHeader({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description?: string }) {
   return (
@@ -561,6 +549,88 @@ function SecaoRegras() {
   );
 }
 
+// ── 6. Resumo / Alertas ────────────────────────────────────────────────────────
+
+function SecaoResumo() {
+  const [alertas, setAlertas] = useState<MicheleAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [listaObras, listaAtiv, configVal] = await Promise.all([
+          listarObras(),
+          listarTodasAtividades(),
+          getConfig("dias_orcamento_sem_retorno"),
+        ]);
+        
+        const diasOrc = configVal ? Number(configVal) : 7;
+        const ativMap: Record<string, Atividade> = {};
+        
+        for (const at of (listaAtiv ?? [])) {
+          if (!at.idObra) continue;
+          const cod = at.idObra;
+          if (!ativMap[cod]) {
+            ativMap[cod] = at;
+          } else {
+            const [d1, m1, y1] = at.dataAtividade.split("/");
+            const [d2, m2, y2] = ativMap[cod].dataAtividade.split("/");
+            if (new Date(`${y1}-${m1}-${d1}`).getTime() > new Date(`${y2}-${m2}-${d2}`).getTime()) {
+              ativMap[cod] = at;
+            }
+          }
+        }
+        
+        const calcAlertas = calcularAlertasMichele(listaObras ?? [], ativMap, { diasOrcamentoSemRetorno: diasOrc });
+        setAlertas(calcAlertas);
+      } catch (err) {
+        console.error("Erro ao carregar alertas:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) {
+    return <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
+  }
+
+  if (alertas.length === 0) {
+    return (
+      <Card className="bg-emerald-50 border-emerald-200 shadow-sm">
+        <CardContent className="p-4 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <p className="text-sm font-medium text-emerald-800">Tudo em dia! A Michele não tem nenhuma recomendação de follow-up ou obras paradas no momento.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-orange-50 border-orange-200 shadow-sm">
+      <CardHeader className="py-3 px-4 flex flex-row items-center gap-2 border-b border-orange-100">
+        <Bot className="h-5 w-5 text-orange-600" />
+        <CardTitle className="text-base text-orange-800">O que a Michele recomenda hoje</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y divide-orange-100 max-h-60 overflow-y-auto">
+          {alertas.map((alerta) => (
+            <div key={alerta.id} className="p-3 px-4 flex items-start gap-3 hover:bg-orange-100/50 transition-colors">
+              <div className="mt-0.5">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-orange-900">{alerta.obraNome}</p>
+                <p className="text-xs text-orange-700 mt-0.5">{alerta.mensagem}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Michele() {
@@ -592,6 +662,9 @@ export default function Michele() {
       </div>
 
       <Separator />
+
+      {/* Resumo da Michele */}
+      <SecaoResumo />
 
       {/* Sections */}
       <SecaoPersonalidade />

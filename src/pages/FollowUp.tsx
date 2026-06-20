@@ -14,8 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil, Building, Search, CalendarDays } from "lucide-react";
+import { MessageSquare, MapPin, ExternalLink, CheckCircle, Loader2, AlertTriangle, CalendarClock, CalendarCheck, Pencil, Building, Search, CalendarDays, Bot } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts";
+import { getConfig } from "@/services/configuracoesService";
 
 function parseDate(str: string): Date | null {
   if (!str) return null;
@@ -260,6 +262,8 @@ export default function FollowUp() {
 
   const [ctFollowUps, setCtFollowUps] = useState<Array<{ atv: AtividadeConstrutora; construtora: Construtora; followUpDate: string }>>([]);
   const [doneCtId, setDoneCtId] = useState<string | null>(null);
+  const [alertasMichele, setAlertasMichele] = useState<MicheleAlert[]>([]);
+  const [configDiasOrcamento, setConfigDiasOrcamento] = useState(7);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"Todos" | "Atrasados" | "Hoje" | "Esta semana">("Todos");
@@ -268,6 +272,9 @@ export default function FollowUp() {
     setLoading(true);
     try {
       const all = await listarObras();
+      const configVal = await getConfig("dias_orcamento_sem_retorno");
+      const dO = configVal ? Number(configVal) : 7;
+      setConfigDiasOrcamento(dO);
       
       const { data: dbFollowUps } = await supabase
         .from("follow_ups")
@@ -320,6 +327,8 @@ export default function FollowUp() {
           return r ? { ...o, ultimaAtividade: r.ultima } : o;
         }),
       );
+
+      setAlertasMichele(calcularAlertasMichele(all, Object.fromEntries(ultimaPorObra), { diasOrcamentoSemRetorno: dO }));
 
       // Construtoras: atividades marcadas com criarFollowUp = "sim" e proximoContato preenchido
       try {
@@ -623,6 +632,31 @@ export default function FollowUp() {
         </h1>
         <p className="text-muted-foreground mt-1">Acompanhe os próximos contatos das suas obras e construtoras</p>
       </div>
+
+      {/* Alertas Inteligentes da Michele */}
+      {alertasMichele.length > 0 && (
+        <Card className="bg-orange-50 border-orange-200 shadow-sm mb-6">
+          <CardHeader className="py-3 px-4 flex flex-row items-center gap-2 border-b border-orange-100">
+            <Bot className="h-5 w-5 text-orange-600" />
+            <CardTitle className="text-base text-orange-800">Alertas da Michele</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-orange-100">
+              {alertasMichele.map((alerta) => (
+                <div key={alerta.id} className="p-3 px-4 flex items-start gap-3 hover:bg-orange-100/50 transition-colors">
+                  <div className="mt-0.5">
+                    <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-orange-900">{alerta.obraNome}</p>
+                    <p className="text-xs text-orange-700 mt-0.5">{alerta.mensagem}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!isEmpty && (
         <>

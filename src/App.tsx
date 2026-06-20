@@ -22,6 +22,7 @@ import Relatorios from "./pages/Relatorios";
 import Michele from "./pages/Michele";
 import MicheleChat from "./pages/MicheleChat";
 import Prospeccao from "./pages/Prospeccao";
+import Orcamentos from "./pages/Orcamentos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
                     <Route path="/michele" element={<Michele />} />
                     <Route path="/michele/chat" element={<MicheleChat />} />
                     <Route path="/prospeccao" element={<Prospeccao />} />
+                    <Route path="/orcamentos" element={<Orcamentos />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
                     <Route path="*" element={<NotFound />} />

@@ -40,16 +40,33 @@ import {
   Building2,
   MapPin,
   Bot,
+  Plus,
+  MoreVertical,
+  Check,
+  Phone,
+  Flame,
+  ArrowRight,
+  Ban,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
+import { criarAtividade, listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts";
+import { getConfig } from "@/services/configuracoesService";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-type StatusFiltro = "todos" | "Prospectar" | "Em Prospecção";
+type StatusFiltro = "todos" | "Prospectar" | "Em Prospecção" | "Lead Quente" | "Orçamento Enviado" | "Negociação";
 
-const STATUS_ALVO = new Set(["prospectar", "em prospeccao"]);
+const STATUS_ALVO = new Set(["Prospectar", "Em Prospecção", "Lead Quente", "Orçamento Enviado", "Negociação"]);
 
 function todayBR(): string {
   return new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -76,8 +93,6 @@ function relativo(dataIso: string): string {
 
 const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
 
-// Extrai dados do bloco [ACAO]. Aceita tanto o formato `tipo:`/`dados:` quanto
-// um JSON wrapper {"tipo":"...","dados":{...}}.
 function parseEnviarEmail(content: string): {
   destinatario_nome?: string;
   destinatario_email?: string;
@@ -88,7 +103,6 @@ function parseEnviarEmail(content: string): {
   if (!m) return null;
   const bloco = m[1];
 
-  // tentativa 1: JSON puro envolvido em chaves
   const jm = bloco.match(/\{[\s\S]*\}/);
   if (jm) {
     try {
@@ -98,7 +112,6 @@ function parseEnviarEmail(content: string): {
     } catch { /* segue */ }
   }
 
-  // tentativa 2: linhas tipo:/dados:
   const dadosMatch = /dados\s*:\s*([\s\S]+)/i.exec(bloco);
   if (dadosMatch) {
     const raw = dadosMatch[1].trim();
@@ -123,8 +136,11 @@ interface ObraStats {
 
 export default function Prospeccao() {
   const { toast } = useToast();
+  const [todasObras, setTodasObras] = useState<Obra[]>([]);
   const [obras, setObras] = useState<Obra[]>([]);
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
+  const [atividadesMap, setAtividadesMap] = useState<Record<string, Atividade>>({});
+  const [alertasMichele, setAlertasMichele] = useState<MicheleAlert[]>([]);
   const [globalStats, setGlobalStats] = useState({
     emailsAbertos: 0,
     linksAbertos: 0,
@@ -133,11 +149,14 @@ export default function Prospeccao() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>("todos");
 
-  // Detalhes de Acessos ao site
   const [acessosLista, setAcessosLista] = useState<any[]>([]);
   const [obraAcessosOpen, setObraAcessosOpen] = useState<Obra | null>(null);
 
-  // Modal e-mail
+  const [novaProspeccaoOpen, setNovaProspeccaoOpen] = useState(false);
+  const [buscaNovaObra, setBuscaNovaObra] = useState("");
+  const [selectedNovaObra, setSelectedNovaObra] = useState("");
+  const [iniciandoProspeccao, setIniciandoProspeccao] = useState(false);
+
   const [emailObra, setEmailObra] = useState<Obra | null>(null);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [emailDraft, setEmailDraft] = useState({
@@ -147,7 +166,6 @@ export default function Prospeccao() {
     corpo_html: "",
   });
 
-  // Modelos de e-mail
   type Modelo = { id: string; nome: string; assunto: string; corpo_html: string };
   const [modelos, setModelos] = useState<Modelo[]>([]);
   const [modeloSel, setModeloSel] = useState<string>("");
@@ -155,7 +173,6 @@ export default function Prospeccao() {
   const [nomeNovoModelo, setNomeNovoModelo] = useState("");
   const [showSalvarModelo, setShowSalvarModelo] = useState(false);
 
-  // Follow-up popover por obra
   const [followObra, setFollowObra] = useState<Obra | null>(null);
   const [followDate, setFollowDate] = useState<Date | undefined>(undefined);
   const [followDesc, setFollowDesc] = useState("");
@@ -168,17 +185,40 @@ export default function Prospeccao() {
   async function carregar() {
     setLoading(true);
     try {
-      const lista = await listarObras();
+      const [lista, todasAtiv, configVal] = await Promise.all([
+        listarObras(),
+        listarTodasAtividades(),
+        getConfig("dias_orcamento_sem_retorno")
+      ]);
+      const diasOrc = configVal ? Number(configVal) : 7;
+      
+      setTodasObras(lista ?? []);
       const filtradas = (lista ?? []).filter((o) =>
         STATUS_ALVO.has(normalizeText(o.statusProspeccao || "")),
       );
       setObras(filtradas);
 
+      const mapAtiv: Record<string, Atividade> = {};
+      for (const at of (todasAtiv ?? [])) {
+        if (!at.idObra) continue;
+        const cod = at.idObra;
+        if (!mapAtiv[cod]) {
+          mapAtiv[cod] = at;
+        } else {
+          const [d1, m1, y1] = at.dataAtividade.split("/");
+          const [d2, m2, y2] = mapAtiv[cod].dataAtividade.split("/");
+          if (new Date(`${y1}-${m1}-${d1}`).getTime() > new Date(`${y2}-${m2}-${d2}`).getTime()) {
+            mapAtiv[cod] = at;
+          }
+        }
+      }
+      setAtividadesMap(mapAtiv);
+      setAlertasMichele(calcularAlertasMichele(filtradas, mapAtiv, { diasOrcamentoSemRetorno: diasOrc }));
+
       const codigos = filtradas
         .map((o) => o.codigoObra || (o as any).id)
         .filter(Boolean) as string[];
 
-      // Stats por obra: e-mail eventos (opened/clicked) + acessos_site
       const novos: Record<string, ObraStats> = {};
       let totalAbertos = 0;
       let totalLinks = 0;
@@ -254,7 +294,121 @@ export default function Prospeccao() {
     });
   }, [obras, busca, statusFiltro]);
 
-  // ============ E-mail flow ============
+  const obrasParaIniciar = useMemo(() => {
+    const q = buscaNovaObra.toLowerCase();
+    return todasObras.filter(o => {
+      const stat = o.statusProspeccao || "";
+      const isAlvo = STATUS_ALVO.has(stat);
+      const isBusca = q === "" || (o.nome || "").toLowerCase().includes(q) || (o.construtora || "").toLowerCase().includes(q);
+      return !isAlvo && isBusca;
+    }).slice(0, 50);
+  }, [todasObras, buscaNovaObra]);
+
+  const handleAddNovaProspeccao = async () => {
+    if (!selectedNovaObra) return;
+    try {
+      await atualizarCampoObra(selectedNovaObra, "statusProspeccao", "Prospectar");
+      await criarAtividade({
+        idObra: selectedNovaObra,
+        dataAtividade: formatBR(new Date()),
+        tipoContato: "observacao",
+        status: "Realizado",
+        proximoContato: "",
+        comentario: "Adicionado à esteira de prospecção",
+      });
+      toast({ title: "Obra adicionada à prospecção!" });
+      setNovaProspeccaoOpen(false);
+      setSelectedNovaObra("");
+      carregar();
+    } catch {
+      toast({ title: "Erro", variant: "destructive" });
+    }
+  };
+
+  async function registrarAcaoManual(obra: Obra, acao: string) {
+    const codigo = obra.codigoObra || (obra as any).id;
+    const nome = obra.nome || "Obra";
+
+    try {
+      if (acao === "iniciar") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "observacao",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: "Prospecção iniciada",
+        });
+        toast({ title: "Marcado como Em Prospecção!" });
+      } else if (acao === "email" || acao === "whatsapp") {
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: acao,
+          status: "Realizado",
+          proximoContato: "",
+          comentario: acao === "email" ? "E-mail enviado" : "WhatsApp enviado",
+        });
+
+        const dias = acao === "email" ? 5 : 3;
+        const dataFutura = new Date();
+        dataFutura.setDate(dataFutura.getDate() + dias);
+
+        await supabase.functions.invoke("michele-executar-acao", {
+          body: {
+            tipo: "criar_followup",
+            dados: {
+              codigoObra: codigo,
+              descricao: `Follow-up de ${acao} (${nome})`,
+              data_prevista: formatBR(dataFutura),
+              prioridade: "normal",
+              responsavel: "michele",
+            },
+          },
+        });
+
+        if (obra.statusProspeccao === "A iniciar" || obra.statusProspeccao === "Prospectar") {
+           await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
+        }
+
+        toast({ title: "Atividade registrada", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
+      } else if (acao === "orcamento") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Orçamento Enviado");
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "orcamento",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: "Orçamento enviado",
+        });
+        toast({ title: "Marcado como Orçamento Enviado!" });
+      } else if (acao === "respondeu") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Lead Quente");
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "outro",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: "Cliente respondeu",
+        });
+        toast({ title: "Marcado como Lead Quente!" });
+      } else if (acao === "avancar") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Negociação");
+        toast({ title: "Avançou para Negociação" });
+      } else if (acao === "encerrar") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Encerrado");
+        toast({ title: "Prospecção encerrada" });
+      }
+      
+      await carregar();
+    } catch (e) {
+      toast({ title: "Erro ao registrar ação", description: String(e), variant: "destructive" });
+    }
+  }
+
   async function carregarModelos() {
     const { data, error } = await supabase
       .from("modelos_email")
@@ -337,53 +491,13 @@ export default function Prospeccao() {
 
   async function aprovarEEnviar() {
     if (!emailObra) return;
-    if (!emailDraft.destinatario_email || !emailDraft.assunto || !emailDraft.corpo_html) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Preencha destinatário, assunto e corpo.",
-        variant: "destructive",
-      });
-      return;
-    }
     setEnviandoEmail(true);
     try {
-      const codigo = emailObra.codigoObra || (emailObra as any).id;
-      const { data, error } = await supabase.functions.invoke("michele-enviar-email", {
-        body: {
-          codigoObra: codigo,
-          destinatario_nome: emailDraft.destinatario_nome,
-          destinatario_email: emailDraft.destinatario_email,
-          assunto: emailDraft.assunto,
-          corpo_html: emailDraft.corpo_html,
-        },
-      });
-      if (error) throw new Error(error.message || "Falha ao enviar");
-      if (data?.error) throw new Error(data.error);
-
-      // Atualiza status para "Em Prospecção" se ainda estiver "Prospectar"
-      if (normalizeText(emailObra.statusProspeccao) === "prospectar") {
-        try {
-          await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
-          setObras((prev) =>
-            prev.map((o) =>
-              (o.codigoObra || (o as any).id) === codigo
-                ? { ...o, statusProspeccao: "Em Prospecção" }
-                : o,
-            ),
-          );
-        } catch (e) {
-          console.warn("Falha ao mudar status:", e);
-        }
-      }
-
-      toast({
-        title: "E-mail enviado",
-        description: `Para ${emailDraft.destinatario_email}.`,
-      });
+      await registrarAcaoManual(emailObra, "email");
       setEmailObra(null);
     } catch (e) {
       toast({
-        title: "Erro ao enviar e-mail",
+        title: "Erro ao registrar",
         description: e instanceof Error ? e.message : String(e),
         variant: "destructive",
       });
@@ -454,11 +568,83 @@ export default function Prospeccao() {
                 Michele · Prospecção
               </h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie obras em prospecção pelo clique. Você escreve o e-mail; a Michele envia e acompanha.
+                Gerencie obras em prospecção pelo clique. O envio é manual; a Michele acompanha cliques e acessos.
               </p>
             </div>
           </div>
+          <Button onClick={() => setNovaProspeccaoOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Prospecção
+          </Button>
         </div>
+
+        {/* Alertas da Michele */}
+        {alertasMichele.length > 0 && (
+          <Card className="bg-orange-50 border-orange-200 shadow-sm">
+            <CardHeader className="py-3 px-4 flex flex-row items-center gap-2 border-b border-orange-100">
+              <Bot className="h-5 w-5 text-orange-600" />
+              <CardTitle className="text-base text-orange-800">O que a Michele recomenda hoje</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-orange-100 max-h-60 overflow-y-auto">
+                {alertasMichele.map((alerta) => (
+                  <div key={alerta.id} className="p-3 px-4 flex items-start gap-3 hover:bg-orange-100/50 transition-colors">
+                    <div className="mt-0.5">
+                      <AlertTriangle className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-orange-900">{alerta.obraNome}</p>
+                      <p className="text-xs text-orange-700 mt-0.5">{alerta.mensagem}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Modal Nova Prospecção */}
+        <Dialog open={novaProspeccaoOpen} onOpenChange={setNovaProspeccaoOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Iniciar Nova Prospecção</DialogTitle>
+              <DialogDescription>
+                Selecione uma obra cadastrada para adicionar ao funil de prospecção.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label>Buscar Obra / Construtora</Label>
+                <Input
+                  value={buscaNovaObra}
+                  onChange={(e) => setBuscaNovaObra(e.target.value)}
+                  placeholder="Digite parte do nome..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Selecionar ({obrasParaIniciar.length} resultados)</Label>
+                <Select value={selectedNovaObra} onValueChange={setSelectedNovaObra}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha uma obra" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {obrasParaIniciar.map((o) => (
+                      <SelectItem key={o.codigoObra || (o as any).id} value={o.codigoObra || (o as any).id}>
+                        {o.nome} {o.construtora ? `- ${o.construtora}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNovaProspeccaoOpen(false)}>Cancelar</Button>
+              <Button onClick={handleAddNovaProspeccao} disabled={!selectedNovaObra}>
+                Adicionar à Prospecção
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -502,6 +688,9 @@ export default function Prospeccao() {
                 <SelectItem value="todos">Todos os status</SelectItem>
                 <SelectItem value="Prospectar">Prospectar</SelectItem>
                 <SelectItem value="Em Prospecção">Em Prospecção</SelectItem>
+                <SelectItem value="Lead Quente">Lead Quente</SelectItem>
+                <SelectItem value="Orçamento Enviado">Orçamento Enviado</SelectItem>
+                <SelectItem value="Negociação">Negociação</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
@@ -529,7 +718,7 @@ export default function Prospeccao() {
                 const s = stats[codigo];
                 const teveEvento = s && (s.emailsAbertos > 0 || s.acessosSite > 0);
                 const recente = teveEvento && s.ultimoEvento ? relativo(s.ultimoEvento) : "";
-                const statusAtivo = normalizeText(o.statusProspeccao);
+                const statusAtivo = o.statusProspeccao;
                 return (
                   <div
                     key={codigo}
@@ -542,8 +731,8 @@ export default function Prospeccao() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold truncate">{o.nome || "(sem nome)"}</span>
                         <Badge
-                          variant={statusAtivo === "prospectar" ? "secondary" : "default"}
-                          className="text-xs"
+                          variant={statusAtivo === "Lead Quente" ? "destructive" : "secondary"}
+                          className={cn("text-xs", statusAtivo === "Lead Quente" && "bg-orange-500 hover:bg-orange-600")}
                         >
                           {o.statusProspeccao || "—"}
                         </Badge>
@@ -586,32 +775,74 @@ export default function Prospeccao() {
                           </span>
                         )}
                       </div>
+                      
+                      {atividadesMap[codigo] && (
+                        <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-md w-fit">
+                          <Clock className="h-3 w-3" />
+                          Última ação: {atividadesMap[codigo].comentario} ({atividadesMap[codigo].dataAtividade})
+                        </div>
+                      )}
+                      
+                      {s && s.acessosSite > 0 && (
+                        <div className="mt-1.5">
+                          <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">
+                            <Flame className="h-3 w-3 mr-1" /> Cliente viu o site!
+                          </Badge>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Button
-                        size="sm"
-                        onClick={() => abrirModalEmail(o)}
-                        disabled={!o.email && !o.responsavel}
-                        title={!o.email ? "Sem e-mail cadastrado na obra" : "Escrever e-mail de prospecção"}
-                      >
-                        <Mail className="h-4 w-4 mr-1.5" />
-                        E-mail
-                      </Button>
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm">
+                            Ações <MoreVertical className="h-3.5 w-3.5 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "iniciar")}>
+                            <ArrowRight className="h-4 w-4 mr-2 text-primary" />
+                            Iniciar prospecção
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => abrirModalEmail(o)}>
+                            <Mail className="h-4 w-4 mr-2 text-primary" />
+                            Gerar e-mail (Modelo)
+                          </DropdownMenuItem>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          {/* span wraps disabled button so tooltip works */}
-                          <span>
-                            <Button size="sm" variant="outline" disabled>
-                              <MessageCircle className="h-4 w-4 mr-1.5" />
-                              WhatsApp
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>em breve</TooltipContent>
-                      </Tooltip>
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "email")}>
+                            <Check className="h-4 w-4 mr-2 text-emerald-600" />
+                            Enviei e-mail (Marcar)
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "whatsapp")}>
+                            <Phone className="h-4 w-4 mr-2 text-emerald-600" />
+                            Enviei WhatsApp
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "respondeu")}>
+                            <Flame className="h-4 w-4 mr-2 text-orange-500" />
+                            Cliente respondeu!
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "orcamento")}>
+                            <Check className="h-4 w-4 mr-2 text-blue-600" />
+                            Enviei Orçamento
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "avancar")}>
+                            <Check className="h-4 w-4 mr-2 text-muted-foreground" />
+                            Avançar para Negociação
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "encerrar")}>
+                            <Ban className="h-4 w-4 mr-2 text-red-500" />
+                            Encerrar / Perda
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
 
+                      {/* Botão de Follow-up nativo preservado, caso precise agendar algo manualmente */}
                       <Popover
                         open={!!followObra && (followObra.codigoObra || (followObra as any).id) === codigo}
                         onOpenChange={(open) => {
@@ -625,9 +856,8 @@ export default function Prospeccao() {
                         }}
                       >
                         <PopoverTrigger asChild>
-                          <Button size="sm" variant="outline">
-                            <CalendarClock className="h-4 w-4 mr-1.5" />
-                            Follow-up
+                          <Button size="sm" variant="outline" title="Agendar follow-up manual">
+                            <CalendarClock className="h-4 w-4" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-3 space-y-3" align="end">
@@ -659,7 +889,7 @@ export default function Prospeccao() {
                             ) : (
                               <CalendarClock className="h-4 w-4 mr-1.5" />
                             )}
-                            Criar follow-up
+                            Criar
                           </Button>
                         </PopoverContent>
                       </Popover>
@@ -682,7 +912,7 @@ export default function Prospeccao() {
               <DialogDescription>
                 {emailObra?.nome} {emailObra?.construtora ? `· ${emailObra.construtora}` : ""}
                 <br />
-                Você escreve o e-mail. A Michele apenas envia e acompanha (abertura, clique, follow-up).
+                Copie o texto para enviar no seu cliente de e-mail. A Michele acompanha cliques no link e acessos.
               </DialogDescription>
             </DialogHeader>
 
@@ -789,7 +1019,7 @@ export default function Prospeccao() {
                 ) : (
                   <Send className="h-4 w-4 mr-1.5" />
                 )}
-                Enviar
+                Marquei: enviei e-mail
               </Button>
             </DialogFooter>
           </DialogContent>
