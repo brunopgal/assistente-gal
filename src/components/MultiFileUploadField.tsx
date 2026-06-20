@@ -9,6 +9,7 @@ interface Props {
   label: string;
   value: string; // comma-separated URLs
   onChange: (urls: string) => void;
+  maxFiles?: number;
 }
 
 function parseUrls(value: string): string[] {
@@ -18,13 +19,18 @@ function parseUrls(value: string): string[] {
     .filter(Boolean);
 }
 
-export default function MultiFileUploadField({ label, value, onChange }: Props) {
+export default function MultiFileUploadField({ label, value, onChange, maxFiles }: Props) {
   const [uploading, setUploading] = useState(false);
   const urls = parseUrls(value);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+
+    if (maxFiles && urls.length + files.length > maxFiles) {
+      alert(`Você só pode enviar no máximo ${maxFiles} arquivos.`);
+      return;
+    }
 
     setUploading(true);
     try {
@@ -85,7 +91,7 @@ export default function MultiFileUploadField({ label, value, onChange }: Props) 
             <Upload className="h-4 w-4 text-muted-foreground" />
           )}
           <span className="text-sm text-muted-foreground">
-            {uploading ? "Enviando..." : urls.length ? "Adicionar mais arquivos" : "Clique para enviar arquivo(s)"}
+            {uploading ? "Enviando..." : (maxFiles && urls.length >= maxFiles) ? `Limite de ${maxFiles} atingido` : urls.length ? "Adicionar mais arquivos" : "Clique para enviar arquivo(s)"}
           </span>
           <input
             type="file"
@@ -93,7 +99,7 @@ export default function MultiFileUploadField({ label, value, onChange }: Props) 
             className="hidden"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
             onChange={handleUpload}
-            disabled={uploading}
+            disabled={uploading || (!!maxFiles && urls.length >= maxFiles)}
           />
         </label>
       </div>

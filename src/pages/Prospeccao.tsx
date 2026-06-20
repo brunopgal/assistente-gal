@@ -21,6 +21,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Tooltip,
@@ -153,7 +155,7 @@ export default function Prospeccao() {
   const [obraAcessosOpen, setObraAcessosOpen] = useState<Obra | null>(null);
 
   const [novaProspeccaoOpen, setNovaProspeccaoOpen] = useState(false);
-  const [buscaNovaObra, setBuscaNovaObra] = useState("");
+  const [novaObraComboboxOpen, setNovaObraComboboxOpen] = useState(false);
   const [selectedNovaObra, setSelectedNovaObra] = useState("");
   const [iniciandoProspeccao, setIniciandoProspeccao] = useState(false);
 
@@ -295,14 +297,12 @@ export default function Prospeccao() {
   }, [obras, busca, statusFiltro]);
 
   const obrasParaIniciar = useMemo(() => {
-    const q = buscaNovaObra.toLowerCase();
     return todasObras.filter(o => {
-      const stat = o.statusProspeccao || "";
+      const stat = normalizeText(o.statusProspeccao || "");
       const isAlvo = STATUS_ALVO.has(stat);
-      const isBusca = q === "" || (o.nome || "").toLowerCase().includes(q) || (o.construtora || "").toLowerCase().includes(q);
-      return !isAlvo && isBusca;
-    }).slice(0, 50);
-  }, [todasObras, buscaNovaObra]);
+      return !isAlvo;
+    });
+  }, [todasObras]);
 
   const handleAddNovaProspeccao = async () => {
     if (!selectedNovaObra) return;
@@ -614,27 +614,38 @@ export default function Prospeccao() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Buscar Obra / Construtora</Label>
-                <Input
-                  value={buscaNovaObra}
-                  onChange={(e) => setBuscaNovaObra(e.target.value)}
-                  placeholder="Digite parte do nome..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Selecionar ({obrasParaIniciar.length} resultados)</Label>
-                <Select value={selectedNovaObra} onValueChange={setSelectedNovaObra}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolha uma obra" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {obrasParaIniciar.map((o) => (
-                      <SelectItem key={o.codigoObra || (o as any).id} value={o.codigoObra || (o as any).id}>
-                        {o.nome} {o.construtora ? `- ${o.construtora}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Buscar e Selecionar Obra</Label>
+                <Popover open={novaObraComboboxOpen} onOpenChange={setNovaObraComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-left truncate">
+                      {selectedNovaObra ? obrasParaIniciar.find((o) => (o.codigoObra || (o as any).id) === selectedNovaObra)?.nome : "Selecione uma obra para iniciar..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar obra pelo nome ou construtora..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma obra encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {obrasParaIniciar.map((o) => {
+                            const code = o.codigoObra || (o as any).id;
+                            return (
+                              <CommandItem
+                                key={code}
+                                value={`${o.nome} ${o.construtora || ""}`}
+                                onSelect={() => { setSelectedNovaObra(code); setNovaObraComboboxOpen(false); }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", selectedNovaObra === code ? "opacity-100" : "opacity-0")} />
+                                <span className="truncate">{o.nome} {o.construtora ? `- ${o.construtora}` : ""}</span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <DialogFooter>

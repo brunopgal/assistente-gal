@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MultiFileUploadField from "@/components/MultiFileUploadField";
 
 function parseDate(str: string): Date | null {
   if (!str) return null;
@@ -318,10 +319,12 @@ export default function Orcamentos() {
               <Input type="number" placeholder="Ex: 50000" value={novoValor} onChange={(e) => setNovoValor(e.target.value)} />
             </div>
 
-            <div className="space-y-2">
-              <Label>Link do Anexo/Orçamento (Opcional)</Label>
-              <Input placeholder="https://..." value={novoLink} onChange={(e) => setNovoLink(e.target.value)} />
-            </div>
+            <MultiFileUploadField
+              label="Anexos do Orçamento (Máx 7)"
+              value={novoLink}
+              onChange={(v) => setNovoLink(v)}
+              maxFiles={7}
+            />
 
             <div className="space-y-2">
               <Label>Data de Envio</Label>
