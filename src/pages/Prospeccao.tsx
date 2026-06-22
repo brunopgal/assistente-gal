@@ -113,36 +113,81 @@ export default function Prospeccao() {
   const [acaoDialogDetalhes, setAcaoDialogDetalhes] = useState("");
   const [acaoDialogIsRecording, setAcaoDialogIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const startingTextRef = useRef("");
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.lang = 'pt-BR';
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setAcaoDialogDetalhes(prev => prev ? prev + ' ' + transcript : transcript);
+        let finalSegment = '';
+        let interimSegment = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalSegment += event.results[i][0].transcript;
+          } else {
+            interimSegment += event.results[i][0].transcript;
+          }
+        }
+        if (finalSegment) {
+          startingTextRef.current += finalSegment;
+        }
+        setAcaoDialogDetalhes(startingTextRef.current + interimSegment);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        if (event.error !== 'no-speech') {
+          console.error("Speech recognition error:", event.error);
+          isRecordingRef.current = false;
+          setAcaoDialogIsRecording(false);
+        }
       };
 
       recognitionRef.current.onend = () => {
-        setAcaoDialogIsRecording(false);
+        if (isRecordingRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch(e) {
+            isRecordingRef.current = false;
+            setAcaoDialogIsRecording(false);
+          }
+        } else {
+          setAcaoDialogIsRecording(false);
+        }
       };
     }
   }, []);
 
   const toggleRecording = () => {
     if (acaoDialogIsRecording) {
+      isRecordingRef.current = false;
       recognitionRef.current?.stop();
       setAcaoDialogIsRecording(false);
     } else {
       if (recognitionRef.current) {
-        recognitionRef.current.start();
+        // Prepara texto base atual (com espaço se já houver algo)
+        const currentText = acaoDialogDetalhes.trim();
+        startingTextRef.current = currentText ? currentText + ' ' : '';
+        setAcaoDialogDetalhes(startingTextRef.current);
+
+        isRecordingRef.current = true;
         setAcaoDialogIsRecording(true);
+        try {
+          recognitionRef.current.start();
+        } catch(e) {}
       }
     }
+  };
+
+  const stopRecordingAndClear = () => {
+    isRecordingRef.current = false;
+    recognitionRef.current?.stop();
+    setAcaoDialogIsRecording(false);
   };
   const [obras, setObras] = useState<Obra[]>([]);
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
@@ -1018,7 +1063,7 @@ export default function Prospeccao() {
           </DialogContent>
         </Dialog>
         {/* Modal Ação (Detalhes Opcionais) */}
-        <Dialog open={!!acaoDialogOcorrencia} onOpenChange={(o) => { if (!o) { setAcaoDialogOcorrencia(null); if (acaoDialogIsRecording) toggleRecording(); } }}>
+        <Dialog open={!!acaoDialogOcorrencia} onOpenChange={(o) => { if (!o) { setAcaoDialogOcorrencia(null); stopRecordingAndClear(); } }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Registrar: {acaoDialogOcorrencia?.title}</DialogTitle>
@@ -1031,7 +1076,11 @@ export default function Prospeccao() {
               <div className="flex items-start gap-2">
                 <Textarea
                   value={acaoDialogDetalhes}
-                  onChange={(e) => setAcaoDialogDetalhes(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAcaoDialogDetalhes(val);
+                    if (acaoDialogIsRecording) startingTextRef.current = val;
+                  }}
                   placeholder="Ex: Falei com o João sobre o orçamento..."
                   className="resize-none"
                   rows={4}
@@ -1050,12 +1099,12 @@ export default function Prospeccao() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setAcaoDialogOcorrencia(null); if (acaoDialogIsRecording) toggleRecording(); }}>
+              <Button variant="outline" onClick={() => { setAcaoDialogOcorrencia(null); stopRecordingAndClear(); }}>
                 Cancelar
               </Button>
               <Button
                 onClick={() => {
-                  if (acaoDialogIsRecording) toggleRecording();
+                  stopRecordingAndClear();
                   if (acaoDialogOcorrencia) {
                     registrarAcaoManual(acaoDialogOcorrencia.obra, acaoDialogOcorrencia.acao, acaoDialogDetalhes.trim());
                     setAcaoDialogOcorrencia(null);
