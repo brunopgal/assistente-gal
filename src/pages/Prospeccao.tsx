@@ -44,7 +44,7 @@ import {
   Bot,
   Plus,
   MoreVertical,
-  Check,
+  AlertTriangle,
   Phone,
   Flame,
   ArrowRight,
