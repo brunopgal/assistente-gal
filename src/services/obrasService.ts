@@ -28,6 +28,7 @@ export interface Obra {
   concorrentes: string;
   prospeccaoIA?: string;
   codigoConstrutora?: string; // FK -> Construtoras.codigo (dual-write com `construtora` por nome)
+  statusDesde?: string;
 }
 
 function buildUrl(id?: string) {

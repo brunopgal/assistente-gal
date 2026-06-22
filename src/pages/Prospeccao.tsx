@@ -375,6 +375,7 @@ export default function Prospeccao() {
     try {
       const statusAlvo = selectedNovaFase || "Em Prospecção";
       await atualizarCampoObra(selectedNovaObra, "statusProspeccao", statusAlvo);
+      await atualizarCampoObra(selectedNovaObra, "statusDesde", formatBR(new Date()));
 
       const pessoaSelecionada = pessoasModal.find(
         (p) => p.codigoPessoa === selectedNovaContato
@@ -408,6 +409,7 @@ export default function Prospeccao() {
     try {
       if (acao === "iniciar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         await criarAtividade({
           idObra: codigo,
           dataAtividade: formatBR(new Date()),
@@ -445,6 +447,7 @@ export default function Prospeccao() {
 
         if (obra.statusProspeccao === "A iniciar" || obra.statusProspeccao === "Prospectar") {
            await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
+           await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         }
 
         toast({ title: "Atividade registrada", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
@@ -470,6 +473,7 @@ export default function Prospeccao() {
         toast({ title: "Reunião registrada!" });
       } else if (acao === "comecei_orcamento") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Fazendo Orçamento");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         await criarAtividade({
           idObra: codigo,
           dataAtividade: formatBR(new Date()),
@@ -481,6 +485,7 @@ export default function Prospeccao() {
         toast({ title: "Marcado como Fazendo Orçamento!" });
       } else if (acao === "orcamento") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Orçamento Enviado");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         await criarAtividade({
           idObra: codigo,
           dataAtividade: formatBR(new Date()),
@@ -509,6 +514,7 @@ export default function Prospeccao() {
         toast({ title: "Marcado como Orçamento Enviado!", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
       } else if (acao === "respondeu") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Lead Quente");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         await criarAtividade({
           idObra: codigo,
           dataAtividade: formatBR(new Date()),
@@ -520,18 +526,21 @@ export default function Prospeccao() {
         toast({ title: "Marcado como Lead Quente!" });
       } else if (acao === "avancar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Negociação");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         if (detalhesOpcionais) {
            await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
         }
         toast({ title: "Avançou para Negociação" });
       } else if (acao === "fechei") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Fechado");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         if (detalhesOpcionais) {
            await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
         }
         toast({ title: "Prospecção ganha (Fechado)!" });
       } else if (acao === "encerrar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Perdido");
+        await atualizarCampoObra(codigo, "statusDesde", formatBR(new Date()));
         if (detalhesOpcionais) {
            await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
         }
@@ -861,6 +870,11 @@ export default function Prospeccao() {
                         >
                           {o.statusProspeccao || "—"}
                         </Badge>
+                        {o.statusDesde && (
+                          <span className="text-[10px] text-muted-foreground ml-1">
+                            desde {o.statusDesde}
+                          </span>
+                        )}
                         {teveEvento && (
                           <Tooltip>
                             <TooltipTrigger asChild>
