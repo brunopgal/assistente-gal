@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Upload, FileText, ExternalLink, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { openFileSafe } from "@/lib/openFile";
 
 interface Props {
@@ -59,8 +59,8 @@ export default function MultiFileUploadField({ label, value, onChange, maxFiles 
   };
 
   return (
-    <FormItem>
-      <FormLabel>{label}</FormLabel>
+    <div className="space-y-2">
+      <Label>{label}</Label>
       <div className="space-y-2">
         {urls.map((url, idx) => (
           <div key={`${url}-${idx}`} className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
@@ -103,7 +103,6 @@ export default function MultiFileUploadField({ label, value, onChange, maxFiles 
           />
         </label>
       </div>
-      <FormMessage />
-    </FormItem>
+    </div>
   );
 }
