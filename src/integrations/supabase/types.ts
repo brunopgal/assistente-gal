@@ -633,6 +633,7 @@ export type Database = {
           prospeccaoIA: string
           proximoContato: string
           responsavel: string
+          statusDesde: string
           statusProspeccao: string
           telefone: string
           temperatura: string | null
@@ -671,6 +672,7 @@ export type Database = {
           prospeccaoIA?: string
           proximoContato?: string
           responsavel?: string
+          statusDesde?: string
           statusProspeccao?: string
           telefone?: string
           temperatura?: string | null
@@ -709,6 +711,7 @@ export type Database = {
           prospeccaoIA?: string
           proximoContato?: string
           responsavel?: string
+          statusDesde?: string
           statusProspeccao?: string
           telefone?: string
           temperatura?: string | null
