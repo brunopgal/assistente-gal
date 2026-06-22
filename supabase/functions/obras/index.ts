@@ -17,6 +17,7 @@ const FIELDS = [
   'dataUltimaVisita', 'dataOrcamentoEnviado', 'proximoContato',
   'linkOrcamentoRhoden', 'linkOrcamentoPrado', 'linkOrcamentoImab',
   'observacoes', 'concorrentes', 'prospeccaoIA', 'codigoConstrutora',
+  'statusDesde',
 ];
 
 const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
