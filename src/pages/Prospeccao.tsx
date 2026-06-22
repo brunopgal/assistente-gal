@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -32,11 +32,9 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Mail,
-  MessageCircle,
   CalendarClock,
   Eye,
   Loader2,
-  Send,
   Search,
   Sparkles,
   Building2,
@@ -49,7 +47,6 @@ import {
   ArrowRight,
   Ban,
   Clock,
-  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
@@ -58,8 +55,7 @@ import { listarPessoas, type Pessoa } from "@/services/pessoasService";
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts"; // alertas calculados localmente, sem chamadas Michele
-import { getConfig } from "@/services/configuracoesService";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,41 +91,7 @@ function relativo(dataIso: string): string {
   return `${meses}mes`;
 }
 
-const ACAO_RE = /\[ACAO\]([\s\S]*?)\[\/ACAO\]/i;
 
-function parseEnviarEmail(content: string): {
-  destinatario_nome?: string;
-  destinatario_email?: string;
-  assunto?: string;
-  corpo_html?: string;
-} | null {
-  const m = content.match(ACAO_RE);
-  if (!m) return null;
-  const bloco = m[1];
-
-  const jm = bloco.match(/\{[\s\S]*\}/);
-  if (jm) {
-    try {
-      const obj = JSON.parse(jm[0]);
-      const dados = obj.dados ?? obj;
-      if (dados && (dados.assunto || dados.corpo_html)) return dados;
-    } catch { /* segue */ }
-  }
-
-  const dadosMatch = /dados\s*:\s*([\s\S]+)/i.exec(bloco);
-  if (dadosMatch) {
-    const raw = dadosMatch[1].trim();
-    try {
-      return JSON.parse(raw);
-    } catch {
-      const jm2 = raw.match(/\{[\s\S]*\}/);
-      if (jm2) {
-        try { return JSON.parse(jm2[0]); } catch { /* nada */ }
-      }
-    }
-  }
-  return null;
-}
 
 interface ObraStats {
   emailsAbertos: number;
@@ -144,7 +106,7 @@ export default function Prospeccao() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
   const [atividadesMap, setAtividadesMap] = useState<Record<string, Atividade>>({});
-  const [alertasMichele, setAlertasMichele] = useState<MicheleAlert[]>([]);
+
   const [globalStats, setGlobalStats] = useState({
     emailsAbertos: 0,
     linksAbertos: 0,
@@ -166,21 +128,7 @@ export default function Prospeccao() {
   const [carregandoPessoas, setCarregandoPessoas] = useState(false);
   const [iniciandoProspeccao, setIniciandoProspeccao] = useState(false);
 
-  const [emailObra, setEmailObra] = useState<Obra | null>(null);
-  const [enviandoEmail, setEnviandoEmail] = useState(false);
-  const [emailDraft, setEmailDraft] = useState({
-    destinatario_nome: "",
-    destinatario_email: "",
-    assunto: "",
-    corpo_html: "",
-  });
 
-  type Modelo = { id: string; nome: string; assunto: string; corpo_html: string };
-  const [modelos, setModelos] = useState<Modelo[]>([]);
-  const [modeloSel, setModeloSel] = useState<string>("");
-  const [salvandoModelo, setSalvandoModelo] = useState(false);
-  const [nomeNovoModelo, setNomeNovoModelo] = useState("");
-  const [showSalvarModelo, setShowSalvarModelo] = useState(false);
 
   const [followObra, setFollowObra] = useState<Obra | null>(null);
   const [followDate, setFollowDate] = useState<Date | undefined>(undefined);
@@ -194,12 +142,10 @@ export default function Prospeccao() {
   async function carregar() {
     setLoading(true);
     try {
-      const [lista, todasAtiv, configVal] = await Promise.all([
+      const [lista, todasAtiv] = await Promise.all([
         listarObras(),
         listarTodasAtividades(),
-        getConfig("dias_orcamento_sem_retorno")
       ]);
-      const diasOrc = configVal ? Number(configVal) : 7;
       
       setTodasObras(lista ?? []);
       const filtradas = (lista ?? []).filter((o) =>
@@ -222,7 +168,6 @@ export default function Prospeccao() {
         }
       }
       setAtividadesMap(mapAtiv);
-      setAlertasMichele(calcularAlertasMichele(filtradas, mapAtiv, { diasOrcamentoSemRetorno: diasOrc }));
 
       const codigos = filtradas
         .map((o) => o.codigoObra || (o as any).id)
@@ -447,102 +392,7 @@ export default function Prospeccao() {
     }
   }
 
-  async function carregarModelos() {
-    const { data, error } = await supabase
-      .from("modelos_email")
-      .select("id,nome,assunto,corpo_html")
-      .order("nome", { ascending: true });
-    if (!error) setModelos((data ?? []) as Modelo[]);
-  }
 
-  useEffect(() => {
-    carregarModelos();
-  }, []);
-
-  function abrirModalEmail(obra: Obra) {
-    setEmailObra(obra);
-    setModeloSel("");
-    setEmailDraft({
-      destinatario_nome: obra.responsavel || "",
-      destinatario_email: obra.email || "",
-      assunto: "",
-      corpo_html: "",
-    });
-  }
-
-  function aplicarModelo(id: string) {
-    setModeloSel(id);
-    const m = modelos.find((x) => x.id === id);
-    if (!m) return;
-    setEmailDraft((d) => ({
-      ...d,
-      assunto: m.assunto || d.assunto,
-      corpo_html: m.corpo_html || d.corpo_html,
-    }));
-  }
-
-  function inserirLinkRastreado() {
-    if (!emailObra) return;
-    const codigo = emailObra.codigoObra || (emailObra as any).id;
-    const link = `https://galrepresentacoes.lovable.app?ref=${encodeURIComponent(codigo)}`;
-    const snippet = `<p><a href="${link}">Conheça a Gal Representações</a></p>`;
-    setEmailDraft((d) =>
-      d.corpo_html.includes(link)
-        ? d
-        : { ...d, corpo_html: (d.corpo_html || "") + (d.corpo_html ? "\n" : "") + snippet },
-    );
-    toast({ title: "Link inserido no corpo do e-mail" });
-  }
-
-  async function salvarComoModelo() {
-    const nome = nomeNovoModelo.trim();
-    if (!nome) {
-      toast({ title: "Dê um nome para o modelo", variant: "destructive" });
-      return;
-    }
-    if (!emailDraft.assunto && !emailDraft.corpo_html) {
-      toast({ title: "Modelo vazio", variant: "destructive" });
-      return;
-    }
-    setSalvandoModelo(true);
-    try {
-      const { error } = await supabase.from("modelos_email").insert({
-        nome,
-        assunto: emailDraft.assunto,
-        corpo_html: emailDraft.corpo_html,
-      });
-      if (error) throw error;
-      toast({ title: "Modelo salvo", description: nome });
-      setNomeNovoModelo("");
-      setShowSalvarModelo(false);
-      await carregarModelos();
-    } catch (e) {
-      toast({
-        title: "Erro ao salvar modelo",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    } finally {
-      setSalvandoModelo(false);
-    }
-  }
-
-  async function aprovarEEnviar() {
-    if (!emailObra) return;
-    setEnviandoEmail(true);
-    try {
-      await registrarAcaoManual(emailObra, "email");
-      setEmailObra(null);
-    } catch (e) {
-      toast({
-        title: "Erro ao registrar",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    } finally {
-      setEnviandoEmail(false);
-    }
-  }
 
   // ============ Follow-up ============
   async function criarFollowUp() {
@@ -612,30 +462,7 @@ export default function Prospeccao() {
           </Button>
         </div>
 
-        {/* Alertas da Michele */}
-        {alertasMichele.length > 0 && (
-          <Card className="bg-orange-50 border-orange-200 shadow-sm">
-            <CardHeader className="py-3 px-4 flex flex-row items-center gap-2 border-b border-orange-100">
-              <Bot className="h-5 w-5 text-orange-600" />
-              <CardTitle className="text-base text-orange-800">O que a Michele recomenda hoje</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-orange-100 max-h-60 overflow-y-auto">
-                {alertasMichele.map((alerta) => (
-                  <div key={alerta.id} className="p-3 px-4 flex items-start gap-3 hover:bg-orange-100/50 transition-colors">
-                    <div className="mt-0.5">
-                      <AlertTriangle className="h-4 w-4 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-orange-900">{alerta.obraNome}</p>
-                      <p className="text-xs text-orange-700 mt-0.5">{alerta.mensagem}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+
 
         {/* Modal Nova Prospecção */}
         <Dialog open={novaProspeccaoOpen} onOpenChange={(v) => { if (!v) setNovaProspeccaoOpen(false); }}>
@@ -944,10 +771,7 @@ export default function Prospeccao() {
                             Iniciar prospecção
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => abrirModalEmail(o)}>
-                            <Mail className="h-4 w-4 mr-2 text-primary" />
-                            Gerar e-mail (Modelo)
-                          </DropdownMenuItem>
+
 
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "email")}>
                             <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
@@ -1040,129 +864,7 @@ export default function Prospeccao() {
           </CardContent>
         </Card>
 
-        {/* Modal e-mail */}
-        <Dialog open={!!emailObra} onOpenChange={(o) => { if (!o) setEmailObra(null); }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
-                E-mail de prospecção
-              </DialogTitle>
-              <DialogDescription>
-                {emailObra?.nome} {emailObra?.construtora ? `· ${emailObra.construtora}` : ""}
-                <br />
-                Copie o texto para enviar no seu cliente de e-mail. A Michele acompanha cliques no link e acessos.
-              </DialogDescription>
-            </DialogHeader>
 
-            <div className="space-y-3">
-              {/* Seletor de modelo */}
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Label className="text-xs">Modelo salvo (opcional)</Label>
-                  <Select value={modeloSel} onValueChange={aplicarModelo}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={modelos.length ? "Escolher modelo…" : "Nenhum modelo salvo ainda"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelos.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSalvarModelo((v) => !v)}
-                >
-                  {showSalvarModelo ? "Cancelar" : "Salvar como modelo"}
-                </Button>
-              </div>
-
-              {showSalvarModelo && (
-                <div className="flex items-end gap-2 p-3 rounded-md border bg-muted/30">
-                  <div className="flex-1">
-                    <Label className="text-xs">Nome do modelo</Label>
-                    <Input
-                      value={nomeNovoModelo}
-                      onChange={(e) => setNomeNovoModelo(e.target.value)}
-                      placeholder="Ex: Apresentação Rohden"
-                    />
-                  </div>
-                  <Button size="sm" disabled={salvandoModelo} onClick={salvarComoModelo}>
-                    {salvandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
-                  </Button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Destinatário</Label>
-                  <Input
-                    value={emailDraft.destinatario_nome}
-                    onChange={(e) =>
-                      setEmailDraft((d) => ({ ...d, destinatario_nome: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">E-mail</Label>
-                  <Input
-                    type="email"
-                    value={emailDraft.destinatario_email}
-                    onChange={(e) =>
-                      setEmailDraft((d) => ({ ...d, destinatario_email: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Assunto</Label>
-                <Input
-                  value={emailDraft.assunto}
-                  onChange={(e) => setEmailDraft((d) => ({ ...d, assunto: e.target.value }))}
-                  placeholder="Escreva o assunto do e-mail"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Corpo (HTML)</Label>
-                  <Button type="button" variant="ghost" size="sm" onClick={inserirLinkRastreado}>
-                    Inserir link rastreado
-                  </Button>
-                </div>
-                <Textarea
-                  rows={14}
-                  value={emailDraft.corpo_html}
-                  onChange={(e) =>
-                    setEmailDraft((d) => ({ ...d, corpo_html: e.target.value }))
-                  }
-                  className="font-mono text-xs"
-                  placeholder="Escreva o e-mail aqui (HTML)…"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Se você não inserir, o link de rastreio é adicionado automaticamente no envio.
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEmailObra(null)} disabled={enviandoEmail}>
-                Cancelar
-              </Button>
-              <Button onClick={aprovarEEnviar} disabled={enviandoEmail}>
-                {enviandoEmail ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                ) : (
-                  <Send className="h-4 w-4 mr-1.5" />
-                )}
-                Marquei: enviei e-mail
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Modal Acessos ao site */}
         <Dialog open={!!obraAcessosOpen} onOpenChange={(o) => { if (!o) setObraAcessosOpen(null); }}>
