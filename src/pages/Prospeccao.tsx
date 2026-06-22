@@ -39,7 +39,9 @@ import {
   Sparkles,
   Building2,
   MapPin,
-  Bot,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
   Plus,
   MoreVertical,
   Phone,
@@ -114,6 +116,7 @@ export default function Prospeccao() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>("todos");
+  const [sortDesc, setSortDesc] = useState(true);
 
   const [acessosLista, setAcessosLista] = useState<any[]>([]);
   const [obraAcessosOpen, setObraAcessosOpen] = useState<Obra | null>(null);
@@ -235,7 +238,7 @@ export default function Prospeccao() {
 
   const filtradas = useMemo(() => {
     const q = normalizeText(busca);
-    return obras.filter((o) => {
+    const result = obras.filter((o) => {
       if (statusFiltro !== "todos") {
         if (normalizeText(o.statusProspeccao) !== normalizeText(statusFiltro)) return false;
       }
@@ -246,7 +249,15 @@ export default function Prospeccao() {
       );
       return blob.includes(q);
     });
-  }, [obras, busca, statusFiltro]);
+
+    result.sort((a, b) => {
+      const aDate = new Date((a as any).updated_at || a.dataCadastro || 0).getTime();
+      const bDate = new Date((b as any).updated_at || b.dataCadastro || 0).getTime();
+      return sortDesc ? bDate - aDate : aDate - bDate;
+    });
+
+    return result;
+  }, [obras, busca, statusFiltro, sortDesc]);
 
   // Mostra TODAS as obras cadastradas — assim sempre é possível selecionar uma,
   // mesmo que ela já esteja na esteira (re-prospecção ou troca de status).
@@ -453,15 +464,12 @@ export default function Prospeccao() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-primary" />
-            </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Michele · Prospecção
+                Prospecção
               </h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie obras em prospecção pelo clique. O envio é manual; a Michele acompanha cliques e acessos.
+                Acompanhe cada obra pelo clique — do primeiro contato ao fechamento.
               </p>
             </div>
           </div>
@@ -629,53 +637,53 @@ export default function Prospeccao() {
           </DialogContent>
         </Dialog>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ResumoCard
-            icon={<Sparkles className="h-5 w-5" />}
-            label="A prospectar"
-            value={counts.aProspectar}
-            accent="text-primary"
-          />
-          <ResumoCard
-            icon={<Mail className="h-5 w-5" />}
-            label="E-mails abertos"
-            value={counts.emailsAbertos}
-            accent="text-emerald-600"
-          />
-          <ResumoCard
-            icon={<Eye className="h-5 w-5" />}
-            label="Links do site abertos"
-            value={counts.linksAbertos}
-            accent="text-emerald-600"
-          />
-        </div>
-
-        {/* Filtros */}
+        {/* Filtros e Chips */}
         <Card>
-          <CardContent className="pt-6 flex flex-col md:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por obra, construtora, cidade, produto…"
-                className="pl-9"
-              />
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex flex-wrap gap-2 items-center">
+              <Button
+                variant={statusFiltro === "todos" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFiltro("todos")}
+                className="rounded-full"
+              >
+                Todos ({obras.length})
+              </Button>
+              {Array.from(STATUS_PROSPECCAO_ATIVOS).map(status => {
+                const count = obras.filter(o => normalizeText(o.statusProspeccao || "") === normalizeText(status)).length;
+                return (
+                  <Button
+                    key={status}
+                    variant={statusFiltro === status ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFiltro(status as StatusFiltro)}
+                    className="rounded-full"
+                  >
+                    {status} ({count})
+                  </Button>
+                );
+              })}
             </div>
-            <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as StatusFiltro)}>
-              <SelectTrigger className="md:w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os status</SelectItem>
-                <SelectItem value="Prospectar">Prospectar</SelectItem>
-                <SelectItem value="Em Prospecção">Em Prospecção</SelectItem>
-                <SelectItem value="Lead Quente">Lead Quente</SelectItem>
-                <SelectItem value="Orçamento Enviado">Orçamento Enviado</SelectItem>
-                <SelectItem value="Negociação">Negociação</SelectItem>
-              </SelectContent>
-            </Select>
+
+            <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+              <div className="relative flex-1 w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por obra, construtora, cidade, produto…"
+                  className="pl-9"
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSortDesc(!sortDesc)}
+                className="shrink-0"
+              >
+                Data de atualização {sortDesc ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronUp className="ml-2 h-4 w-4" />}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

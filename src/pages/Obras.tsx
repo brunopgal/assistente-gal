@@ -206,7 +206,7 @@ export default function Obras() {
     const nCidade = normalizeText(filtroCidade);
     const nStatus = normalizeText(filtroStatus);
     const nProduto = normalizeText(filtroProduto);
-    return obras.filter((o) => {
+    const result = obras.filter((o) => {
       if (
         q &&
         ![o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
@@ -225,6 +225,14 @@ export default function Obras() {
       }
       return true;
     });
+
+    result.sort((a, b) => {
+      const aDate = new Date((a as any).updated_at || a.dataCadastro || 0).getTime();
+      const bDate = new Date((b as any).updated_at || b.dataCadastro || 0).getTime();
+      return bDate - aDate;
+    });
+
+    return result;
   }, [obras, query, filtroCidade, filtroProduto, filtroStatus]);
 
   return (
