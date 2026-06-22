@@ -48,10 +48,12 @@ function dateToCompare(str: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getNext7DaysStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 7);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+type FollowUpCategory = "Atrasados" | "Hoje" | "Próximos";
+
+function categoriaFollowUp(followUpDate: string, today: string): FollowUpCategory {
+  if (followUpDate < today) return "Atrasados";
+  if (followUpDate === today) return "Hoje";
+  return "Próximos";
 }
 
 function calculateDaysOverdue(targetDateStr: string, todayStr: string): number {
@@ -262,7 +264,7 @@ export default function FollowUp() {
   const [doneCtId, setDoneCtId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"Todos" | "Atrasados" | "Hoje" | "Esta semana">("Todos");
+  const [activeFilter, setActiveFilter] = useState<"Todos" | FollowUpCategory>("Todos");
 
   const fetchData = async () => {
     setLoading(true);
@@ -429,29 +431,29 @@ export default function FollowUp() {
   };
 
   const today = todayStr();
-  const next7DaysStr = getNext7DaysStr();
 
   // Memos for summary cards
   const summary = useMemo(() => {
     let atrasados = 0;
     let hoje = 0;
-    let proximos7 = 0;
+    let proximos = 0;
     
     const allItems = [...obras.map(o => o.followUpDate), ...ctFollowUps.map(c => c.followUpDate)];
     
     allItems.forEach(date => {
-      if (date < today) atrasados++;
-      else if (date === today) hoje++;
-      else if (date > today && date <= next7DaysStr) proximos7++;
+      const cat = categoriaFollowUp(date, today);
+      if (cat === "Atrasados") atrasados++;
+      else if (cat === "Hoje") hoje++;
+      else proximos++;
     });
 
     return {
       atrasados,
       hoje,
-      proximos7,
+      proximos,
       total: allItems.length
     };
-  }, [obras, ctFollowUps, today, next7DaysStr]);
+  }, [obras, ctFollowUps, today]);
 
   // Apply filters
   const filteredObras = useMemo(() => {
@@ -465,14 +467,13 @@ export default function FollowUp() {
       if (!matchesSearch) return false;
 
       // Quick filter
-      if (activeFilter === "Todos") return true;
-      if (activeFilter === "Atrasados") return obra.followUpDate < today;
-      if (activeFilter === "Hoje") return obra.followUpDate === today;
-      if (activeFilter === "Esta semana") return obra.followUpDate > today && obra.followUpDate <= next7DaysStr;
+      if (activeFilter !== "Todos") {
+        if (categoriaFollowUp(obra.followUpDate, today) !== activeFilter) return false;
+      }
       
       return true;
     });
-  }, [obras, searchTerm, activeFilter, today, next7DaysStr]);
+  }, [obras, searchTerm, activeFilter, today]);
 
   const filteredCts = useMemo(() => {
     return ctFollowUps.filter(ct => {
@@ -485,22 +486,21 @@ export default function FollowUp() {
       if (!matchesSearch) return false;
 
       // Quick filter
-      if (activeFilter === "Todos") return true;
-      if (activeFilter === "Atrasados") return ct.followUpDate < today;
-      if (activeFilter === "Hoje") return ct.followUpDate === today;
-      if (activeFilter === "Esta semana") return ct.followUpDate > today && ct.followUpDate <= next7DaysStr;
+      if (activeFilter !== "Todos") {
+        if (categoriaFollowUp(ct.followUpDate, today) !== activeFilter) return false;
+      }
       
       return true;
     });
-  }, [ctFollowUps, searchTerm, activeFilter, today, next7DaysStr]);
+  }, [ctFollowUps, searchTerm, activeFilter, today]);
 
-  const atrasados = filteredObras.filter((o) => o.followUpDate < today);
-  const hoje = filteredObras.filter((o) => o.followUpDate === today);
-  const proximos = filteredObras.filter((o) => o.followUpDate > today);
+  const atrasados = filteredObras.filter((o) => categoriaFollowUp(o.followUpDate, today) === "Atrasados");
+  const hoje = filteredObras.filter((o) => categoriaFollowUp(o.followUpDate, today) === "Hoje");
+  const proximos = filteredObras.filter((o) => categoriaFollowUp(o.followUpDate, today) === "Próximos");
   
-  const ctsAtrasados = filteredCts.filter((c) => c.followUpDate < today);
-  const ctsHoje = filteredCts.filter((c) => c.followUpDate === today);
-  const ctsProximos = filteredCts.filter((c) => c.followUpDate > today);
+  const ctsAtrasados = filteredCts.filter((c) => categoriaFollowUp(c.followUpDate, today) === "Atrasados");
+  const ctsHoje = filteredCts.filter((c) => categoriaFollowUp(c.followUpDate, today) === "Hoje");
+  const ctsProximos = filteredCts.filter((c) => categoriaFollowUp(c.followUpDate, today) === "Próximos");
 
   if (loading) {
     return (
@@ -627,9 +627,12 @@ export default function FollowUp() {
 
       {!isEmpty && (
         <>
-          {/* RESUMO CARDS */}
+          {/* RESUMO CARDS (Agora são filtros também) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-destructive/5 border-destructive/20 shadow-sm">
+            <Card 
+              className={`bg-destructive/5 border-destructive/20 shadow-sm cursor-pointer transition-all ${activeFilter === "Atrasados" ? "ring-2 ring-destructive ring-offset-2" : "hover:border-destructive/40"}`}
+              onClick={() => setActiveFilter(activeFilter === "Atrasados" ? "Todos" : "Atrasados")}
+            >
               <CardContent className="p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-destructive font-medium mb-1">
                   <AlertTriangle className="h-4 w-4" />
@@ -639,7 +642,10 @@ export default function FollowUp() {
               </CardContent>
             </Card>
             
-            <Card className="bg-primary/5 border-primary/20 shadow-sm">
+            <Card 
+              className={`bg-primary/5 border-primary/20 shadow-sm cursor-pointer transition-all ${activeFilter === "Hoje" ? "ring-2 ring-primary ring-offset-2" : "hover:border-primary/40"}`}
+              onClick={() => setActiveFilter(activeFilter === "Hoje" ? "Todos" : "Hoje")}
+            >
               <CardContent className="p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-primary font-medium mb-1">
                   <CalendarClock className="h-4 w-4" />
@@ -649,17 +655,23 @@ export default function FollowUp() {
               </CardContent>
             </Card>
             
-            <Card className="bg-card shadow-sm">
+            <Card 
+              className={`bg-card shadow-sm cursor-pointer transition-all ${activeFilter === "Próximos" ? "ring-2 ring-muted-foreground ring-offset-2 border-border" : "border-border/50 hover:border-border"}`}
+              onClick={() => setActiveFilter(activeFilter === "Próximos" ? "Todos" : "Próximos")}
+            >
               <CardContent className="p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground font-medium mb-1">
                   <CalendarCheck className="h-4 w-4" />
-                  <span className="text-sm">Próximos 7 dias</span>
+                  <span className="text-sm">Próximos</span>
                 </div>
-                <span className="text-2xl font-bold">{summary.proximos7}</span>
+                <span className="text-2xl font-bold">{summary.proximos}</span>
               </CardContent>
             </Card>
             
-            <Card className="bg-card shadow-sm">
+            <Card 
+              className={`bg-card shadow-sm cursor-pointer transition-all ${activeFilter === "Todos" ? "ring-2 ring-muted-foreground ring-offset-2 border-border" : "border-border/50 hover:border-border"}`}
+              onClick={() => setActiveFilter("Todos")}
+            >
               <CardContent className="p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground font-medium mb-1">
                   <CalendarDays className="h-4 w-4" />
@@ -670,9 +682,9 @@ export default function FollowUp() {
             </Card>
           </div>
 
-          {/* FILTERS BAR */}
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-muted/30 p-3 rounded-lg border border-border/50">
-            <div className="relative w-full sm:w-80">
+          {/* SEARCH BAR */}
+          <div className="flex items-center bg-muted/30 p-3 rounded-lg border border-border/50">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Buscar obra ou construtora..." 
@@ -680,19 +692,6 @@ export default function FollowUp() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-            </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              {(["Todos", "Atrasados", "Hoje", "Esta semana"] as const).map((filter) => (
-                <Button
-                  key={filter}
-                  variant={activeFilter === filter ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setActiveFilter(filter)}
-                  className="whitespace-nowrap h-9"
-                >
-                  {filter}
-                </Button>
-              ))}
             </div>
           </div>
         </>
