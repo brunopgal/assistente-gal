@@ -512,11 +512,19 @@ export default function Prospeccao() {
                                 onSelect={() => {
                                   setSelectedNovaObra(code);
                                   setNovaObraComboboxOpen(false);
-                                  // Ao mudar obra, recarrega pessoas filtradas pela construtora
                                   if (o.construtora) {
                                     listarPessoas({ codigoConstrutora: o.construtora })
-                                      .then((p) => setPessoasModal(p ?? []))
+                                      .then(async (p) => {
+                                        if (p && p.length > 0) {
+                                          setPessoasModal(p);
+                                        } else {
+                                          const todas = await listarPessoas();
+                                          setPessoasModal(todas ?? []);
+                                        }
+                                      })
                                       .catch(() => {});
+                                  } else {
+                                    listarPessoas().then((p) => setPessoasModal(p ?? []));
                                   }
                                 }}
                               >
@@ -574,7 +582,7 @@ export default function Prospeccao() {
                           {pessoasModal.map((p) => (
                             <CommandItem
                               key={p.codigoPessoa}
-                              value={`${p.nome} ${p.cargo || ""}`}
+                              value={`${p.nome} ${p.cargo || ""} ${p.email || ""}`}
                               onSelect={() => { setSelectedNovaContato(p.codigoPessoa ?? ""); setNovaContatoComboboxOpen(false); }}
                             >
                               <CheckIcon className={cn("mr-2 h-4 w-4 shrink-0", selectedNovaContato === p.codigoPessoa ? "opacity-100" : "opacity-0")} />
