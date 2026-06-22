@@ -196,7 +196,7 @@ export default function Orcamentos() {
                     <h3 className="font-semibold text-foreground truncate">{obra?.nome || "Obra Desconhecida"}</h3>
                     <p className="text-xs text-muted-foreground truncate">{obra?.construtora || "Sem construtora"}</p>
                   </div>
-                  <Badge variant={statusColor(orc.status)} className="shrink-0 text-[10px] uppercase">
+                  <Badge variant={statusColor(orc.status) as any} className="shrink-0 text-[10px] uppercase">
                     {orc.status}
                   </Badge>
                 </div>
