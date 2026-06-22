@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { openFileSafe } from "@/lib/openFile";
 import { normalizeText } from "@/lib/normalize";
 import { exportarParaExcel } from "@/lib/exportXlsx";
+import { STATUS_PROSPECCAO } from "@/lib/statusProspeccao";
 
 
 const SHEETS_EXTERNAL_URL =
@@ -198,11 +199,7 @@ export default function Obras() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [obras]);
 
-  const statusDisponiveis = useMemo(() => {
-    const set = new Set<string>();
-    obras.forEach((o) => o.statusProspeccao && set.add(o.statusProspeccao.trim()));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [obras]);
+
 
   const filtradas = useMemo(() => {
     const q = normalizeText(query);
@@ -315,7 +312,7 @@ export default function Obras() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos os status</SelectItem>
-                {statusDisponiveis.map((s) => (
+                {STATUS_PROSPECCAO.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>

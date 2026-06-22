@@ -55,6 +55,7 @@ import { listarPessoas, type Pessoa } from "@/services/pessoasService";
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { STATUS_PROSPECCAO_ATIVOS, type StatusProspeccao } from "@/lib/statusProspeccao";
 
 import {
   DropdownMenu,
@@ -63,10 +64,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type StatusFiltro = "todos" | "Prospectar" | "Em Prospecção" | "Lead Quente" | "Orçamento Enviado" | "Negociação";
+type StatusFiltro = "todos" | StatusProspeccao;
 
-const STATUS_ALVO = new Set(["Prospectar", "Em Prospecção", "Lead Quente", "Orçamento Enviado", "Negociação"]);
-const STATUS_ALVO_NORM = new Set(Array.from(STATUS_ALVO).map(normalizeText));
+const STATUS_ALVO_NORM = new Set(Array.from(STATUS_PROSPECCAO_ATIVOS).map(normalizeText));
 
 function todayBR(): string {
   return new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -254,13 +254,8 @@ export default function Prospeccao() {
     return todasObras;
   }, [todasObras]);
 
-  // Fases disponíveis no modal Nova Prospecção (mesmos valores de STATUS_ALVO / registrarAcaoManual)
-  const FASES_INICIAIS = [
-    "Em Prospecção",
-    "Lead Quente",
-    "Orçamento Enviado",
-    "Negociação",
-  ] as const;
+  // Fases disponíveis no modal Nova Prospecção (mesmos valores de STATUS_PROSPECCAO_ATIVOS)
+  const FASES_INICIAIS = Array.from(STATUS_PROSPECCAO_ATIVOS);
 
   async function abrirNovaProspeccao() {
     setSelectedNovaObra("");
@@ -356,6 +351,17 @@ export default function Prospeccao() {
         }
 
         toast({ title: "Atividade registrada", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
+      } else if (acao === "comecei_orcamento") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Fazendo Orçamento");
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "observacao",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: "Comecei orçamento",
+        });
+        toast({ title: "Marcado como Fazendo Orçamento!" });
       } else if (acao === "orcamento") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Orçamento Enviado");
         await criarAtividade({
@@ -381,9 +387,12 @@ export default function Prospeccao() {
       } else if (acao === "avancar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Negociação");
         toast({ title: "Avançou para Negociação" });
+      } else if (acao === "fechei") {
+        await atualizarCampoObra(codigo, "statusProspeccao", "Fechado");
+        toast({ title: "Prospecção ganha (Fechado)!" });
       } else if (acao === "encerrar") {
-        await atualizarCampoObra(codigo, "statusProspeccao", "Encerrado");
-        toast({ title: "Prospecção encerrada" });
+        await atualizarCampoObra(codigo, "statusProspeccao", "Perdido");
+        toast({ title: "Prospecção encerrada (Perdido)" });
       }
       
       await carregar();
@@ -788,6 +797,11 @@ export default function Prospeccao() {
                             Cliente respondeu!
                           </DropdownMenuItem>
                           
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "comecei_orcamento")}>
+                            <Clock className="h-4 w-4 mr-2 text-teal-600" />
+                            Comecei orçamento
+                          </DropdownMenuItem>
+                          
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "orcamento")}>
                             <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
                             Enviei Orçamento
@@ -796,6 +810,11 @@ export default function Prospeccao() {
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "avancar")}>
                             <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                             Avançar para Negociação
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "fechei")}>
+                            <Sparkles className="h-4 w-4 mr-2 text-emerald-600" />
+                            Fechei / Ganhei
                           </DropdownMenuItem>
                           
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "encerrar")}>

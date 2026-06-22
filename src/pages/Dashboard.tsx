@@ -5,6 +5,7 @@ import { listarConstrutoras, type Construtora } from "@/services/construtorasSer
 import { listarPessoas, type Pessoa } from "@/services/pessoasService";
 import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import { listarTodasAtividadesConstrutoras, type AtividadeConstrutora } from "@/services/construtorasService";
+import { STATUS_PROSPECCAO, type StatusProspeccao } from "@/lib/statusProspeccao";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,24 +36,15 @@ import {
 } from "lucide-react";
 
 // ─── Estágios do funil comercial ───────────────────────────────────────
-const FUNNEL_STAGES = [
-  "Prospectar",
-  "Em Prospecção",
-  "Contato Inicial",
-  "Visita Realizada",
-  "Orçamento Enviado",
-  "Negociação",
-  "Fechado",
-  "Perdido",
-] as const;
+const FUNNEL_STAGES = STATUS_PROSPECCAO;
 
-type FunnelStage = (typeof FUNNEL_STAGES)[number];
+type FunnelStage = StatusProspeccao;
 
 const FUNNEL_COLORS: Record<FunnelStage, string> = {
   "Prospectar":         "from-slate-400 to-slate-500",
   "Em Prospecção":      "from-sky-400 to-sky-500",
-  "Contato Inicial":    "from-cyan-400 to-cyan-500",
-  "Visita Realizada":   "from-teal-400 to-teal-500",
+  "Lead Quente":        "from-cyan-400 to-cyan-500",
+  "Fazendo Orçamento": "from-teal-400 to-teal-500",
   "Orçamento Enviado":  "from-amber-400 to-amber-500",
   "Negociação":         "from-orange-400 to-orange-500",
   "Fechado":            "from-emerald-400 to-emerald-500",
@@ -62,8 +54,8 @@ const FUNNEL_COLORS: Record<FunnelStage, string> = {
 const FUNNEL_BG: Record<FunnelStage, string> = {
   "Prospectar":         "bg-slate-500/10 border-slate-500/30 text-slate-700 dark:text-slate-300",
   "Em Prospecção":      "bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300",
-  "Contato Inicial":    "bg-cyan-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-300",
-  "Visita Realizada":   "bg-teal-500/10 border-teal-500/30 text-teal-700 dark:text-teal-300",
+  "Lead Quente":        "bg-cyan-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-300",
+  "Fazendo Orçamento": "bg-teal-500/10 border-teal-500/30 text-teal-700 dark:text-teal-300",
   "Orçamento Enviado":  "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300",
   "Negociação":         "bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300",
   "Fechado":            "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300",
@@ -102,16 +94,19 @@ function addDaysStr(days: number): string {
 
 function normalizeStage(raw: string): string {
   const s = (raw || "").trim().toLowerCase();
-  // Map legacy / alternate values to canonical stages
-  if (s.includes("fazendo")) return "Orçamento Enviado";
+  // Mapeamento de valores legados para os canonicos
+  if (s === "contato inicial") return "Em Prospecção";
+  if (s === "visita realizada") return "Lead Quente";
+  if (s === "encerrado") return "Perdido";
+  // Correspondência exata com os status oficiais
   for (const stage of FUNNEL_STAGES) {
     if (stage.toLowerCase() === s) return stage;
   }
-  // Partial matching for common variants
+  // Correspondência parcial para variantes comuns
   if (s.includes("prospectar")) return "Prospectar";
   if (s.includes("prospecção") || s.includes("prospeccao")) return "Em Prospecção";
-  if (s.includes("contato inicial")) return "Contato Inicial";
-  if (s.includes("visita realizada")) return "Visita Realizada";
+  if (s.includes("lead") || s.includes("quente")) return "Lead Quente";
+  if (s.includes("fazendo")) return "Fazendo Orçamento";
   if (s.includes("orçamento") || s.includes("orcamento")) return "Orçamento Enviado";
   if (s.includes("negociação") || s.includes("negociacao") || s.includes("negocia")) return "Negociação";
   if (s.includes("fechado") || s.includes("ganho")) return "Fechado";

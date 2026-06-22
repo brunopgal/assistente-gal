@@ -24,17 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const STATUS_OPTIONS = [
-  "Prospectar",
-  "Em Prospecção",
-  "Contato Inicial",
-  "Visita Realizada",
-  "Orçamento Enviado",
-  "Negociação",
-  "Fechado",
-  "Perdido",
-] as const;
+import { STATUS_PROSPECCAO } from "@/lib/statusProspeccao";
 
 const CLASSIFICACAO_OPTIONS = [
   "Baixo Padrão",
@@ -206,7 +196,7 @@ export default function ObraForm({ defaultValues, onSubmit, isSubmitting, isEdit
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (
+                    {STATUS_PROSPECCAO.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
