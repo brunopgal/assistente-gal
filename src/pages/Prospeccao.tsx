@@ -54,6 +54,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
 import { criarAtividade, listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import { listarPessoas, type Pessoa } from "@/services/pessoasService";
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -157,7 +158,12 @@ export default function Prospeccao() {
 
   const [novaProspeccaoOpen, setNovaProspeccaoOpen] = useState(false);
   const [novaObraComboboxOpen, setNovaObraComboboxOpen] = useState(false);
+  const [novaContatoComboboxOpen, setNovaContatoComboboxOpen] = useState(false);
   const [selectedNovaObra, setSelectedNovaObra] = useState("");
+  const [selectedNovaFase, setSelectedNovaFase] = useState("");
+  const [selectedNovaContato, setSelectedNovaContato] = useState(""); // codigoPessoa
+  const [pessoasModal, setPessoasModal] = useState<Pessoa[]>([]);
+  const [carregandoPessoas, setCarregandoPessoas] = useState(false);
   const [iniciandoProspeccao, setIniciandoProspeccao] = useState(false);
 
   const [emailObra, setEmailObra] = useState<Obra | null>(null);
@@ -303,24 +309,60 @@ export default function Prospeccao() {
     return todasObras;
   }, [todasObras]);
 
+  // Fases disponíveis no modal Nova Prospecção (mesmos valores de STATUS_ALVO / registrarAcaoManual)
+  const FASES_INICIAIS = [
+    "Em Prospecção",
+    "Lead Quente",
+    "Orçamento Enviado",
+    "Negociação",
+  ] as const;
+
+  async function abrirNovaProspeccao() {
+    setSelectedNovaObra("");
+    setSelectedNovaFase("");
+    setSelectedNovaContato("");
+    setNovaProspeccaoOpen(true);
+    // Carrega todas as pessoas uma vez ao abrir o modal
+    setCarregandoPessoas(true);
+    try {
+      const lista = await listarPessoas();
+      setPessoasModal(lista ?? []);
+    } catch {
+      setPessoasModal([]);
+    } finally {
+      setCarregandoPessoas(false);
+    }
+  }
+
   const handleAddNovaProspeccao = async () => {
     if (!selectedNovaObra) return;
+    setIniciandoProspeccao(true);
     try {
-      await atualizarCampoObra(selectedNovaObra, "statusProspeccao", "Prospectar");
+      const statusAlvo = selectedNovaFase || "Em Prospecção";
+      await atualizarCampoObra(selectedNovaObra, "statusProspeccao", statusAlvo);
+
+      const pessoaSelecionada = pessoasModal.find(
+        (p) => p.codigoPessoa === selectedNovaContato
+      );
+      const sufixoContato = pessoaSelecionada
+        ? ` — contato: ${pessoaSelecionada.nome}`
+        : "";
+
       await criarAtividade({
         idObra: selectedNovaObra,
         dataAtividade: formatBR(new Date()),
         tipoContato: "observacao",
         status: "Realizado",
         proximoContato: "",
-        comentario: "Adicionado à esteira de prospecção",
+        comentario: `Prospecção iniciada${sufixoContato}`,
       });
-      toast({ title: "Obra adicionada à prospecção!" });
+      toast({ title: "Obra adicionada à prospecção!", description: `Status: ${statusAlvo}` });
       setNovaProspeccaoOpen(false);
-      setSelectedNovaObra("");
       carregar();
     } catch {
-      toast({ title: "Erro", variant: "destructive" });
+      toast({ title: "Erro ao criar prospecção", variant: "destructive" });
+    } finally {
+      setIniciandoProspeccao(false);
     }
   };
 
@@ -564,7 +606,7 @@ export default function Prospeccao() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setNovaProspeccaoOpen(true)}>
+          <Button onClick={abrirNovaProspeccao}>
             <Plus className="h-4 w-4 mr-2" />
             Nova Prospecção
           </Button>
@@ -596,40 +638,61 @@ export default function Prospeccao() {
         )}
 
         {/* Modal Nova Prospecção */}
-        <Dialog open={novaProspeccaoOpen} onOpenChange={setNovaProspeccaoOpen}>
-          <DialogContent>
+        <Dialog open={novaProspeccaoOpen} onOpenChange={(v) => { if (!v) setNovaProspeccaoOpen(false); }}>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Iniciar Nova Prospecção</DialogTitle>
               <DialogDescription>
-                Selecione uma obra cadastrada para adicionar ao funil de prospecção.
+                Selecione a obra e, opcionalmente, um contato e a fase inicial.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label>Buscar e Selecionar Obra</Label>
+
+            <div className="space-y-4 pt-2">
+              {/* 1. Obra */}
+              <div className="space-y-1.5">
+                <Label>Obra <span className="text-destructive">*</span></Label>
                 <Popover open={novaObraComboboxOpen} onOpenChange={setNovaObraComboboxOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-left truncate">
-                      {selectedNovaObra ? obrasParaIniciar.find((o) => (o.codigoObra || (o as any).id) === selectedNovaObra)?.nome : "Selecione uma obra para iniciar..."}
+                      {selectedNovaObra
+                        ? obrasParaIniciar.find((o) => (o.codigoObra || (o as any).id) === selectedNovaObra)?.nome
+                        : "Selecione uma obra…"}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
+                  <PopoverContent className="w-[420px] p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Buscar obra pelo nome ou construtora..." />
+                      <CommandInput placeholder="Buscar por nome ou construtora…" />
                       <CommandList>
                         <CommandEmpty>Nenhuma obra encontrada.</CommandEmpty>
                         <CommandGroup>
                           {obrasParaIniciar.map((o) => {
                             const code = o.codigoObra || (o as any).id;
+                            const naEsteira = STATUS_ALVO_NORM.has(normalizeText(o.statusProspeccao || ""));
                             return (
                               <CommandItem
                                 key={code}
                                 value={`${o.nome} ${o.construtora || ""}`}
-                                onSelect={() => { setSelectedNovaObra(code); setNovaObraComboboxOpen(false); }}
+                                onSelect={() => {
+                                  setSelectedNovaObra(code);
+                                  setNovaObraComboboxOpen(false);
+                                  // Ao mudar obra, recarrega pessoas filtradas pela construtora
+                                  if (o.construtora) {
+                                    listarPessoas({ codigoConstrutora: o.construtora })
+                                      .then((p) => setPessoasModal(p ?? []))
+                                      .catch(() => {});
+                                  }
+                                }}
                               >
-                                <CheckIcon className={cn("mr-2 h-4 w-4", selectedNovaObra === code ? "opacity-100" : "opacity-0")} />
-                                <span className="truncate">{o.nome} {o.construtora ? `- ${o.construtora}` : ""}</span>
+                                <CheckIcon className={cn("mr-2 h-4 w-4 shrink-0", selectedNovaObra === code ? "opacity-100" : "opacity-0")} />
+                                <span className="flex-1 truncate">
+                                  {o.nome}{o.construtora ? ` — ${o.construtora}` : ""}
+                                </span>
+                                {naEsteira && (
+                                  <span className="ml-2 shrink-0 text-xs text-amber-600 font-medium">
+                                    • já na esteira ({o.statusProspeccao})
+                                  </span>
+                                )}
                               </CommandItem>
                             );
                           })}
@@ -639,10 +702,83 @@ export default function Prospeccao() {
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {/* 2. Contato (pessoa) — opcional */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1">
+                  Contato
+                  <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+                </Label>
+                <Popover open={novaContatoComboboxOpen} onOpenChange={setNovaContatoComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-left truncate" disabled={carregandoPessoas}>
+                      {carregandoPessoas
+                        ? "Carregando contatos…"
+                        : selectedNovaContato
+                          ? pessoasModal.find((p) => p.codigoPessoa === selectedNovaContato)?.nome
+                          : "Nenhum contato selecionado"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[420px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar contato pelo nome…" />
+                      <CommandList>
+                        <CommandEmpty>Nenhum contato encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {/* Opção para limpar seleção */}
+                          {selectedNovaContato && (
+                            <CommandItem
+                              value="__limpar__"
+                              onSelect={() => { setSelectedNovaContato(""); setNovaContatoComboboxOpen(false); }}
+                            >
+                              <span className="text-muted-foreground italic">— Sem contato específico</span>
+                            </CommandItem>
+                          )}
+                          {pessoasModal.map((p) => (
+                            <CommandItem
+                              key={p.codigoPessoa}
+                              value={`${p.nome} ${p.cargo || ""}`}
+                              onSelect={() => { setSelectedNovaContato(p.codigoPessoa ?? ""); setNovaContatoComboboxOpen(false); }}
+                            >
+                              <CheckIcon className={cn("mr-2 h-4 w-4 shrink-0", selectedNovaContato === p.codigoPessoa ? "opacity-100" : "opacity-0")} />
+                              <span className="flex-1 truncate">{p.nome}</span>
+                              {p.cargo && <span className="ml-2 text-xs text-muted-foreground">{p.cargo}</span>}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* 3. Fase inicial — opcional */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1">
+                  Fase inicial
+                  <span className="text-xs text-muted-foreground font-normal">(padrão: Em Prospecção)</span>
+                </Label>
+                <Select value={selectedNovaFase} onValueChange={setSelectedNovaFase}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Em Prospecção (padrão)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Em Prospecção">Em Prospecção</SelectItem>
+                    <SelectItem value="Lead Quente">Lead Quente</SelectItem>
+                    <SelectItem value="Orçamento Enviado">Orçamento Enviado</SelectItem>
+                    <SelectItem value="Negociação">Negociação</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setNovaProspeccaoOpen(false)}>Cancelar</Button>
-              <Button onClick={handleAddNovaProspeccao} disabled={!selectedNovaObra}>
+
+            <DialogFooter className="mt-2">
+              <Button variant="outline" onClick={() => setNovaProspeccaoOpen(false)} disabled={iniciandoProspeccao}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAddNovaProspeccao} disabled={!selectedNovaObra || iniciandoProspeccao}>
+                {iniciandoProspeccao && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Adicionar à Prospecção
               </Button>
             </DialogFooter>
