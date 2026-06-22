@@ -22,7 +22,7 @@ import {
 } from "@/services/pessoasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
 import { listarObras, type Obra } from "@/services/obrasService";
-import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import { listarTodasAtividades, atualizarAtividade, excluirAtividade, type Atividade } from "@/services/atividadesService";
 import { normalizeText } from "@/lib/normalize";
 import { exportarParaExcel } from "@/lib/exportXlsx";
 
@@ -40,6 +40,7 @@ const EMPTY: Pessoa = {
 export default function Pessoas() {
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [construtoras, setConstrutoras] = useState<Construtora[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filtroCT, setFiltroCT] = useState<string>("__all__");
@@ -99,6 +100,51 @@ export default function Pessoas() {
     }
   }
 
+  // Edit Atividade states
+  const [editingAtv, setEditingAtv] = useState<Atividade | null>(null);
+  const [formAtv, setFormAtv] = useState<Partial<Atividade>>({});
+  const [savingAtv, setSavingAtv] = useState(false);
+
+  async function saveHistoricoPessoa(codigoConstrutora: string, codigoObraAtual: string) {
+    if (!historicoOpen?.codigoPessoa) return;
+    try {
+      await atualizarPessoa(historicoOpen.codigoPessoa, { codigoConstrutora, codigoObraAtual });
+      toast.success("Vínculos atualizados");
+      const updated = { ...historicoOpen, codigoConstrutora, codigoObraAtual };
+      setHistoricoOpen(updated);
+      await loadHistorico(updated);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function saveAtv() {
+    if (!editingAtv?.idAtividade) return;
+    setSavingAtv(true);
+    try {
+      await atualizarAtividade(editingAtv.idAtividade, formAtv);
+      toast.success("Atividade atualizada");
+      setEditingAtv(null);
+      await loadHistorico(historicoOpen!);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingAtv(false);
+    }
+  }
+
+  async function deleteAtv(id: string) {
+    if (!confirm("Excluir esta atividade?")) return;
+    try {
+      await excluirAtividade(id);
+      toast.success("Atividade excluída");
+      await loadHistorico(historicoOpen!);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   useEffect(() => {
     if (historicoOpen) {
       loadHistorico(historicoOpen);
@@ -108,9 +154,10 @@ export default function Pessoas() {
   async function load() {
     setLoading(true);
     try {
-      const [p, c] = await Promise.all([listarPessoas(), listarConstrutoras()]);
+      const [p, c, o] = await Promise.all([listarPessoas(), listarConstrutoras(), listarObras()]);
       setPessoas(p);
       setConstrutoras(c);
+      setObras(o);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -436,12 +483,24 @@ export default function Pessoas() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-muted/30 p-3 rounded-lg border">
                     <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                      <Building2 className="h-4 w-4" /> Relacionado a
+                      <Building2 className="h-4 w-4" /> Relacionado a (Construtora)
                     </div>
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">{ctByCodigo.get(historicoOpen?.codigoConstrutora || "")?.nome || "Sem construtora"}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <Select
+                      value={historicoOpen?.codigoConstrutora || "none"}
+                      onValueChange={(v) => saveHistoricoPessoa(v === "none" ? "" : v, historicoOpen?.codigoObraAtual || "")}
+                    >
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma construtora</SelectItem>
+                        {construtoras
+                          .filter(c => c.codigo)
+                          .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""))
+                          .map(c => (
+                            <SelectItem key={c.codigo} value={c.codigo!}>{c.nome}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground mt-2 px-1">
                       Cargo: {historicoOpen?.cargo || "Não informado"}
                     </div>
                   </div>
@@ -450,17 +509,24 @@ export default function Pessoas() {
                     <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                       <HardHat className="h-4 w-4" /> Obra Atual
                     </div>
-                    {historicoObra ? (
-                      <>
-                        <div className="text-sm font-medium text-foreground line-clamp-1" title={historicoObra.nome}>
-                          {historicoObra.nome}
-                        </div>
-                        <div className="mt-1">
-                          <Badge variant="outline" className="text-[10px] uppercase">{historicoObra.statusProspeccao || "A Iniciar"}</Badge>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-sm text-muted-foreground italic">Nenhuma obra vinculada</div>
+                    <Select
+                      value={historicoOpen?.codigoObraAtual || "none"}
+                      onValueChange={(v) => saveHistoricoPessoa(historicoOpen?.codigoConstrutora || "", v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Nenhuma obra" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma obra</SelectItem>
+                        {obras.map(o => (
+                          <SelectItem key={o.codigoObra || o.id} value={(o.codigoObra || o.id)!}>
+                            {o.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {historicoObra && (
+                      <div className="mt-2 px-1">
+                        <Badge variant="outline" className="text-[10px] uppercase">{historicoObra.statusProspeccao || "A Iniciar"}</Badge>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -481,33 +547,100 @@ export default function Pessoas() {
                   ) : (
                     <div className="space-y-3 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:ml-[22px] md:before:translate-x-0 before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border/50 before:to-transparent">
                       {historicoAtividades.map((atv, idx) => (
-                        <div key={atv.idAtividade || idx} className="relative flex items-start justify-between gap-4 md:gap-6 bg-card rounded-lg border p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div key={atv.idAtividade || idx} className="relative flex items-start justify-between gap-4 md:gap-6 bg-card rounded-lg border p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow group">
                           <div className="absolute left-0 md:left-5 top-4 md:top-5 w-2 h-2 rounded-full bg-primary/40 ring-4 ring-background z-10" />
                           <div className="flex-1 space-y-2 pl-4 md:pl-8">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="font-mono text-xs">
-                                  {atv.dataAtividade}
-                                </Badge>
-                                {atv.tipoContato && (
-                                  <Badge variant="outline" className="capitalize text-[10px]">
-                                    {atv.tipoContato}
-                                  </Badge>
+                            {editingAtv?.idAtividade === atv.idAtividade ? (
+                              <div className="space-y-3 bg-muted/20 p-3 rounded border border-border/50">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-[10px] uppercase font-bold text-muted-foreground">Tipo</label>
+                                    <Input
+                                      className="h-8 text-sm"
+                                      value={formAtv.tipoContato || ""}
+                                      onChange={e => setFormAtv({ ...formAtv, tipoContato: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] uppercase font-bold text-muted-foreground">Data</label>
+                                    <Input
+                                      className="h-8 text-sm"
+                                      value={formAtv.dataAtividade || ""}
+                                      onChange={e => setFormAtv({ ...formAtv, dataAtividade: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] uppercase font-bold text-muted-foreground">Status</label>
+                                    <Input
+                                      className="h-8 text-sm"
+                                      value={formAtv.status || ""}
+                                      onChange={e => setFormAtv({ ...formAtv, status: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] uppercase font-bold text-muted-foreground">Próximo Contato</label>
+                                    <Input
+                                      className="h-8 text-sm"
+                                      value={formAtv.proximoContato || ""}
+                                      onChange={e => setFormAtv({ ...formAtv, proximoContato: e.target.value })}
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase font-bold text-muted-foreground">Comentário</label>
+                                  <Textarea
+                                    rows={2}
+                                    className="text-sm"
+                                    value={formAtv.comentario || ""}
+                                    onChange={e => setFormAtv({ ...formAtv, comentario: e.target.value })}
+                                  />
+                                </div>
+                                <div className="flex gap-2 justify-end pt-1">
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingAtv(null)}>Cancelar</Button>
+                                  <Button size="sm" onClick={saveAtv} disabled={savingAtv}>Salvar</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="font-mono text-xs">
+                                      {atv.dataAtividade}
+                                    </Badge>
+                                    {atv.tipoContato && (
+                                      <Badge variant="outline" className="capitalize text-[10px]">
+                                        {atv.tipoContato}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {atv.status && (
+                                      <Badge variant={atv.status === 'Realizado' ? 'default' : 'secondary'} className="text-[10px] w-fit">
+                                        {atv.status}
+                                      </Badge>
+                                    )}
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 rounded px-1">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                                        setEditingAtv(atv);
+                                        setFormAtv({ ...atv });
+                                      }}>
+                                        <Edit3 className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={() => deleteAtv(atv.idAtividade!)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-sm text-foreground/90 whitespace-pre-wrap">
+                                  {atv.comentario || <span className="italic opacity-50">Sem descrição</span>}
+                                </div>
+                                {atv.proximoContato && (
+                                  <div className="text-xs font-medium text-primary bg-primary/5 rounded px-2 py-1 w-fit border border-primary/10">
+                                    Próximo: {atv.proximoContato}
+                                  </div>
                                 )}
-                              </div>
-                              {atv.status && (
-                                <Badge variant={atv.status === 'Realizado' ? 'default' : 'secondary'} className="text-[10px] w-fit">
-                                  {atv.status}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-foreground/90 whitespace-pre-wrap">
-                              {atv.comentario || <span className="italic opacity-50">Sem descrição</span>}
-                            </div>
-                            {atv.proximoContato && (
-                              <div className="text-xs font-medium text-primary bg-primary/5 rounded px-2 py-1 w-fit border border-primary/10">
-                                Próximo: {atv.proximoContato}
-                              </div>
+                              </>
                             )}
                           </div>
                         </div>
