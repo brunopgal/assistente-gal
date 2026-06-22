@@ -441,6 +441,8 @@ export default function Prospeccao() {
           comentario: `Follow-up de ${acao} — ${nome}`,
         });
 
+        await atualizarCampoObra(codigo, "proximoContato", formatBR(dataFutura));
+
         if (obra.statusProspeccao === "A iniciar" || obra.statusProspeccao === "Prospectar") {
            await atualizarCampoObra(codigo, "statusProspeccao", "Em Prospecção");
         }
@@ -487,7 +489,24 @@ export default function Prospeccao() {
           proximoContato: "",
           comentario: detalhesOpcionais || "Orçamento enviado",
         });
-        toast({ title: "Marcado como Orçamento Enviado!" });
+
+        // Agendar follow-up automático de orçamento (15 dias)
+        const DIAS_FOLLOWUP = 15;
+        const dataFutura = new Date();
+        dataFutura.setDate(dataFutura.getDate() + DIAS_FOLLOWUP);
+
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "observacao",
+          status: "Pendente",
+          proximoContato: formatBR(dataFutura),
+          comentario: `Follow-up de orçamento — ${nome}`,
+        });
+
+        await atualizarCampoObra(codigo, "proximoContato", formatBR(dataFutura));
+
+        toast({ title: "Marcado como Orçamento Enviado!", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
       } else if (acao === "respondeu") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Lead Quente");
         await criarAtividade({
@@ -546,6 +565,8 @@ export default function Prospeccao() {
         proximoContato: formatBR(followDate),
         comentario: followDesc || `Follow-up de prospecção — ${followObra.nome}`,
       });
+
+      await atualizarCampoObra(codigo, "proximoContato", formatBR(followDate));
 
       toast({
         title: "Follow-up criado",
