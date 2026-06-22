@@ -119,11 +119,12 @@ function mapStatusProspeccao(v: string): string {
   const map: Record<string, string> = {
     "prospectar": "Prospectar",
     "em prospeccao": "Em Prospecção",
-    "contato inicial": "Contato Inicial",
-    "visita realizada": "Visita Realizada",
+    "contato inicial": "Em Prospecção",
+    "visita realizada": "Lead Quente",
+    "lead quente": "Lead Quente",
+    "fazendo orcamento": "Fazendo Orçamento",
     "orcamento enviado": "Orçamento Enviado",
     "negociacao": "Negociação",
-    "fazendo orcamento": "Negociação",
     "fechado": "Fechado",
     "perdido": "Perdido",
   };
@@ -133,12 +134,13 @@ function mapStatusProspeccao(v: string): string {
 function mapEstagioObra(v: string): string {
   const n = norm(v);
   const map: Record<string, string> = {
-    "terreno": "Não iniciado",
-    "nao iniciado": "Não iniciado",
-    "fundacao": "Fundação",
-    "estrutura": "Estrutura",
-    "alvenaria": "Alvenaria",
-    "acabamento": "Acabamento",
+    "terreno": "Não Iniciado",
+    "nao iniciado": "Não Iniciado",
+    "fundacao": "Inicial",
+    "estrutura": "Inicial",
+    "alvenaria": "Médio",
+    "acabamento": "Final",
+    "execucao final": "Final",
     "finalizacao": "Finalizado",
     "finalizado": "Finalizado",
     "entregue": "Finalizado",
@@ -150,10 +152,12 @@ function mapPadraoObra(v: string): string {
   // padraoObra do prompt novo -> classificacao atual (campo único hoje)
   const n = norm(v);
   const map: Record<string, string> = {
-    "mcmv": "Baixo",
-    "popular": "Baixo",
-    "medio": "Médio",
-    "alto": "Alto",
+    "mcmv": "Baixo Padrão",
+    "popular": "Baixo Padrão",
+    "baixo": "Baixo Padrão",
+    "medio": "Médio Padrão",
+    "medio/alto": "Médio/Alto Padrão",
+    "alto": "Alto Padrão",
   };
   return map[n] || "";
 }
