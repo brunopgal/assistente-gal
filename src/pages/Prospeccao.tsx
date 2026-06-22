@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check as CheckIcon, ChevronsUpDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Tooltip,
@@ -44,12 +44,12 @@ import {
   Bot,
   Plus,
   MoreVertical,
-  AlertTriangle,
   Phone,
   Flame,
   ArrowRight,
   Ban,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
@@ -57,7 +57,7 @@ import { criarAtividade, listarTodasAtividades, type Atividade } from "@/service
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts";
+import { calcularAlertasMichele, type MicheleAlert } from "@/lib/micheleAlerts"; // alertas calculados localmente, sem chamadas Michele
 import { getConfig } from "@/services/configuracoesService";
 import {
   DropdownMenu,
@@ -69,6 +69,7 @@ import {
 type StatusFiltro = "todos" | "Prospectar" | "Em Prospecção" | "Lead Quente" | "Orçamento Enviado" | "Negociação";
 
 const STATUS_ALVO = new Set(["Prospectar", "Em Prospecção", "Lead Quente", "Orçamento Enviado", "Negociação"]);
+const STATUS_ALVO_NORM = new Set(Array.from(STATUS_ALVO).map(normalizeText));
 
 function todayBR(): string {
   return new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -196,7 +197,7 @@ export default function Prospeccao() {
       
       setTodasObras(lista ?? []);
       const filtradas = (lista ?? []).filter((o) =>
-        STATUS_ALVO.has(normalizeText(o.statusProspeccao || "")),
+        STATUS_ALVO_NORM.has(normalizeText(o.statusProspeccao || "")),
       );
       setObras(filtradas);
 
@@ -296,12 +297,10 @@ export default function Prospeccao() {
     });
   }, [obras, busca, statusFiltro]);
 
+  // Mostra TODAS as obras cadastradas — assim sempre é possível selecionar uma,
+  // mesmo que ela já esteja na esteira (re-prospecção ou troca de status).
   const obrasParaIniciar = useMemo(() => {
-    return todasObras.filter(o => {
-      const stat = normalizeText(o.statusProspeccao || "");
-      const isAlvo = STATUS_ALVO.has(stat);
-      return !isAlvo;
-    });
+    return todasObras;
   }, [todasObras]);
 
   const handleAddNovaProspeccao = async () => {
@@ -351,21 +350,18 @@ export default function Prospeccao() {
           comentario: acao === "email" ? "E-mail enviado" : "WhatsApp enviado",
         });
 
-        const dias = acao === "email" ? 5 : 3;
+        // Follow-up criado diretamente via criarAtividade (prazo padrão: 15 dias)
+        const DIAS_FOLLOWUP = 15;
         const dataFutura = new Date();
-        dataFutura.setDate(dataFutura.getDate() + dias);
+        dataFutura.setDate(dataFutura.getDate() + DIAS_FOLLOWUP);
 
-        await supabase.functions.invoke("michele-executar-acao", {
-          body: {
-            tipo: "criar_followup",
-            dados: {
-              codigoObra: codigo,
-              descricao: `Follow-up de ${acao} (${nome})`,
-              data_prevista: formatBR(dataFutura),
-              prioridade: "normal",
-              responsavel: "michele",
-            },
-          },
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "observacao",
+          status: "Pendente",
+          proximoContato: formatBR(dataFutura),
+          comentario: `Follow-up de ${acao} — ${nome}`,
         });
 
         if (obra.statusProspeccao === "A iniciar" || obra.statusProspeccao === "Prospectar") {
@@ -515,20 +511,16 @@ export default function Prospeccao() {
     setCriandoFollow(true);
     try {
       const codigo = followObra.codigoObra || (followObra as any).id;
-      const { data, error } = await supabase.functions.invoke("michele-executar-acao", {
-        body: {
-          tipo: "criar_followup",
-          dados: {
-            codigoObra: codigo,
-            descricao: followDesc || `Follow-up de prospecção — ${followObra.nome}`,
-            data_prevista: formatBR(followDate),
-            prioridade: "normal",
-            responsavel: "michele",
-          },
-        },
+
+      // Criação direta de follow-up via criarAtividade (sem chamada Michele)
+      await criarAtividade({
+        idObra: codigo,
+        dataAtividade: formatBR(new Date()),
+        tipoContato: "observacao",
+        status: "Pendente",
+        proximoContato: formatBR(followDate),
+        comentario: followDesc || `Follow-up de prospecção — ${followObra.nome}`,
       });
-      if (error) throw new Error(error.message || "Falha");
-      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Follow-up criado",
@@ -636,7 +628,7 @@ export default function Prospeccao() {
                                 value={`${o.nome} ${o.construtora || ""}`}
                                 onSelect={() => { setSelectedNovaObra(code); setNovaObraComboboxOpen(false); }}
                               >
-                                <Check className={cn("mr-2 h-4 w-4", selectedNovaObra === code ? "opacity-100" : "opacity-0")} />
+                                <CheckIcon className={cn("mr-2 h-4 w-4", selectedNovaObra === code ? "opacity-100" : "opacity-0")} />
                                 <span className="truncate">{o.nome} {o.construtora ? `- ${o.construtora}` : ""}</span>
                               </CommandItem>
                             );
@@ -822,7 +814,7 @@ export default function Prospeccao() {
                           </DropdownMenuItem>
 
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "email")}>
-                            <Check className="h-4 w-4 mr-2 text-emerald-600" />
+                            <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
                             Enviei e-mail (Marcar)
                           </DropdownMenuItem>
                           
@@ -837,12 +829,12 @@ export default function Prospeccao() {
                           </DropdownMenuItem>
                           
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "orcamento")}>
-                            <Check className="h-4 w-4 mr-2 text-blue-600" />
+                            <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
                             Enviei Orçamento
                           </DropdownMenuItem>
                           
                           <DropdownMenuItem onClick={() => registrarAcaoManual(o, "avancar")}>
-                            <Check className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                             Avançar para Negociação
                           </DropdownMenuItem>
                           
