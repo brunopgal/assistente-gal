@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 import { Label } from "@/components/ui/label";
 import {
@@ -49,6 +50,9 @@ import {
   ArrowRight,
   Ban,
   Clock,
+  Mic,
+  MicOff,
+  Users
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
@@ -105,6 +109,41 @@ interface ObraStats {
 export default function Prospeccao() {
   const { toast } = useToast();
   const [todasObras, setTodasObras] = useState<Obra[]>([]);
+  const [acaoDialogOcorrencia, setAcaoDialogOcorrencia] = useState<{obra: Obra, acao: string, title: string} | null>(null);
+  const [acaoDialogDetalhes, setAcaoDialogDetalhes] = useState("");
+  const [acaoDialogIsRecording, setAcaoDialogIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.lang = 'pt-BR';
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setAcaoDialogDetalhes(prev => prev ? prev + ' ' + transcript : transcript);
+      };
+
+      recognitionRef.current.onend = () => {
+        setAcaoDialogIsRecording(false);
+      };
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (acaoDialogIsRecording) {
+      recognitionRef.current?.stop();
+      setAcaoDialogIsRecording(false);
+    } else {
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+        setAcaoDialogIsRecording(true);
+      }
+    }
+  };
   const [obras, setObras] = useState<Obra[]>([]);
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
   const [atividadesMap, setAtividadesMap] = useState<Record<string, Atividade>>({});
@@ -317,7 +356,7 @@ export default function Prospeccao() {
     }
   };
 
-  async function registrarAcaoManual(obra: Obra, acao: string) {
+  async function registrarAcaoManual(obra: Obra, acao: string, detalhesOpcionais?: string) {
     const codigo = obra.codigoObra || (obra as any).id;
     const nome = obra.nome || "Obra";
 
@@ -330,7 +369,7 @@ export default function Prospeccao() {
           tipoContato: "observacao",
           status: "Realizado",
           proximoContato: "",
-          comentario: "Prospecção iniciada",
+          comentario: detalhesOpcionais || "Prospecção iniciada",
         });
         toast({ title: "Marcado como Em Prospecção!" });
       } else if (acao === "email" || acao === "whatsapp") {
@@ -340,7 +379,7 @@ export default function Prospeccao() {
           tipoContato: acao,
           status: "Realizado",
           proximoContato: "",
-          comentario: acao === "email" ? "E-mail enviado" : "WhatsApp enviado",
+          comentario: detalhesOpcionais || (acao === "email" ? "E-mail enviado" : "WhatsApp enviado"),
         });
 
         // Follow-up criado diretamente via criarAtividade (prazo padrão: 15 dias)
@@ -362,6 +401,26 @@ export default function Prospeccao() {
         }
 
         toast({ title: "Atividade registrada", description: `Follow-up agendado para ${formatBR(dataFutura)}.` });
+      } else if (acao === "visitei") {
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "visita",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: detalhesOpcionais || "Visitei a obra",
+        });
+        toast({ title: "Visita registrada!" });
+      } else if (acao === "reuniao") {
+        await criarAtividade({
+          idObra: codigo,
+          dataAtividade: formatBR(new Date()),
+          tipoContato: "reuniao",
+          status: "Realizado",
+          proximoContato: "",
+          comentario: detalhesOpcionais || "Fiz reunião",
+        });
+        toast({ title: "Reunião registrada!" });
       } else if (acao === "comecei_orcamento") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Fazendo Orçamento");
         await criarAtividade({
@@ -370,7 +429,7 @@ export default function Prospeccao() {
           tipoContato: "observacao",
           status: "Realizado",
           proximoContato: "",
-          comentario: "Comecei orçamento",
+          comentario: detalhesOpcionais || "Comecei orçamento",
         });
         toast({ title: "Marcado como Fazendo Orçamento!" });
       } else if (acao === "orcamento") {
@@ -381,7 +440,7 @@ export default function Prospeccao() {
           tipoContato: "orcamento",
           status: "Realizado",
           proximoContato: "",
-          comentario: "Orçamento enviado",
+          comentario: detalhesOpcionais || "Orçamento enviado",
         });
         toast({ title: "Marcado como Orçamento Enviado!" });
       } else if (acao === "respondeu") {
@@ -392,17 +451,26 @@ export default function Prospeccao() {
           tipoContato: "outro",
           status: "Realizado",
           proximoContato: "",
-          comentario: "Cliente respondeu",
+          comentario: detalhesOpcionais || "Cliente respondeu",
         });
         toast({ title: "Marcado como Lead Quente!" });
       } else if (acao === "avancar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Negociação");
+        if (detalhesOpcionais) {
+           await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
+        }
         toast({ title: "Avançou para Negociação" });
       } else if (acao === "fechei") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Fechado");
+        if (detalhesOpcionais) {
+           await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
+        }
         toast({ title: "Prospecção ganha (Fechado)!" });
       } else if (acao === "encerrar") {
         await atualizarCampoObra(codigo, "statusProspeccao", "Perdido");
+        if (detalhesOpcionais) {
+           await criarAtividade({ idObra: codigo, dataAtividade: formatBR(new Date()), tipoContato: "observacao", status: "Realizado", proximoContato: "", comentario: detalhesOpcionais });
+        }
         toast({ title: "Prospecção encerrada (Perdido)" });
       }
       
@@ -791,49 +859,57 @@ export default function Prospeccao() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "iniciar")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "iniciar", title: "Iniciar prospecção"}); }}>
                             <ArrowRight className="h-4 w-4 mr-2 text-primary" />
                             Iniciar prospecção
                           </DropdownMenuItem>
-                          
 
-
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "email")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "email", title: "Enviei e-mail"}); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
                             Enviei e-mail (Marcar)
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "whatsapp")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "whatsapp", title: "Enviei WhatsApp"}); }}>
                             <Phone className="h-4 w-4 mr-2 text-emerald-600" />
                             Enviei WhatsApp
                           </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "visitei", title: "Visitei a obra"}); }}>
+                            <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                            Visitei a obra
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "reuniao", title: "Fiz reunião"}); }}>
+                            <Users className="h-4 w-4 mr-2 text-indigo-600" />
+                            Fiz reunião
+                          </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "respondeu")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "respondeu", title: "Cliente respondeu!"}); }}>
                             <Flame className="h-4 w-4 mr-2 text-orange-500" />
                             Cliente respondeu!
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "comecei_orcamento")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "comecei_orcamento", title: "Comecei orçamento"}); }}>
                             <Clock className="h-4 w-4 mr-2 text-teal-600" />
                             Comecei orçamento
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "orcamento")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "orcamento", title: "Enviei Orçamento"}); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
                             Enviei Orçamento
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "avancar")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                             Avançar para Negociação
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "fechei")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "fechei", title: "Fechei / Ganhei"}); }}>
                             <Sparkles className="h-4 w-4 mr-2 text-emerald-600" />
                             Fechei / Ganhei
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => registrarAcaoManual(o, "encerrar")}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "encerrar", title: "Encerrar / Perda"}); }}>
                             <Ban className="h-4 w-4 mr-2 text-red-500" />
                             Encerrar / Perda
                           </DropdownMenuItem>
@@ -939,6 +1015,56 @@ export default function Prospeccao() {
                 <div className="text-sm text-muted-foreground text-center py-4">Nenhum acesso detalhado encontrado.</div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+        {/* Modal Ação (Detalhes Opcionais) */}
+        <Dialog open={!!acaoDialogOcorrencia} onOpenChange={(o) => { if (!o) { setAcaoDialogOcorrencia(null); if (acaoDialogIsRecording) toggleRecording(); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Registrar: {acaoDialogOcorrencia?.title}</DialogTitle>
+              <DialogDescription>
+                Se desejar, adicione mais detalhes sobre essa ação.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2 space-y-2">
+              <Label>Detalhes (opcional)</Label>
+              <div className="flex items-start gap-2">
+                <Textarea
+                  value={acaoDialogDetalhes}
+                  onChange={(e) => setAcaoDialogDetalhes(e.target.value)}
+                  placeholder="Ex: Falei com o João sobre o orçamento..."
+                  className="resize-none"
+                  rows={4}
+                />
+                <Button
+                  type="button"
+                  variant={acaoDialogIsRecording ? "destructive" : "outline"}
+                  size="icon"
+                  className="shrink-0"
+                  onClick={toggleRecording}
+                  disabled={!recognitionRef.current}
+                  title={!recognitionRef.current ? "Ditado por voz não suportado neste navegador" : (acaoDialogIsRecording ? "Parar gravação" : "Falar")}
+                >
+                  {acaoDialogIsRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setAcaoDialogOcorrencia(null); if (acaoDialogIsRecording) toggleRecording(); }}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (acaoDialogIsRecording) toggleRecording();
+                  if (acaoDialogOcorrencia) {
+                    registrarAcaoManual(acaoDialogOcorrencia.obra, acaoDialogOcorrencia.acao, acaoDialogDetalhes.trim());
+                    setAcaoDialogOcorrencia(null);
+                  }
+                }}
+              >
+                Confirmar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

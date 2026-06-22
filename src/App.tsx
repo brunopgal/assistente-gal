@@ -12,7 +12,6 @@ import Agenda from "./pages/Agenda";
 import Mapa from "./pages/Mapa";
 import NovaObra from "./pages/NovaObra";
 import FollowUp from "./pages/FollowUp";
-import Visitas from "./pages/Visitas";
 import Construtoras from "./pages/Construtoras";
 import Atividades from "./pages/Atividades";
 import AtividadesGerais from "./pages/AtividadesGerais";
@@ -46,7 +45,6 @@ const App = () => (
                     <Route path="/agenda" element={<Agenda />} />
                     <Route path="/mapa" element={<Mapa />} />
                     <Route path="/follow-up" element={<FollowUp />} />
-                    <Route path="/visitas" element={<Visitas />} />
                     <Route path="/construtoras" element={<Construtoras />} />
                     <Route path="/atividades/:id" element={<Atividades />} />
                     <Route path="/atividades-gerais" element={<AtividadesGerais />} />

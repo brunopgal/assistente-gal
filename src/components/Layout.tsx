@@ -78,7 +78,6 @@ const navStructure: NavEntry[] = [
       icon: Calendar,
       items: [
         { title: "Follow-up", path: "/follow-up", icon: PhoneForwarded },
-        { title: "Visita/Reunião", path: "/visitas", icon: CalendarClock },
         { title: "Agenda", path: "/agenda", icon: Calendar },
         { title: "Atividades Gerais", path: "/atividades-gerais", icon: ListChecks },
       ],
