@@ -26,7 +26,7 @@ export async function listarOrcamentos(): Promise<Orcamento[]> {
     console.error("Erro ao listar orçamentos:", error);
     throw new Error(error.message);
   }
-  return data || [];
+  return (data || []) as Orcamento[];
 }
 
 export async function listarOrcamentosPorObra(codigoObra: string): Promise<Orcamento[]> {
@@ -40,7 +40,7 @@ export async function listarOrcamentosPorObra(codigoObra: string): Promise<Orcam
     console.error("Erro ao listar orçamentos da obra:", error);
     throw new Error(error.message);
   }
-  return data || [];
+  return (data || []) as Orcamento[];
 }
 
 export async function criarOrcamento(orcamento: Orcamento): Promise<Orcamento> {
@@ -54,7 +54,7 @@ export async function criarOrcamento(orcamento: Orcamento): Promise<Orcamento> {
     console.error("Erro ao criar orçamento:", error);
     throw new Error(error.message);
   }
-  return data;
+  return data as Orcamento;
 }
 
 export async function atualizarStatusOrcamento(id: string, status: StatusOrcamento): Promise<Orcamento> {
@@ -69,7 +69,7 @@ export async function atualizarStatusOrcamento(id: string, status: StatusOrcamen
     console.error("Erro ao atualizar status do orçamento:", error);
     throw new Error(error.message);
   }
-  return data;
+  return data as Orcamento;
 }
 
 export async function excluirOrcamento(id: string): Promise<void> {

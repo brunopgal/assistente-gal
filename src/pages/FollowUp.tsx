@@ -598,7 +598,7 @@ export default function FollowUp() {
 
                   <div className="flex items-center gap-2 flex-wrap pt-1">
                     <Button variant="outline" size="sm" asChild className="h-8 text-xs px-2">
-                      <a href={`/construtoras/${construtora.id}`} target="_blank" rel="noopener noreferrer">
+                      <a href={`/construtoras/${construtora.codigo}`} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-3 w-3 mr-1" />
                         Detalhes
                       </a>
