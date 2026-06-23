@@ -5,6 +5,7 @@ import {
   buscarObraPorCodigoPublico,
   type OrcamentoPagina,
 } from "@/services/orcamentosService";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,23 @@ export default function OrcamentoPublico() {
 
     fetchPublicData();
   }, [token]);
+
+  // Registra a abertura do orçamento uma única vez após o carregamento bem-sucedido e ativo
+  useEffect(() => {
+    if (orcamento && orcamento.ativo && token) {
+      const registrarAbertura = async () => {
+        try {
+          await supabase.functions.invoke("registrar-abertura", {
+            body: { token, tipo: "orcamento" },
+          });
+        } catch (error) {
+          // Falha silenciosa: ignora o erro conforme requisito fire-and-forget
+          console.warn("Falha silenciosa ao registrar abertura:", error);
+        }
+      };
+      registrarAbertura();
+    }
+  }, [orcamento?.id, token]);
 
   // Função robusta de download para forçar o download no navegador
   const handleDownload = async (url: string, filename: string) => {
