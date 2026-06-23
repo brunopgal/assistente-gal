@@ -751,6 +751,71 @@ export type Database = {
         }
         Relationships: []
       }
+      orcamento_aberturas: {
+        Row: {
+          aberto_em: string
+          id: string
+          pagina_id: string
+          tipo: string
+        }
+        Insert: {
+          aberto_em?: string
+          id?: string
+          pagina_id: string
+          tipo: string
+        }
+        Update: {
+          aberto_em?: string
+          id?: string
+          pagina_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_aberturas_pagina_id_fkey"
+            columns: ["pagina_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_paginas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orcamento_paginas: {
+        Row: {
+          ativo: boolean
+          blocos: Json
+          codigo_obra: string
+          created_at: string
+          id: string
+          titulo_versao: string
+          token_apresentacao: string
+          token_orcamento: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          blocos?: Json
+          codigo_obra: string
+          created_at?: string
+          id?: string
+          titulo_versao?: string
+          token_apresentacao: string
+          token_orcamento: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          blocos?: Json
+          codigo_obra?: string
+          created_at?: string
+          id?: string
+          titulo_versao?: string
+          token_apresentacao?: string
+          token_orcamento?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orcamentos: {
         Row: {
           codigoObra: string | null
