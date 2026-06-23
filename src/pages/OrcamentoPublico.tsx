@@ -75,17 +75,26 @@ export default function OrcamentoPublico() {
     setDownloadingFile(url);
     try {
       const response = await fetch(url);
-      const blob = await response.blob();
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const baseBlob = await response.blob();
+      
+      // Converte para octet-stream para tentar forçar o download no celular/Safari/Chrome móvel
+      const blob = new Blob([baseBlob], { type: "application/octet-stream" });
       const blobUrl = window.URL.createObjectURL(blob);
       
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = filename;
+      
+      // Essencial anexar ao documento no mobile para disparar o evento click
       document.body.appendChild(link);
       link.click();
       
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
+      // Aguarda um pequeno delay e limpa os recursos
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
     } catch (error) {
       console.warn("Download via blob falhou, tentando fallback direto:", error);
       // Fallback para download direto caso CORS impeça fetch
@@ -93,7 +102,9 @@ export default function OrcamentoPublico() {
       link.href = url;
       link.target = "_blank";
       link.download = filename;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } finally {
       setDownloadingFile(null);
     }
@@ -137,25 +148,31 @@ export default function OrcamentoPublico() {
         <Card className="border-border shadow-sm overflow-hidden bg-card">
           <div className="h-2 bg-gradient-to-r from-primary to-indigo-600" />
           <CardContent className="p-6 sm:p-8 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 border-border/60">
-              <div>
+            <div className="space-y-4 pb-4 border-b border-border/60">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-primary uppercase tracking-wider block">
                   Gal Representações
                 </span>
-                <h1 className="text-2xl font-extrabold text-foreground tracking-tight mt-1" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                <Badge variant="outline" className="bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300 border-indigo-200/50 dark:border-indigo-900/50 font-bold uppercase tracking-widest text-[10px] px-2 py-0.5 rounded shadow-sm">
+                  Orçamento
+                </Badge>
+              </div>
+              
+              <div className="space-y-2">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   {obra?.nome || orcamento.titulo_versao || "Orçamento de Obra"}
                 </h1>
+                {obra?.construtora && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium bg-muted/30 px-3 py-1.5 rounded-lg w-fit">
+                    <Building2 className="h-4 w-4 text-primary shrink-0" />
+                    <span>Construtora: <span className="text-foreground font-semibold">{obra.construtora}</span></span>
+                  </div>
+                )}
               </div>
-              {obra?.construtora && (
-                <div className="shrink-0 flex items-center gap-2 bg-muted/60 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground">
-                  <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <span>{obra.construtora}</span>
-                </div>
-              )}
             </div>
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>Link Seguro de Orçamento</span>
               </span>

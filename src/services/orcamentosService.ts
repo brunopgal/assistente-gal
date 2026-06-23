@@ -248,5 +248,95 @@ export async function buscarObraPorCodigoPublico(codigoObra: string): Promise<an
   return data;
 }
 
+export interface ResumoAberturasObra {
+  temOrcamento: boolean;
+  totalAberturas: number;
+}
+
+export async function contarAberturas(paginaId: string): Promise<{ total: number; ultima: string | null }> {
+  const { data, error, count } = await supabase
+    .from("orcamento_aberturas" as any)
+    .select("aberto_em", { count: "exact" })
+    .eq("pagina_id", paginaId)
+    .eq("tipo", "orcamento")
+    .order("aberto_em", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao contar aberturas:", error);
+    throw new Error(error.message);
+  }
+
+  const total = count || 0;
+  const ultima = data && data.length > 0 ? data[0].aberto_em : null;
+
+  return { total, ultima };
+}
+
+export async function obterResumoAberturasPorObra(codigoObras: string[]): Promise<Record<string, ResumoAberturasObra>> {
+  if (!codigoObras || codigoObras.length === 0) return {};
+
+  const { data: paginas, error: errPaginas } = await supabase
+    .from("orcamento_paginas" as any)
+    .select("id, codigo_obra")
+    .in("codigo_obra", codigoObras);
+
+  if (errPaginas) {
+    console.error("Erro ao obter páginas de orçamento para resumo:", errPaginas);
+    throw new Error(errPaginas.message);
+  }
+
+  const result: Record<string, ResumoAberturasObra> = {};
+
+  for (const cod of codigoObras) {
+    result[cod] = {
+      temOrcamento: false,
+      totalAberturas: 0,
+    };
+  }
+
+  if (!paginas || paginas.length === 0) {
+    return result;
+  }
+
+  const paginaIds: string[] = [];
+  const paginaParaObra: Record<string, string> = {};
+
+  for (const pag of paginas) {
+    const cod = pag.codigo_obra;
+    if (result[cod]) {
+      result[cod].temOrcamento = true;
+    }
+    paginaIds.push(pag.id);
+    paginaParaObra[pag.id] = cod;
+  }
+
+  if (paginaIds.length === 0) {
+    return result;
+  }
+
+  const { data: aberturas, error: errAberturas } = await supabase
+    .from("orcamento_aberturas" as any)
+    .select("pagina_id")
+    .eq("tipo", "orcamento")
+    .in("pagina_id", paginaIds);
+
+  if (errAberturas) {
+    console.error("Erro ao obter aberturas de orçamento para resumo:", errAberturas);
+    throw new Error(errAberturas.message);
+  }
+
+  if (aberturas) {
+    for (const ab of aberturas) {
+      const cod = paginaParaObra[ab.pagina_id];
+      if (cod && result[cod]) {
+        result[cod].totalAberturas += 1;
+      }
+    }
+  }
+
+  return result;
+}
+
+
 
 

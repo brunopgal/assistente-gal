@@ -72,6 +72,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import OrcamentoEditor from "@/components/OrcamentoEditor";
+import { obterResumoAberturasPorObra, type ResumoAberturasObra } from "@/services/orcamentosService";
 
 type StatusFiltro = "todos" | StatusProspeccao;
 
@@ -197,6 +198,7 @@ export default function Prospeccao() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
   const [atividadesMap, setAtividadesMap] = useState<Record<string, Atividade>>({});
+  const [resumoAberturas, setResumoAberturas] = useState<Record<string, ResumoAberturasObra>>({});
 
   const [globalStats, setGlobalStats] = useState({
     emailsAbertos: 0,
@@ -273,6 +275,16 @@ export default function Prospeccao() {
       const codigos = filtradas
         .map((o) => o.codigoObra || (o as any).id)
         .filter(Boolean) as string[];
+
+      let resumoAberturasMap: Record<string, ResumoAberturasObra> = {};
+      if (codigos.length > 0) {
+        try {
+          resumoAberturasMap = await obterResumoAberturasPorObra(codigos);
+        } catch (err) {
+          console.error("Erro ao obter resumo de aberturas por obra:", err);
+        }
+      }
+      setResumoAberturas(resumoAberturasMap);
 
       const novos: Record<string, ObraStats> = {};
       let totalAbertos = 0;
@@ -889,6 +901,23 @@ export default function Prospeccao() {
                             desde {o.statusDesde}
                           </span>
                         )}
+                        {(() => {
+                          const resumo = resumoAberturas[codigo];
+                          if (!resumo || !resumo.temOrcamento) return null;
+                          if (resumo.totalAberturas > 0) {
+                            return (
+                              <Badge variant="outline" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20">
+                                Orçamento aberto · {resumo.totalAberturas}
+                              </Badge>
+                            );
+                          } else {
+                            return (
+                              <Badge variant="outline" className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10">
+                                Orçamento não aberto
+                              </Badge>
+                            );
+                          }
+                        })()}
                         {teveEvento && (
                           <Tooltip>
                             <TooltipTrigger asChild>

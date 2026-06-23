@@ -31,6 +31,7 @@ import {
   atualizarOrcamento,
   excluirOrcamentoPagina,
   uploadArquivoOrcamento,
+  contarAberturas,
   type OrcamentoPagina,
   type BlocoOrcamento,
   type ArquivoOrcamento,
@@ -63,6 +64,31 @@ export default function OrcamentoEditor({
   const [tituloVersao, setTituloVersao] = useState("");
   const [ativo, setAtivo] = useState(true);
   const [blocos, setBlocos] = useState<BlocoOrcamento[]>([]);
+
+  const [aberturasTotal, setAberturasTotal] = useState<number | null>(null);
+  const [aberturasUltima, setAberturasUltima] = useState<string | null>(null);
+  const [loadingAberturas, setLoadingAberturas] = useState(false);
+
+  useEffect(() => {
+    if (versãoSelecionada?.id) {
+      const carregarAberturas = async () => {
+        setLoadingAberturas(true);
+        try {
+          const stats = await contarAberturas(versãoSelecionada.id);
+          setAberturasTotal(stats.total);
+          setAberturasUltima(stats.ultima);
+        } catch (error) {
+          console.error("Erro ao carregar aberturas:", error);
+        } finally {
+          setLoadingAberturas(false);
+        }
+      };
+      carregarAberturas();
+    } else {
+      setAberturasTotal(null);
+      setAberturasUltima(null);
+    }
+  }, [versãoSelecionada?.id]);
 
   // Carrega lista de versões da obra
   const carregarVersões = async () => {
@@ -476,6 +502,26 @@ export default function OrcamentoEditor({
                             </Button>
                           </div>
                         </div>
+                        
+                        {loadingAberturas ? (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span>Carregando estatísticas de aberturas...</span>
+                          </div>
+                        ) : aberturasTotal !== null && (
+                          <div className="pt-1 flex flex-wrap gap-2">
+                            {aberturasTotal === 0 ? (
+                              <span className="inline-flex items-center text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                Ainda não aberto
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-900/50">
+                                Aberto · {aberturasTotal} {aberturasTotal === 1 ? "vez" : "vezes"} · última em {aberturasUltima ? new Date(aberturasUltima).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : ""}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {!ativo && (
                           <p className="text-[10px] text-amber-600 font-medium flex items-center gap-1.5">
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
