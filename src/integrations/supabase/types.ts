@@ -129,6 +129,30 @@ export type Database = {
           },
         ]
       }
+      apresentacao_paginas: {
+        Row: {
+          codigo_obra: string
+          created_at: string
+          enviado_em: string | null
+          id: string
+          token_apresentacao: string
+        }
+        Insert: {
+          codigo_obra: string
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          token_apresentacao: string
+        }
+        Update: {
+          codigo_obra?: string
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          token_apresentacao?: string
+        }
+        Relationships: []
+      }
       atividades: {
         Row: {
           comentario: string
@@ -786,6 +810,7 @@ export type Database = {
           blocos: Json
           codigo_obra: string
           created_at: string
+          enviado_em: string | null
           id: string
           titulo_versao: string
           token_apresentacao: string
@@ -797,6 +822,7 @@ export type Database = {
           blocos?: Json
           codigo_obra: string
           created_at?: string
+          enviado_em?: string | null
           id?: string
           titulo_versao?: string
           token_apresentacao: string
@@ -808,6 +834,7 @@ export type Database = {
           blocos?: Json
           codigo_obra?: string
           created_at?: string
+          enviado_em?: string | null
           id?: string
           titulo_versao?: string
           token_apresentacao?: string
