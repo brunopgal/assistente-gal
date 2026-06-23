@@ -52,7 +52,8 @@ import {
   Clock,
   Mic,
   MicOff,
-  Users
+  Users,
+  FileText
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
