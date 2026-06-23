@@ -6,11 +6,23 @@ export default function ApresentacaoRedirect() {
   const { token } = useParams<{ token: string }>();
 
   useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, []);
+
+  useEffect(() => {
     if (token) {
       const registrarERedirecionar = async () => {
         try {
           await supabase.functions.invoke("registrar-abertura", {
-            body: { token, tipo: "apresentacao" },
+            body: { token, tipo: "apresentacao", _cb: Date.now() },
           });
         } catch (error) {
           console.warn("Falha silenciosa ao registrar abertura de apresentacao:", error);
