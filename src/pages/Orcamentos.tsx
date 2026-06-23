@@ -228,7 +228,9 @@ export default function Orcamentos() {
                   <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex justify-between">
                     <span>Versões de Páginas</span>
                     <span>{totalVersoes}</span>
-                          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  </div>
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+
                     {versoes.map((v) => {
                       const link = `https://assistente-gal.lovable.app/orcamento/${v.token_orcamento}`;
                       const info = aberturasMap[v.id];
