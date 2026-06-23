@@ -16,6 +16,7 @@ import {
   Bot,
   Target,
   ChevronDown,
+  ChevronRight,
   ListChecks,
   FileText,
   Settings,
