@@ -427,7 +427,7 @@ export async function garantirApresentacaoDaObra(codigoObra: string): Promise<Ap
     throw new Error(errCriar.message);
   }
 
-  return nova as ApresentacaoPagina;
+  return nova as unknown as ApresentacaoPagina;
 }
 
 export async function listarApresentacoes(): Promise<ApresentacaoPagina[]> {
