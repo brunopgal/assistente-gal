@@ -207,3 +207,17 @@ export async function uploadArquivoOrcamento(codigoObra: string, file: File): Pr
   return publicUrlData.publicUrl;
 }
 
+export async function listarTodosOrcamentos(): Promise<OrcamentoPagina[]> {
+  const { data, error } = await supabase
+    .from("orcamento_paginas" as any)
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao listar todos os orçamentos:", error);
+    throw new Error(error.message);
+  }
+  return (data || []) as OrcamentoPagina[];
+}
+
+

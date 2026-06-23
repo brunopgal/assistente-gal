@@ -1,73 +1,63 @@
 import { useEffect, useState, useMemo } from "react";
-import { listarOrcamentos, atualizarStatusOrcamento, criarOrcamento, type Orcamento, type StatusOrcamento, type ProdutoOrcamento } from "@/services/orcamentosService";
-import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
-import { criarAtividade } from "@/services/atividadesService";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { listarTodosOrcamentos, type OrcamentoPagina } from "@/services/orcamentosService";
+import { listarObras, type Obra } from "@/services/obrasService";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, MoreVertical, ExternalLink, Calendar, Search, FileText } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Search,
+  Layers,
+  Building2,
+  Calendar,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  FolderOpen,
+  ArrowRightLeft,
+} from "lucide-react";
+import OrcamentoEditor from "@/components/OrcamentoEditor";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import MultiFileUploadField from "@/components/MultiFileUploadField";
 
-function parseDate(str: string): Date | null {
-  if (!str) return null;
-  const iso = new Date(str);
-  if (!isNaN(iso.getTime())) return iso;
-  return null;
-}
-
-function diffDays(from: Date, to: Date): number {
-  from.setHours(0, 0, 0, 0);
-  to.setHours(0, 0, 0, 0);
-  return Math.floor((to.getTime() - from.getTime()) / (1000 * 3600 * 24));
-}
-
-function statusColor(status: StatusOrcamento) {
-  switch (status) {
-    case "Enviado": return "default";
-    case "Em Análise": return "secondary";
-    case "Aprovado": return "success";
-    case "Recusado": return "destructive";
-    default: return "outline";
-  }
+interface ObraComOrcamento {
+  codigoObra: string;
+  obra?: Obra;
+  versoes: OrcamentoPagina[];
 }
 
 export default function Orcamentos() {
+  const { toast } = useToast();
   const [obras, setObras] = useState<Obra[]>([]);
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [orcamentos, setOrcamentos] = useState<OrcamentoPagina[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const { toast } = useToast();
+  const [activeObraForOrcamento, setActiveObraForOrcamento] = useState<Obra | null>(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [novaIdObra, setNovaIdObra] = useState("");
-  const [novoProduto, setNovoProduto] = useState<ProdutoOrcamento | "">("");
-  const [novoValor, setNovoValor] = useState("");
-  const [novoLink, setNovoLink] = useState("");
-  const [novaData, setNovaData] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
+  // Estados para abertura de novo orçamento
+  const [novoOrcamentoOpen, setNovoOrcamentoOpen] = useState(false);
+  const [selectedObraId, setSelectedObraId] = useState("");
   const [obraComboboxOpen, setObraComboboxOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [ops, orcs] = await Promise.all([listarObras(), listarOrcamentos()]);
-      setObras(ops);
-      setOrcamentos(orcs);
+      const [ops, orcs] = await Promise.all([listarObras(), listarTodosOrcamentos()]);
+      setObras(ops || []);
+      setOrcamentos(orcs || []);
     } catch (e: any) {
-      toast({ title: "Erro ao carregar dados", variant: "destructive" });
+      toast({
+        title: "Erro ao carregar dados",
+        description: e.message || "Tente novamente mais tarde",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -77,67 +67,6 @@ export default function Orcamentos() {
     fetchData();
   }, []);
 
-  const handleSalvar = async () => {
-    if (!novaIdObra || !novoProduto || !novaData) {
-      toast({ title: "Preencha obra, produto e data", variant: "destructive" });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const selectedObra = obras.find(o => (o.codigoObra || o.id) === novaIdObra);
-      const valNum = parseFloat(novoValor.replace(",", "."));
-      
-      const newOrc: Orcamento = {
-        codigoObra: novaIdObra,
-        produto: novoProduto,
-        valor: isNaN(valNum) ? null : valNum,
-        link_anexo: novoLink,
-        data_envio: novaData,
-        status: "Enviado",
-      };
-
-      await criarOrcamento(newOrc);
-
-      // Atualiza status da obra e cria atividade conforme a regra rígida
-      if (selectedObra) {
-        await atualizarCampoObra(novaIdObra, "statusProspeccao", "Orçamento Enviado");
-        
-        // Data no formato BR para atividade (DD/MM/YYYY)
-        const d = new Date(novaData);
-        d.setMinutes(d.getMinutes() + d.getTimezoneOffset()); // adjust local timezone issue for input date
-        const dataBr = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
-        
-        await criarAtividade({
-          idObra: novaIdObra,
-          dataAtividade: dataBr,
-          tipoContato: "orcamento", // tipo de atividade EXATO
-          status: "Realizado",
-          proximoContato: "",
-          comentario: `Orçamento da marca ${novoProduto} enviado${!isNaN(valNum) ? ' (R$ ' + valNum.toFixed(2) + ')' : ''}.`,
-        });
-      }
-
-      toast({ title: "Orçamento salvo e vinculado com sucesso!" });
-      setModalOpen(false);
-      fetchData(); // recarrega
-    } catch (e: any) {
-      toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" });
-    } finally {
-      setSaving(true);
-    }
-  };
-
-  const handleMudarStatus = async (id: string, status: StatusOrcamento) => {
-    try {
-      await atualizarStatusOrcamento(id, status);
-      setOrcamentos(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-      toast({ title: "Status atualizado" });
-    } catch (e) {
-      toast({ title: "Erro ao atualizar", variant: "destructive" });
-    }
-  };
-
   const mapObras = useMemo(() => {
     return obras.reduce((acc, o) => {
       acc[o.codigoObra || o.id!] = o;
@@ -145,135 +74,252 @@ export default function Orcamentos() {
     }, {} as Record<string, Obra>);
   }, [obras]);
 
-  const filteredOrcamentos = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return orcamentos.filter(orc => {
-      const obra = mapObras[orc.codigoObra];
-      const matchObra = obra?.nome?.toLowerCase().includes(q);
-      const matchProduto = orc.produto.toLowerCase().includes(q);
-      return !q || matchObra || matchProduto;
+  const filteredObrasComOrcamentos = useMemo(() => {
+    // 1. Agrupa os orçamentos por codigo_obra
+    const groups: Record<string, ObraComOrcamento> = {};
+
+    orcamentos.forEach((orc) => {
+      const cod = orc.codigo_obra;
+      if (!groups[cod]) {
+        groups[cod] = {
+          codigoObra: cod,
+          obra: mapObras[cod],
+          versoes: [],
+        };
+      }
+      groups[cod].versoes.push(orc);
     });
-  }, [orcamentos, searchTerm, mapObras]);
+
+    const list = Object.values(groups);
+
+    // 2. Filtra pela busca
+    const q = searchTerm.toLowerCase().trim();
+    if (!q) return list;
+
+    return list.filter((item) => {
+      const matchObraName = item.obra?.nome?.toLowerCase().includes(q);
+      const matchConstrutora = item.obra?.construtora?.toLowerCase().includes(q);
+      const matchCodigo = item.codigoObra?.toLowerCase().includes(q);
+      const matchVersao = item.versoes.some((v) =>
+        v.titulo_versao?.toLowerCase().includes(q)
+      );
+
+      return matchObraName || matchConstrutora || matchCodigo || matchVersao;
+    });
+  }, [orcamentos, mapObras, searchTerm]);
+
+  const handleAbrirEditor = (obra: Obra) => {
+    setActiveObraForOrcamento(obra);
+  };
+
+  const handleCriarOrcamento = () => {
+    if (!selectedObraId) {
+      toast({
+        title: "Seleção obrigatória",
+        description: "Selecione uma obra para gerenciar o orçamento.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const selected = obras.find((o) => (o.codigoObra || o.id) === selectedObraId);
+    if (selected) {
+      setActiveObraForOrcamento(selected);
+      setNovoOrcamentoOpen(false);
+      setSelectedObraId("");
+    }
+  };
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Orçamentos</h1>
-          <p className="text-muted-foreground text-sm mt-1">Acompanhe todos os orçamentos enviados</p>
+          <h1
+            className="text-2xl font-bold text-foreground"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            Páginas de Orçamentos
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Gerencie as versões e páginas públicas de orçamentos vinculados a cada obra.
+          </p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>
+        <Button onClick={() => setNovoOrcamentoOpen(true)} className="shadow-sm">
           <Plus className="h-4 w-4 mr-2" />
-          Adicionar Orçamento
+          Novo Orçamento de Obra
         </Button>
       </div>
 
+      {/* Busca */}
       <div className="flex items-center gap-2 max-w-sm">
-        <Search className="h-4 w-4 text-muted-foreground absolute ml-3" />
-        <Input 
-          className="pl-9" 
-          placeholder="Buscar obra ou produto..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <div className="relative w-full">
+          <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            className="pl-9 bg-card/50"
+            placeholder="Buscar por obra, construtora ou versão..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredOrcamentos.map(orc => {
-          const obra = mapObras[orc.codigoObra];
-          const dt = parseDate(orc.data_envio);
-          const dias = dt ? diffDays(dt, new Date()) : 0;
-          
+      {/* Grid de Obras com Orçamentos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredObrasComOrcamentos.map((item) => {
+          const { obra, codigoObra, versoes } = item;
+          const totalVersoes = versoes.length;
+          const temVersaoAtiva = versoes.some((v) => v.ativo);
+
           return (
-            <Card key={orc.id} className="hover:border-primary/30 transition-colors">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">{obra?.nome || "Obra Desconhecida"}</h3>
-                    <p className="text-xs text-muted-foreground truncate">{obra?.construtora || "Sem construtora"}</p>
+            <Card
+              key={codigoObra}
+              className="hover:shadow-md transition-all duration-200 border-border bg-card/60 flex flex-col justify-between"
+            >
+              <CardContent className="p-5 space-y-4 flex-1">
+                {/* Nome da obra e Construtora */}
+                <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-foreground line-clamp-1">
+                      {obra?.nome || "Obra Sem Nome"}
+                    </h3>
+                    <Badge
+                      variant={temVersaoAtiva ? "success" : "secondary"}
+                      className="text-[9px] uppercase tracking-wider font-semibold shrink-0"
+                    >
+                      {temVersaoAtiva ? "Possui Ativo" : "Inativo"}
+                    </Badge>
                   </div>
-                  <Badge variant={statusColor(orc.status) as any} className="shrink-0 text-[10px] uppercase">
-                    {orc.status}
-                  </Badge>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    {obra?.construtora || "Sem construtora vinculada"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    Código: {codigoObra}
+                  </p>
                 </div>
 
-                <div className="bg-muted/50 rounded-md p-2 text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Produto:</span>
-                    <span className="font-medium">{orc.produto}</span>
+                {/* Lista de Versões */}
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex justify-between">
+                    <span>Versões de Páginas</span>
+                    <span>{totalVersoes}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Valor:</span>
-                    <span className="font-medium">
-                      {orc.valor ? `R$ ${orc.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : "—"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-border/50 mt-1">
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span className="text-xs">{orc.data_envio ? new Date(orc.data_envio + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</span>
-                    </div>
-                    {dias > 0 && <span className="text-xs text-orange-600 font-medium">{dias} dias atrás</span>}
-                    {dias === 0 && <span className="text-xs text-emerald-600 font-medium">Hoje</span>}
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  {orc.link_anexo ? (
-                    <Button variant="outline" size="sm" asChild className="h-8 text-xs">
-                      <a href={orc.link_anexo} target="_blank" rel="noreferrer">
-                        <FileText className="h-3.5 w-3.5 mr-1" /> Ver Anexo
-                      </a>
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Sem anexo</span>
-                  )}
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleMudarStatus(orc.id!, "Enviado")}>Marcar como Enviado</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleMudarStatus(orc.id!, "Em Análise")}>Marcar como Em Análise</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleMudarStatus(orc.id!, "Aprovado")}>Marcar como Aprovado</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleMudarStatus(orc.id!, "Recusado")} className="text-red-600">Marcar como Recusado</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {versoes.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between p-2 rounded bg-muted/30 text-xs border border-border/40"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <span className="font-semibold text-foreground truncate block">
+                            {v.titulo_versao || "Sem Título"}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {v.created_at
+                              ? new Date(v.created_at).toLocaleDateString("pt-BR")
+                              : "—"}
+                          </span>
+                        </div>
+                        <Badge
+                          variant={v.ativo ? "success" : "outline"}
+                          className="text-[8px] uppercase px-1.5 py-0"
+                        >
+                          {v.ativo ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
+
+              {/* Botão de Ação */}
+              <div className="p-4 pt-0 border-t bg-muted/5 rounded-b-lg">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs font-semibold mt-3 hover:bg-primary/5 hover:text-primary hover:border-primary/40 transition-colors"
+                  onClick={() =>
+                    handleAbrirEditor(
+                      obra || {
+                        codigoObra,
+                        nome: "Obra Desconhecida",
+                        dataCadastro: "",
+                        statusProspeccao: "",
+                        classificacao: "",
+                        construtora: "",
+                        responsavel: "",
+                        telefone: "",
+                        email: "",
+                        cidade: "",
+                        localizacao: "",
+                        produtoOferecido: "",
+                        estagioObra: "",
+                        marcouReuniao: "",
+                        visita: "",
+                        dataUltimaVisita: "",
+                        dataOrcamentoEnviado: "",
+                        proximoContato: "",
+                        linkOrcamentoRhoden: "",
+                        linkOrcamentoPrado: "",
+                        linkOrcamentoImab: "",
+                        observacoes: "",
+                        concorrentes: "",
+                      }
+                    )
+                  }
+                >
+                  <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+                  Abrir Editor de Orçamentos
+                </Button>
+              </div>
             </Card>
           );
         })}
-        {filteredOrcamentos.length === 0 && (
-          <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed rounded-lg">
-            Nenhum orçamento encontrado.
+
+        {filteredObrasComOrcamentos.length === 0 && (
+          <div className="col-span-full py-16 text-center text-muted-foreground border border-dashed rounded-lg bg-card/25 flex flex-col items-center justify-center gap-2">
+            <FolderOpen className="h-10 w-10 text-muted-foreground/35" />
+            <div className="font-semibold text-sm">Nenhum orçamento encontrado</div>
+            <div className="text-xs">
+              Clique em "Novo Orçamento de Obra" para iniciar uma versão para alguma obra.
+            </div>
           </div>
         )}
       </div>
 
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent>
+      {/* Dialog para Novo Orçamento (Escolher Obra) */}
+      <Dialog open={novoOrcamentoOpen} onOpenChange={setNovoOrcamentoOpen}>
+        <DialogContent className="max-w-md bg-background border border-border">
           <DialogHeader>
-            <DialogTitle>Adicionar Orçamento</DialogTitle>
+            <DialogTitle>Selecionar Obra para Orçamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label>Obra</Label>
+              <Label>Selecione uma obra</Label>
               <Popover open={obraComboboxOpen} onOpenChange={setObraComboboxOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal text-left truncate">
-                    {novaIdObra ? obras.find((o) => (o.codigoObra || o.id) === novaIdObra)?.nome : "Selecione uma obra..."}
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal text-left truncate bg-card"
+                  >
+                    {selectedObraId
+                      ? obras.find((o) => (o.codigoObra || o.id) === selectedObraId)?.nome
+                      : "Escolha uma obra..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="start">
+                <PopoverContent className="w-[380px] p-0" align="start">
                   <Command>
                     <CommandInput placeholder="Buscar obra..." />
                     <CommandList>
@@ -285,9 +331,17 @@ export default function Orcamentos() {
                             <CommandItem
                               key={code}
                               value={o.nome}
-                              onSelect={() => { setNovaIdObra(code); setObraComboboxOpen(false); }}
+                              onSelect={() => {
+                                setSelectedObraId(code);
+                                setObraComboboxOpen(false);
+                              }}
                             >
-                              <Check className={cn("mr-2 h-4 w-4", novaIdObra === code ? "opacity-100" : "opacity-0")} />
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedObraId === code ? "opacity-100" : "opacity-0"
+                                )}
+                              />
                               <span className="truncate">{o.nome}</span>
                             </CommandItem>
                           );
@@ -299,48 +353,32 @@ export default function Orcamentos() {
               </Popover>
             </div>
 
-            <div className="space-y-2">
-              <Label>Produto</Label>
-              <Select value={novoProduto} onValueChange={(v) => setNovoProduto(v as ProdutoOrcamento)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o produto" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Prado">Prado</SelectItem>
-                  <SelectItem value="Rohden">Rohden</SelectItem>
-                  <SelectItem value="Imab">Imab</SelectItem>
-                  <SelectItem value="Outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Valor Total (Opcional)</Label>
-              <Input type="number" placeholder="Ex: 50000" value={novoValor} onChange={(e) => setNovoValor(e.target.value)} />
-            </div>
-
-            <MultiFileUploadField
-              label="Anexos do Orçamento (Máx 7)"
-              value={novoLink}
-              onChange={(v) => setNovoLink(v)}
-              maxFiles={7}
-            />
-
-            <div className="space-y-2">
-              <Label>Data de Envio</Label>
-              <Input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSalvar} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Salvar
+            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+              <Button variant="ghost" onClick={() => setNovoOrcamentoOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCriarOrcamento} disabled={!selectedObraId}>
+                Abrir Editor
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Editor Dialog */}
+      {activeObraForOrcamento && (
+        <OrcamentoEditor
+          codigoObra={activeObraForOrcamento.codigoObra || activeObraForOrcamento.id || ""}
+          obraNome={activeObraForOrcamento.nome}
+          open={!!activeObraForOrcamento}
+          onOpenChange={(open) => {
+            if (!open) {
+              setActiveObraForOrcamento(null);
+              fetchData(); // recarrega para pegar modificações
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

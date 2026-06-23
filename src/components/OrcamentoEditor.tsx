@@ -169,7 +169,7 @@ export default function OrcamentoEditor({
       produto,
       titulo: `Orçamento referente a ${produto === "Outros" ? "itens diversos" : produto}`,
       arquivos: [],
-      nome: produto === "Outros" ? "" : undefined,
+      nome: produto === "Outros" ? "" : produto,
     };
 
     setBlocos([...blocos, novoBloco]);
@@ -218,7 +218,7 @@ export default function OrcamentoEditor({
       }
     } catch (error: any) {
       toast({
-        title: "Erro ao enviar arquivo",
+        title: "Falha ao enviar o arquivo, tente novamente",
         description: error.message,
         variant: "destructive",
       });
@@ -251,7 +251,7 @@ export default function OrcamentoEditor({
 
     for (let i = 0; i < blocos.length; i++) {
       const b = blocos[i];
-      if (b.produto === "Outros" && !b.nome?.trim()) {
+      if (!b.nome?.trim()) {
         toast({
           title: "Nome do produto obrigatório",
           description: `Defina o nome do produto no bloco ${i + 1}.`,
@@ -511,17 +511,15 @@ export default function OrcamentoEditor({
                                     className="h-9"
                                   />
                                 </div>
-                                {bloco.produto === "Outros" && (
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold">Nome do Produto <span className="text-destructive">*</span></Label>
-                                    <Input
-                                      value={bloco.nome || ""}
-                                      onChange={(e) => atualizarCampoBloco(idx, "nome", e.target.value)}
-                                      placeholder="Ex: Ferragens Especiais"
-                                      className="h-9"
-                                    />
-                                  </div>
-                                )}
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs font-semibold">Nome do Produto <span className="text-destructive">*</span></Label>
+                                  <Input
+                                    value={bloco.nome || ""}
+                                    onChange={(e) => atualizarCampoBloco(idx, "nome", e.target.value)}
+                                    placeholder="Ex: Prado Especial"
+                                    className="h-9"
+                                  />
+                                </div>
                               </div>
 
                               {/* Arquivos do Bloco */}
