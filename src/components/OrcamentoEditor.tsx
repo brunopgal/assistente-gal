@@ -38,6 +38,7 @@ import {
   type ArquivoOrcamento,
 } from "@/services/orcamentosService";
 import { useToast } from "@/hooks/use-toast";
+import { PUBLIC_BASE_URL } from "@/lib/config";
 
 interface OrcamentoEditorProps {
   codigoObra: string;
@@ -469,7 +470,7 @@ export default function OrcamentoEditor({
                             </span>
                             <Input
                               readOnly
-                              value={`https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`}
+                              value={`${PUBLIC_BASE_URL}/orcamento/${versãoSelecionada.token_orcamento}`}
                               className="h-8 text-xs font-mono bg-background border-indigo-200 select-all"
                             />
                           </div>
@@ -497,7 +498,7 @@ export default function OrcamentoEditor({
                                   console.error("Erro ao marcar enviado:", error);
                                 }
                                 navigator.clipboard.writeText(
-                                  `https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`
+                                  `${PUBLIC_BASE_URL}/orcamento/${versãoSelecionada.token_orcamento}`
                                 );
                                 toast({
                                   title: "Link copiado!",
@@ -514,7 +515,7 @@ export default function OrcamentoEditor({
                               className="h-8 text-xs font-semibold gap-1.5"
                               onClick={() =>
                                 window.open(
-                                  `https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`,
+                                  `${PUBLIC_BASE_URL}/orcamento/${versãoSelecionada.token_orcamento}`,
                                   "_blank"
                                 )
                               }

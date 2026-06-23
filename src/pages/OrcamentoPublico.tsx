@@ -6,6 +6,7 @@ import {
   type OrcamentoPagina,
 } from "@/services/orcamentosService";
 import { supabase } from "@/integrations/supabase/client";
+import { updateMetaTags } from "@/lib/meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,13 @@ export default function OrcamentoPublico() {
 
     fetchPublicData();
   }, [token]);
+
+  useEffect(() => {
+    if (orcamento) {
+      const pageTitle = `${obra?.nome || orcamento.titulo_versao || "Orçamento"} - Gal Representações`;
+      updateMetaTags(pageTitle, "Conheça nossos produtos e orçamentos");
+    }
+  }, [orcamento, obra]);
 
   // Registra a abertura do orçamento uma única vez após o carregamento bem-sucedido e ativo
   useEffect(() => {

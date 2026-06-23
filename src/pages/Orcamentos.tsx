@@ -33,6 +33,7 @@ import OrcamentoEditor from "@/components/OrcamentoEditor";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { PUBLIC_BASE_URL } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 interface ObraComOrcamento {
@@ -232,7 +233,7 @@ export default function Orcamentos() {
                   <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
 
                     {versoes.map((v) => {
-                      const link = `https://assistente-gal.lovable.app/orcamento/${v.token_orcamento}`;
+                      const link = `${PUBLIC_BASE_URL}/orcamento/${v.token_orcamento}`;
                       const info = aberturasMap[v.id];
                       const totalAberturas = info?.total || 0;
                       return (

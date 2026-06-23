@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { updateMetaTags } from "@/lib/meta";
 
 export default function ApresentacaoRedirect() {
   const { token } = useParams<{ token: string }>();
@@ -15,6 +16,10 @@ export default function ApresentacaoRedirect() {
     return () => {
       window.removeEventListener("pageshow", handlePageShow);
     };
+  }, []);
+
+  useEffect(() => {
+    updateMetaTags("Apresentação - Gal Representações", "Conheça nossos produtos e orçamentos");
   }, []);
 
   useEffect(() => {

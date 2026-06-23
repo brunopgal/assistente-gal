@@ -22,6 +22,7 @@ import {
   Copy,
   Presentation
 } from "lucide-react";
+import { PUBLIC_BASE_URL } from "@/lib/config";
 
 export default function Apresentacao() {
   const { toast } = useToast();
@@ -93,7 +94,7 @@ export default function Apresentacao() {
       // Marca como enviado
       await marcarEnviado("apresentacao", ap.id);
       
-      const link = `https://assistente-gal.lovable.app/apresentacao/${ap.token_apresentacao}`;
+      const link = `${PUBLIC_BASE_URL}/apresentacao/${ap.token_apresentacao}`;
       await navigator.clipboard.writeText(link);
       
       toast({
@@ -120,7 +121,7 @@ export default function Apresentacao() {
     setActionLoading(cod);
     try {
       const ap = await garantirApresentacaoDaObra(cod);
-      const link = `https://assistente-gal.lovable.app/apresentacao/${ap.token_apresentacao}`;
+      const link = `${PUBLIC_BASE_URL}/apresentacao/${ap.token_apresentacao}`;
       window.open(link, "_blank");
       
       // Também recarrega para pegar qualquer atualização
@@ -208,7 +209,7 @@ export default function Apresentacao() {
                         </span>
                         <Input
                           readOnly
-                          value={`https://assistente-gal.lovable.app/apresentacao/${ap.token_apresentacao}`}
+                          value={`${PUBLIC_BASE_URL}/apresentacao/${ap.token_apresentacao}`}
                           className="h-8 text-xs font-mono bg-background border-indigo-200 select-all"
                         />
                       </div>
