@@ -267,7 +267,8 @@ export async function contarAberturas(paginaId: string): Promise<{ total: number
   }
 
   const total = count || 0;
-  const ultima = data && data.length > 0 ? data[0].aberto_em : null;
+  const rows = (data as any[]) || [];
+  const ultima = rows.length > 0 ? rows[0].aberto_em : null;
 
   return { total, ultima };
 }
@@ -301,7 +302,7 @@ export async function obterResumoAberturasPorObra(codigoObras: string[]): Promis
   const paginaIds: string[] = [];
   const paginaParaObra: Record<string, string> = {};
 
-  for (const pag of paginas) {
+  for (const pag of (paginas as any[])) {
     const cod = pag.codigo_obra;
     if (result[cod]) {
       result[cod].temOrcamento = true;
@@ -326,7 +327,7 @@ export async function obterResumoAberturasPorObra(codigoObras: string[]): Promis
   }
 
   if (aberturas) {
-    for (const ab of aberturas) {
+    for (const ab of (aberturas as any[])) {
       const cod = paginaParaObra[ab.pagina_id];
       if (cod && result[cod]) {
         result[cod].totalAberturas += 1;
@@ -364,7 +365,7 @@ export async function obterResumoAberturasPorVersoes(paginaIds: string[]): Promi
   }
 
   if (aberturas) {
-    for (const ab of aberturas) {
+    for (const ab of (aberturas as any[])) {
       const pid = ab.pagina_id;
       if (result[pid]) {
         result[pid].total += 1;
