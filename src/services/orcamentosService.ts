@@ -129,7 +129,7 @@ export async function listarOrcamentosDaObra(codigoObra: string): Promise<Orcame
     console.error("Erro ao listar orçamentos da obra:", error);
     throw new Error(error.message);
   }
-  return (data || []) as OrcamentoPagina[];
+  return (data || []) as unknown as OrcamentoPagina[];
 }
 
 export async function criarOrcamentoPagina(codigoObra: string, tituloVersao: string): Promise<OrcamentoPagina> {
@@ -154,7 +154,7 @@ export async function criarOrcamentoPagina(codigoObra: string, tituloVersao: str
     console.error("Erro ao criar orçamento da página:", error);
     throw new Error(error.message);
   }
-  return data as OrcamentoPagina;
+  return data as unknown as OrcamentoPagina;
 }
 
 export async function atualizarOrcamento(
@@ -172,7 +172,7 @@ export async function atualizarOrcamento(
     console.error("Erro ao atualizar orçamento:", error);
     throw new Error(error.message);
   }
-  return data as OrcamentoPagina;
+  return data as unknown as OrcamentoPagina;
 }
 
 export async function excluirOrcamentoPagina(id: string): Promise<void> {
@@ -217,7 +217,7 @@ export async function listarTodosOrcamentos(): Promise<OrcamentoPagina[]> {
     console.error("Erro ao listar todos os orçamentos:", error);
     throw new Error(error.message);
   }
-  return (data || []) as OrcamentoPagina[];
+  return (data || []) as unknown as OrcamentoPagina[];
 }
 
 export async function buscarOrcamentoPorToken(token: string): Promise<OrcamentoPagina | null> {
@@ -231,7 +231,7 @@ export async function buscarOrcamentoPorToken(token: string): Promise<OrcamentoP
     console.error("Erro ao buscar orçamento por token:", error);
     throw new Error(error.message);
   }
-  return data as OrcamentoPagina | null;
+  return data as unknown as OrcamentoPagina | null;
 }
 
 export async function buscarObraPorCodigoPublico(codigoObra: string): Promise<any | null> {
