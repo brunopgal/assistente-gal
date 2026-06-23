@@ -1,0 +1,1 @@
+ALTER TABLE public.orcamento_aberturas DROP CONSTRAINT IF EXISTS orcamento_aberturas_pagina_id_fkey;
