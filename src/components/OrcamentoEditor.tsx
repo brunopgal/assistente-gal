@@ -429,8 +429,60 @@ export default function OrcamentoEditor({
                             )}
                           </Label>
                         </div>
-                      </div>
                     </div>
+
+                    {/* Link Público do Orçamento */}
+                    {versãoSelecionada.token_orcamento && (
+                      <div className="p-4 border rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border-indigo-100/80 dark:border-indigo-950/40 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1 flex-1">
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">
+                              Link Público do Orçamento
+                            </span>
+                            <Input
+                              readOnly
+                              value={`https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`}
+                              className="h-8 text-xs font-mono bg-background border-indigo-200 select-all"
+                            />
+                          </div>
+                          <div className="flex gap-2 shrink-0 self-end sm:self-center">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  `https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`
+                                );
+                                toast({ title: "Link copiado!" });
+                              }}
+                            >
+                              Copiar link
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs font-semibold gap-1.5"
+                              onClick={() =>
+                                window.open(
+                                  `https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`,
+                                  "_blank"
+                                )
+                              }
+                            >
+                              Abrir
+                            </Button>
+                          </div>
+                        </div>
+                        {!ativo && (
+                          <p className="text-[10px] text-amber-600 font-medium flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            Esta versão está desativada — o cliente verá 'indisponível'.
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Linha 2: Ativar Produtos */}
                     <div className="space-y-3">
