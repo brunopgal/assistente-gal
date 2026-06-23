@@ -407,7 +407,7 @@ export async function garantirApresentacaoDaObra(codigoObra: string): Promise<Ap
   }
 
   if (data) {
-    return data as ApresentacaoPagina;
+    return data as unknown as ApresentacaoPagina;
   }
 
   const token_apresentacao = generateToken();
@@ -427,7 +427,7 @@ export async function garantirApresentacaoDaObra(codigoObra: string): Promise<Ap
     throw new Error(errCriar.message);
   }
 
-  return nova as ApresentacaoPagina;
+  return nova as unknown as ApresentacaoPagina;
 }
 
 export async function listarApresentacoes(): Promise<ApresentacaoPagina[]> {
@@ -440,7 +440,7 @@ export async function listarApresentacoes(): Promise<ApresentacaoPagina[]> {
     throw new Error(error.message);
   }
 
-  return (data || []) as ApresentacaoPagina[];
+  return (data || []) as unknown as ApresentacaoPagina[];
 }
 
 export async function buscarApresentacaoPorToken(token: string): Promise<ApresentacaoPagina | null> {
@@ -455,7 +455,7 @@ export async function buscarApresentacaoPorToken(token: string): Promise<Apresen
     throw new Error(error.message);
   }
 
-  return data as ApresentacaoPagina | null;
+  return data as unknown as ApresentacaoPagina | null;
 }
 
 export async function marcarEnviado(tipo: "orcamento" | "apresentacao", id: string): Promise<void> {
