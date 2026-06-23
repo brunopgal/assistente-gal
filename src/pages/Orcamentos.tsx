@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import {
   listarTodosOrcamentos,
   obterResumoAberturasPorVersoes,
+  marcarEnviado,
   type OrcamentoPagina,
   type ResumoAberturasVersao,
 } from "@/services/orcamentosService";
@@ -25,6 +26,8 @@ import {
   XCircle,
   FolderOpen,
   ArrowRightLeft,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import OrcamentoEditor from "@/components/OrcamentoEditor";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -225,72 +228,121 @@ export default function Orcamentos() {
                   <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex justify-between">
                     <span>Versões de Páginas</span>
                     <span>{totalVersoes}</span>
-                  </div>
+                          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {versoes.map((v) => {
+                      const link = `https://assistente-gal.lovable.app/orcamento/${v.token_orcamento}`;
+                      const info = aberturasMap[v.id];
+                      const totalAberturas = info?.total || 0;
+                      return (
+                        <div
+                          key={v.id}
+                          className="p-3 rounded bg-muted/30 text-xs border border-border/40 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-foreground truncate block text-sm">
+                              {v.titulo_versao || "Sem Título"}
+                            </span>
+                            <Badge
+                              variant={v.ativo ? "default" : "outline"}
+                              className="text-[8px] uppercase px-1.5 py-0 font-semibold shrink-0"
+                            >
+                              {v.ativo ? "Ativo" : "Inativo"}
+                            </Badge>
+                          </div>
 
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {versoes.map((v) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center justify-between p-2 rounded bg-muted/30 text-xs border border-border/40"
-                      >
-                        <div className="min-w-0 flex-1 pr-2">
-                          <span className="font-semibold text-foreground truncate block">
-                            {v.titulo_versao || "Sem Título"}
-                          </span>
-                          <span className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            {v.created_at
-                              ? new Date(v.created_at).toLocaleDateString("pt-BR")
-                              : "—"}
-                          </span>
-                          {(() => {
-                            const info = aberturasMap[v.id];
-                            if (info && info.total > 0 && info.ultima) {
-                              const dataFmt = new Date(info.ultima).toLocaleString("pt-BR", {
-                                timeZone: "America/Sao_Paulo"
-                              });
-                              return (
-                                <span className="text-[8px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-medium">
-                                  Última abertura: {dataFmt}
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              readOnly
+                              value={link}
+                              className="h-7 text-[10px] font-mono bg-background border-border/65 select-all flex-1 py-0 px-2"
+                            />
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7 shrink-0"
+                              title="Copiar link"
+                              onClick={async () => {
+                                try {
+                                  await marcarEnviado("orcamento", v.id);
+                                  await fetchData();
+                                } catch (error) {
+                                  console.error("Erro ao marcar enviado:", error);
+                                }
+                                navigator.clipboard.writeText(link);
+                                toast({
+                                  title: "Link copiado!",
+                                  description: "O link do orçamento foi copiado e o status de envio atualizado.",
+                                });
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7 shrink-0"
+                              title="Abrir link"
+                              onClick={() => window.open(link, "_blank")}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-col gap-1 text-[10px] text-muted-foreground pt-1.5 border-t border-border/30">
+                            <div>
+                              <span className="font-semibold text-foreground/80">Enviado em:</span>{" "}
+                              {v.enviado_em ? (
+                                <span className="text-foreground">
+                                  {new Date(v.enviado_em).toLocaleString("pt-BR", {
+                                    timeZone: "America/Sao_Paulo",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit"
+                                  })}
                                 </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <Badge
-                            variant={v.ativo ? "default" : "outline"}
-                            className="text-[8px] uppercase px-1.5 py-0 font-semibold"
-                          >
-                            {v.ativo ? "Ativo" : "Inativo"}
-                          </Badge>
-                          {(() => {
-                            const info = aberturasMap[v.id];
-                            const count = info?.total || 0;
-                            if (count > 0) {
-                              return (
+                              ) : (
+                                <span className="text-amber-600 font-medium">Não enviado ainda</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-foreground/80">Status:</span>{" "}
+                              {totalAberturas > 0 ? (
                                 <Badge
                                   variant="outline"
-                                  className="text-[8px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20"
+                                  className="text-[8px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0"
                                 >
-                                  Aberto · {count}
+                                  Aberto · {totalAberturas}
                                 </Badge>
-                              );
-                            } else {
-                              return (
+                              ) : (
                                 <Badge
                                   variant="outline"
-                                  className="text-[8px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10"
+                                  className="text-[8px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10 px-1.5 py-0"
                                 >
                                   Não aberto
                                 </Badge>
-                              );
-                            }
-                          })()}
+                              )}
+                            </div>
+
+                            {totalAberturas > 0 && info?.ultima && (
+                              <div className="text-[9px] text-emerald-600 dark:text-emerald-400">
+                                Última abertura:{" "}
+                                {new Date(info.ultima).toLocaleString("pt-BR", {
+                                  timeZone: "America/Sao_Paulo",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </CardContent>

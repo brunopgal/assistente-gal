@@ -100,6 +100,7 @@ export interface OrcamentoPagina {
   blocos: BlocoOrcamento[];
   token_orcamento: string;
   token_apresentacao: string;
+  enviado_em?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -253,16 +254,19 @@ export interface ResumoAberturasObra {
   totalAberturas: number;
 }
 
-export async function contarAberturas(paginaId: string): Promise<{ total: number; ultima: string | null }> {
+export async function contarAberturas(
+  paginaId: string,
+  tipo: "orcamento" | "apresentacao" = "orcamento"
+): Promise<{ total: number; ultima: string | null }> {
   const { data, error, count } = await supabase
     .from("orcamento_aberturas" as any)
     .select("aberto_em", { count: "exact" })
     .eq("pagina_id", paginaId)
-    .eq("tipo", "orcamento")
+    .eq("tipo", tipo)
     .order("aberto_em", { ascending: false });
 
   if (error) {
-    console.error("Erro ao contar aberturas:", error);
+    console.error(`Erro ao contar aberturas para ${tipo}:`, error);
     throw new Error(error.message);
   }
 
@@ -343,18 +347,21 @@ export interface ResumoAberturasVersao {
   ultima: string | null;
 }
 
-export async function obterResumoAberturasPorVersoes(paginaIds: string[]): Promise<Record<string, ResumoAberturasVersao>> {
+export async function obterResumoAberturasPorVersoes(
+  paginaIds: string[],
+  tipo: "orcamento" | "apresentacao" = "orcamento"
+): Promise<Record<string, ResumoAberturasVersao>> {
   if (!paginaIds || paginaIds.length === 0) return {};
 
   const { data: aberturas, error } = await supabase
     .from("orcamento_aberturas" as any)
     .select("pagina_id, aberto_em")
-    .eq("tipo", "orcamento")
+    .eq("tipo", tipo)
     .in("pagina_id", paginaIds)
     .order("aberto_em", { ascending: false });
 
   if (error) {
-    console.error("Erro ao obter resumo de aberturas por versões:", error);
+    console.error(`Erro ao obter resumo de aberturas por versões (${tipo}):`, error);
     throw new Error(error.message);
   }
 
@@ -377,6 +384,91 @@ export async function obterResumoAberturasPorVersoes(paginaIds: string[]): Promi
   }
 
   return result;
+}
+
+export interface ApresentacaoPagina {
+  id: string;
+  codigo_obra: string;
+  token_apresentacao: string;
+  enviado_em: string | null;
+  created_at: string;
+}
+
+export async function garantirApresentacaoDaObra(codigoObra: string): Promise<ApresentacaoPagina> {
+  const { data, error } = await supabase
+    .from("apresentacao_paginas" as any)
+    .select("*")
+    .eq("codigo_obra", codigoObra)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao buscar apresentacao_paginas:", error);
+    throw new Error(error.message);
+  }
+
+  if (data) {
+    return data as ApresentacaoPagina;
+  }
+
+  const token_apresentacao = generateToken();
+  const { data: nova, error: errCriar } = await supabase
+    .from("apresentacao_paginas" as any)
+    .insert([
+      {
+        codigo_obra: codigoObra,
+        token_apresentacao,
+      },
+    ])
+    .select()
+    .single();
+
+  if (errCriar) {
+    console.error("Erro ao criar apresentacao_paginas:", errCriar);
+    throw new Error(errCriar.message);
+  }
+
+  return nova as ApresentacaoPagina;
+}
+
+export async function listarApresentacoes(): Promise<ApresentacaoPagina[]> {
+  const { data, error } = await supabase
+    .from("apresentacao_paginas" as any)
+    .select("*");
+
+  if (error) {
+    console.error("Erro ao listar apresentacao_paginas:", error);
+    throw new Error(error.message);
+  }
+
+  return (data || []) as ApresentacaoPagina[];
+}
+
+export async function buscarApresentacaoPorToken(token: string): Promise<ApresentacaoPagina | null> {
+  const { data, error } = await supabase
+    .from("apresentacao_paginas" as any)
+    .select("*")
+    .eq("token_apresentacao", token)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao buscar apresentacao_paginas por token:", error);
+    throw new Error(error.message);
+  }
+
+  return data as ApresentacaoPagina | null;
+}
+
+export async function marcarEnviado(tipo: "orcamento" | "apresentacao", id: string): Promise<void> {
+  const table = tipo === "orcamento" ? "orcamento_paginas" : "apresentacao_paginas";
+  const { error } = await supabase
+    .from(table as any)
+    .update({ enviado_em: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    console.error(`Erro ao marcar enviado em ${table}:`, error);
+    throw new Error(error.message);
+  }
 }
 
 

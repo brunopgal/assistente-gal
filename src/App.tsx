@@ -23,6 +23,8 @@ import Prospeccao from "./pages/Prospeccao";
 import Orcamentos from "./pages/Orcamentos";
 import NotFound from "./pages/NotFound";
 import OrcamentoPublico from "./pages/OrcamentoPublico";
+import ApresentacaoRedirect from "./pages/ApresentacaoRedirect";
+import Apresentacao from "./pages/Apresentacao";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,7 @@ const App = () => (
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/orcamento/:token" element={<OrcamentoPublico />} />
+          <Route path="/apresentacao/:token" element={<ApresentacaoRedirect />} />
           <Route
             path="*"
             element={
@@ -54,6 +57,7 @@ const App = () => (
                     <Route path="/configuracoes" element={<Configuracoes />} />
                     <Route path="/prospeccao" element={<Prospeccao />} />
                     <Route path="/orcamentos" element={<Orcamentos />} />
+                    <Route path="/apresentacao" element={<Apresentacao />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
                     <Route path="*" element={<NotFound />} />

@@ -31,8 +31,9 @@ Deno.serve(async (req) => {
     const SUPA_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Configurar colunas de busca baseadas no tipo de link aberto
+    const tableName = tipo === 'orcamento' ? 'orcamento_paginas' : 'apresentacao_paginas';
     const columnToken = tipo === 'orcamento' ? 'token_orcamento' : 'token_apresentacao';
-    const queryUrl = `${SUPA_URL}/rest/v1/orcamento_paginas?${columnToken}=eq.${encodeURIComponent(token)}&select=id`;
+    const queryUrl = `${SUPA_URL}/rest/v1/${tableName}?${columnToken}=eq.${encodeURIComponent(token)}&select=id`;
 
     const headers = {
       Authorization: `Bearer ${SUPA_KEY}`,
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
 
     const pages = await resPage.json();
     if (pages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Orçamento não encontrado' }), {
+      return new Response(JSON.stringify({ error: 'Página não encontrada' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

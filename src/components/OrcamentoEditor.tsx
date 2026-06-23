@@ -32,6 +32,7 @@ import {
   excluirOrcamentoPagina,
   uploadArquivoOrcamento,
   contarAberturas,
+  marcarEnviado,
   type OrcamentoPagina,
   type BlocoOrcamento,
   type ArquivoOrcamento,
@@ -477,11 +478,31 @@ export default function OrcamentoEditor({
                               type="button"
                               size="sm"
                               className="h-8 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
-                              onClick={() => {
+                              onClick={async () => {
+                                try {
+                                  await marcarEnviado("orcamento", versãoSelecionada.id);
+                                  const agora = new Date().toISOString();
+                                  setVersões(
+                                    versões.map((v) =>
+                                      v.id === versãoSelecionada.id
+                                        ? { ...v, enviado_em: agora }
+                                        : v
+                                    )
+                                  );
+                                  setVersãoSelecionada({
+                                    ...versãoSelecionada,
+                                    enviado_em: agora
+                                  });
+                                } catch (error) {
+                                  console.error("Erro ao marcar enviado:", error);
+                                }
                                 navigator.clipboard.writeText(
                                   `https://assistente-gal.lovable.app/orcamento/${versãoSelecionada.token_orcamento}`
                                 );
-                                toast({ title: "Link copiado!" });
+                                toast({
+                                  title: "Link copiado!",
+                                  description: "Status de envio atualizado com sucesso."
+                                });
                               }}
                             >
                               Copiar link
