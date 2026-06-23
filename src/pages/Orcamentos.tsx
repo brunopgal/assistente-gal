@@ -191,7 +191,7 @@ export default function Orcamentos() {
                       {obra?.nome || "Obra Sem Nome"}
                     </h3>
                     <Badge
-                      variant={temVersaoAtiva ? "success" : "secondary"}
+                      variant={temVersaoAtiva ? "default" : "secondary"}
                       className="text-[9px] uppercase tracking-wider font-semibold shrink-0"
                     >
                       {temVersaoAtiva ? "Possui Ativo" : "Inativo"}
@@ -231,7 +231,7 @@ export default function Orcamentos() {
                           </span>
                         </div>
                         <Badge
-                          variant={v.ativo ? "success" : "outline"}
+                          variant={v.ativo ? "default" : "outline"}
                           className="text-[8px] uppercase px-1.5 py-0"
                         >
                           {v.ativo ? "Ativo" : "Inativo"}
