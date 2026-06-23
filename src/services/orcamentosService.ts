@@ -220,4 +220,33 @@ export async function listarTodosOrcamentos(): Promise<OrcamentoPagina[]> {
   return (data || []) as OrcamentoPagina[];
 }
 
+export async function buscarOrcamentoPorToken(token: string): Promise<OrcamentoPagina | null> {
+  const { data, error } = await supabase
+    .from("orcamento_paginas" as any)
+    .select("*")
+    .eq("token_orcamento", token)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao buscar orçamento por token:", error);
+    throw new Error(error.message);
+  }
+  return data as OrcamentoPagina | null;
+}
+
+export async function buscarObraPorCodigoPublico(codigoObra: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("obras" as any)
+    .select("*")
+    .eq("codigoObra", codigoObra)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Erro ao buscar obra por código:", error);
+    return null;
+  }
+  return data;
+}
+
+
 

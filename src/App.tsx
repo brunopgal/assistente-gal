@@ -22,6 +22,7 @@ import Configuracoes from "./pages/Configuracoes";
 import Prospeccao from "./pages/Prospeccao";
 import Orcamentos from "./pages/Orcamentos";
 import NotFound from "./pages/NotFound";
+import OrcamentoPublico from "./pages/OrcamentoPublico";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/orcamento/:token" element={<OrcamentoPublico />} />
           <Route
             path="*"
             element={
