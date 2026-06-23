@@ -794,15 +794,7 @@ export type Database = {
           pagina_id?: string
           tipo?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "orcamento_aberturas_pagina_id_fkey"
-            columns: ["pagina_id"]
-            isOneToOne: false
-            referencedRelation: "orcamento_paginas"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       orcamento_paginas: {
         Row: {
