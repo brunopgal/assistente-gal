@@ -57,6 +57,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasService";
 import { criarAtividade, listarTodasAtividades, type Atividade } from "@/services/atividadesService";
+import { getConfig } from "@/services/configuracoesService";
 import { listarPessoas, type Pessoa } from "@/services/pessoasService";
 import { normalizeText } from "@/lib/normalize";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,6 +110,8 @@ interface ObraStats {
 export default function Prospeccao() {
   const { toast } = useToast();
   const [todasObras, setTodasObras] = useState<Obra[]>([]);
+  const [configFollow, setConfigFollow] = useState({ email: 10, whatsapp: 7, orcamento: 15 });
+  const [acaoDialogDias, setAcaoDialogDias] = useState<number | null>(null);
   const [acaoDialogOcorrencia, setAcaoDialogOcorrencia] = useState<{obra: Obra, acao: string, title: string} | null>(null);
   const [acaoDialogDetalhes, setAcaoDialogDetalhes] = useState("");
   const [acaoDialogIsRecording, setAcaoDialogIsRecording] = useState(false);
@@ -229,10 +232,18 @@ export default function Prospeccao() {
   async function carregar() {
     setLoading(true);
     try {
-      const [lista, todasAtiv] = await Promise.all([
+      const [lista, todasAtiv, confEmail, confWpp, confOrc] = await Promise.all([
         listarObras(),
         listarTodasAtividades(),
+        getConfig("dias_followup_email"),
+        getConfig("dias_followup_whatsapp"),
+        getConfig("dias_followup_orcamento")
       ]);
+      setConfigFollow({
+        email: confEmail ? Number(confEmail) : 10,
+        whatsapp: confWpp ? Number(confWpp) : 7,
+        orcamento: confOrc ? Number(confOrc) : 15
+      });
       
       setTodasObras(lista ?? []);
       const filtradas = (lista ?? []).filter((o) =>
@@ -402,7 +413,7 @@ export default function Prospeccao() {
     }
   };
 
-  async function registrarAcaoManual(obra: Obra, acao: string, detalhesOpcionais?: string) {
+  async function registrarAcaoManual(obra: Obra, acao: string, detalhesOpcionais?: string, diasFollowUp?: number | null) {
     const codigo = obra.codigoObra || (obra as any).id;
     const nome = obra.nome || "Obra";
 
@@ -429,8 +440,8 @@ export default function Prospeccao() {
           comentario: detalhesOpcionais || (acao === "email" ? "E-mail enviado" : "WhatsApp enviado"),
         });
 
-        // Follow-up criado diretamente via criarAtividade (prazo padrão: 15 dias)
-        const DIAS_FOLLOWUP = 15;
+        // Follow-up criado diretamente via criarAtividade (prazo dinâmico)
+        const DIAS_FOLLOWUP = diasFollowUp ?? 15;
         const dataFutura = new Date();
         dataFutura.setDate(dataFutura.getDate() + DIAS_FOLLOWUP);
 
@@ -495,8 +506,8 @@ export default function Prospeccao() {
           comentario: detalhesOpcionais || "Orçamento enviado",
         });
 
-        // Agendar follow-up automático de orçamento (15 dias)
-        const DIAS_FOLLOWUP = 15;
+        // Agendar follow-up automático de orçamento
+        const DIAS_FOLLOWUP = diasFollowUp ?? 15;
         const dataFutura = new Date();
         dataFutura.setDate(dataFutura.getDate() + DIAS_FOLLOWUP);
 
@@ -939,57 +950,57 @@ export default function Prospeccao() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "iniciar", title: "Iniciar prospecção"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "iniciar", title: "Iniciar prospecção"}); setAcaoDialogDias(null); }}>
                             <ArrowRight className="h-4 w-4 mr-2 text-primary" />
                             Iniciar prospecção
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "email", title: "Enviei e-mail"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "email", title: "Enviei e-mail"}); setAcaoDialogDias(configFollow.email); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
                             Enviei e-mail (Marcar)
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "whatsapp", title: "Enviei WhatsApp"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "whatsapp", title: "Enviei WhatsApp"}); setAcaoDialogDias(configFollow.whatsapp); }}>
                             <Phone className="h-4 w-4 mr-2 text-emerald-600" />
                             Enviei WhatsApp
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "visitei", title: "Visitei a obra"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "visitei", title: "Visitei a obra"}); setAcaoDialogDias(null); }}>
                             <MapPin className="h-4 w-4 mr-2 text-blue-600" />
                             Visitei a obra
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "reuniao", title: "Fiz reunião"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "reuniao", title: "Fiz reunião"}); setAcaoDialogDias(null); }}>
                             <Users className="h-4 w-4 mr-2 text-indigo-600" />
                             Fiz reunião
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "respondeu", title: "Cliente respondeu!"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "respondeu", title: "Cliente respondeu!"}); setAcaoDialogDias(null); }}>
                             <Flame className="h-4 w-4 mr-2 text-orange-500" />
                             Cliente respondeu!
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "comecei_orcamento", title: "Comecei orçamento"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "comecei_orcamento", title: "Comecei orçamento"}); setAcaoDialogDias(null); }}>
                             <Clock className="h-4 w-4 mr-2 text-teal-600" />
                             Comecei orçamento
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "orcamento", title: "Enviei Orçamento"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "orcamento", title: "Enviei Orçamento"}); setAcaoDialogDias(configFollow.orcamento); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
                             Enviei Orçamento
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); setAcaoDialogDias(null); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                             Avançar para Negociação
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "fechei", title: "Fechei / Ganhei"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "fechei", title: "Fechei / Ganhei"}); setAcaoDialogDias(null); }}>
                             <Sparkles className="h-4 w-4 mr-2 text-emerald-600" />
                             Fechei / Ganhei
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "encerrar", title: "Encerrar / Perda"}); }}>
+                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "encerrar", title: "Encerrar / Perda"}); setAcaoDialogDias(null); }}>
                             <Ban className="h-4 w-4 mr-2 text-red-500" />
                             Encerrar / Perda
                           </DropdownMenuItem>
@@ -1133,6 +1144,32 @@ export default function Prospeccao() {
                 </Button>
               </div>
             </div>
+            {acaoDialogDias !== null && (
+              <div className="py-2 space-y-2 border-t mt-2">
+                <Label>Agendar próximo contato (dias)</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[5, 7, 10, 15, 30, 60].map(p => (
+                    <Button
+                      key={p}
+                      type="button"
+                      variant={acaoDialogDias === p ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setAcaoDialogDias(p)}
+                      className="h-8 text-xs"
+                    >
+                      {p}
+                    </Button>
+                  ))}
+                  <Input
+                    type="number"
+                    className="w-16 h-8 text-xs"
+                    value={acaoDialogDias || ""}
+                    onChange={e => setAcaoDialogDias(Number(e.target.value))}
+                    min={1}
+                  />
+                </div>
+              </div>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => { setAcaoDialogOcorrencia(null); stopRecordingAndClear(); }}>
                 Cancelar
@@ -1141,7 +1178,7 @@ export default function Prospeccao() {
                 onClick={() => {
                   stopRecordingAndClear();
                   if (acaoDialogOcorrencia) {
-                    registrarAcaoManual(acaoDialogOcorrencia.obra, acaoDialogOcorrencia.acao, acaoDialogDetalhes.trim());
+                    registrarAcaoManual(acaoDialogOcorrencia.obra, acaoDialogOcorrencia.acao, acaoDialogDetalhes.trim(), acaoDialogDias);
                     setAcaoDialogOcorrencia(null);
                   }
                 }}

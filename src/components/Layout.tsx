@@ -16,9 +16,9 @@ import {
   Bot,
   Target,
   ChevronDown,
-  ChevronRight,
   ListChecks,
   FileText,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,7 +67,7 @@ const navStructure: NavEntry[] = [
         { title: "Prospecção", path: "/prospeccao", icon: Target, iconClassName: "text-primary" },
         { title: "Orçamentos", path: "/orcamentos", icon: FileText, iconClassName: "text-blue-500" },
         { title: "Prospecção IA", path: "/prospeccao-ia", icon: Sparkles },
-        { title: "Michele", path: "/michele", icon: Bot, iconClassName: "text-primary" },
+        { title: "Configurações", path: "/configuracoes", icon: Settings },
       ],
     },
   },
