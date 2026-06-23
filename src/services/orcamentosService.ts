@@ -337,6 +337,47 @@ export async function obterResumoAberturasPorObra(codigoObras: string[]): Promis
   return result;
 }
 
+export interface ResumoAberturasVersao {
+  total: number;
+  ultima: string | null;
+}
+
+export async function obterResumoAberturasPorVersoes(paginaIds: string[]): Promise<Record<string, ResumoAberturasVersao>> {
+  if (!paginaIds || paginaIds.length === 0) return {};
+
+  const { data: aberturas, error } = await supabase
+    .from("orcamento_aberturas" as any)
+    .select("pagina_id, aberto_em")
+    .eq("tipo", "orcamento")
+    .in("pagina_id", paginaIds)
+    .order("aberto_em", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao obter resumo de aberturas por versões:", error);
+    throw new Error(error.message);
+  }
+
+  const result: Record<string, ResumoAberturasVersao> = {};
+
+  for (const id of paginaIds) {
+    result[id] = { total: 0, ultima: null };
+  }
+
+  if (aberturas) {
+    for (const ab of aberturas) {
+      const pid = ab.pagina_id;
+      if (result[pid]) {
+        result[pid].total += 1;
+        if (!result[pid].ultima) {
+          result[pid].ultima = ab.aberto_em;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 
 
 

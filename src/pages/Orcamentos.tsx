@@ -1,5 +1,10 @@
 import { useEffect, useState, useMemo } from "react";
-import { listarTodosOrcamentos, type OrcamentoPagina } from "@/services/orcamentosService";
+import {
+  listarTodosOrcamentos,
+  obterResumoAberturasPorVersoes,
+  type OrcamentoPagina,
+  type ResumoAberturasVersao,
+} from "@/services/orcamentosService";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +42,7 @@ export default function Orcamentos() {
   const { toast } = useToast();
   const [obras, setObras] = useState<Obra[]>([]);
   const [orcamentos, setOrcamentos] = useState<OrcamentoPagina[]>([]);
+  const [aberturasMap, setAberturasMap] = useState<Record<string, ResumoAberturasVersao>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeObraForOrcamento, setActiveObraForOrcamento] = useState<Obra | null>(null);
@@ -52,6 +58,14 @@ export default function Orcamentos() {
       const [ops, orcs] = await Promise.all([listarObras(), listarTodosOrcamentos()]);
       setObras(ops || []);
       setOrcamentos(orcs || []);
+      
+      const ids = (orcs || []).map((o) => o.id).filter(Boolean);
+      if (ids.length > 0) {
+        const resumo = await obterResumoAberturasPorVersoes(ids);
+        setAberturasMap(resumo);
+      } else {
+        setAberturasMap({});
+      }
     } catch (e: any) {
       toast({
         title: "Erro ao carregar dados",
@@ -229,13 +243,52 @@ export default function Orcamentos() {
                               ? new Date(v.created_at).toLocaleDateString("pt-BR")
                               : "—"}
                           </span>
+                          {(() => {
+                            const info = aberturasMap[v.id];
+                            if (info && info.total > 0 && info.ultima) {
+                              const dataFmt = new Date(info.ultima).toLocaleString("pt-BR", {
+                                timeZone: "America/Sao_Paulo"
+                              });
+                              return (
+                                <span className="text-[8px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-medium">
+                                  Última abertura: {dataFmt}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
-                        <Badge
-                          variant={v.ativo ? "default" : "outline"}
-                          className="text-[8px] uppercase px-1.5 py-0"
-                        >
-                          {v.ativo ? "Ativo" : "Inativo"}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge
+                            variant={v.ativo ? "default" : "outline"}
+                            className="text-[8px] uppercase px-1.5 py-0 font-semibold"
+                          >
+                            {v.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                          {(() => {
+                            const info = aberturasMap[v.id];
+                            const count = info?.total || 0;
+                            if (count > 0) {
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20"
+                                >
+                                  Aberto · {count}
+                                </Badge>
+                              );
+                            } else {
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10"
+                                >
+                                  Não aberto
+                                </Badge>
+                              );
+                            }
+                          })()}
+                        </div>
                       </div>
                     ))}
                   </div>
