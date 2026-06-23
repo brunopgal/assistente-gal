@@ -407,7 +407,7 @@ export async function garantirApresentacaoDaObra(codigoObra: string): Promise<Ap
   }
 
   if (data) {
-    return data as ApresentacaoPagina;
+    return data as unknown as ApresentacaoPagina;
   }
 
   const token_apresentacao = generateToken();
