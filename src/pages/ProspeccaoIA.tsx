@@ -136,9 +136,12 @@ function mapEstagioObra(v: string): string {
   const map: Record<string, string> = {
     "terreno": "Não Iniciado",
     "nao iniciado": "Não Iniciado",
+    "inicial": "Inicial",
     "fundacao": "Inicial",
     "estrutura": "Inicial",
+    "medio": "Médio",
     "alvenaria": "Médio",
+    "final": "Final",
     "acabamento": "Final",
     "execucao final": "Final",
     "finalizacao": "Finalizado",
@@ -324,6 +327,18 @@ export default function ProspeccaoIA() {
         const valClassificacao = mapPadraoObra(o.classificacao || "");
         const valPadrao = mapPadraoObra(o.padraoObra || "");
         const classificacaoFinal = valClassificacao || valPadrao || "";
+
+        // Encontra pessoa relacionada para preencher dados de contato
+        const matchingPeople = pesIn.filter((p) => {
+          const sameObra = norm(p.obraRelacionada || "") === nomeKey;
+          const sameConstrutora = !p.construtora || !o.construtora || norm(p.construtora) === ctKey;
+          return sameObra && sameConstrutora;
+        });
+        const bestPerson = matchingPeople.find((p) => {
+          const c = norm(p.cargo || "");
+          return c.includes("compras") || c.includes("comprador");
+        }) || matchingPeople[0];
+
         return {
           raw: o,
           data: {
@@ -338,6 +353,9 @@ export default function ProspeccaoIA() {
             concorrentes: o.concorrentes || "",
             observacoes: buildObservacoesObra(o),
             prospeccaoIA: o.prospeccaoIA || "",
+            responsavel: bestPerson?.nome || "",
+            telefone: bestPerson?.telefone || "",
+            email: bestPerson?.email || "",
           },
           duplicate,
           construtoraExistente,
@@ -467,9 +485,9 @@ export default function ProspeccaoIA() {
           classificacao: entry.data.classificacao || "",
           construtora: ctNome,
           codigoConstrutora: codigoCt,
-          responsavel: "",
-          telefone: "",
-          email: "",
+          responsavel: entry.data.responsavel || "",
+          telefone: entry.data.telefone || "",
+          email: entry.data.email || "",
           cidade: entry.data.cidade || "",
           localizacao: entry.data.localizacao || "",
           produtoOferecido: entry.data.produtoOferecido || "",
