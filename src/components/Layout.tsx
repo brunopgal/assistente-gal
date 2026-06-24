@@ -21,6 +21,7 @@ import {
   FileText,
   Settings,
   Presentation,
+  GitMerge,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +53,7 @@ const navStructure: NavEntry[] = [
         { title: "Obras", path: "/obras", icon: Building2 },
         { title: "Construtoras", path: "/construtoras", icon: Building },
         { title: "Contatos", path: "/pessoas", icon: Users },
+        { title: "Limpar Duplicatas", path: "/duplicatas", icon: GitMerge },
         { title: "Relatórios", path: "/relatorios", icon: FileBarChart },
       ],
     },

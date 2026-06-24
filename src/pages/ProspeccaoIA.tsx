@@ -15,6 +15,7 @@ import {
   type Construtora,
 } from "@/services/construtorasService";
 import { listarPessoas, criarPessoa, type Pessoa } from "@/services/pessoasService";
+import { norm, strongNorm, onlyDigits } from "@/lib/normalize";
 
 const PROMPT_TEMPLATE = `Você vai me retornar informações de prospecção em formato JSON ESTRITO seguindo exatamente o schema abaixo.
 
@@ -97,28 +98,6 @@ REGRAS IMPORTANTES
 - O campo "prospeccaoIA" deve conter um resumo estratégico útil para vendas.
 
 Agora preencha com os dados solicitados:`;
-
-function norm(s: string) {
-  return (s || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function strongNorm(s: string): string {
-  return (s || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function onlyDigits(s: string): string {
-  return (s || "").replace(/\D/g, "");
-}
 
 // ============ Normalizadores (Opção A: prompt novo -> valores canônicos atuais) ============
 

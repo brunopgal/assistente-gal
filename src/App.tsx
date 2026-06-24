@@ -25,6 +25,7 @@ import NotFound from "./pages/NotFound";
 import OrcamentoPublico from "./pages/OrcamentoPublico";
 import ApresentacaoRedirect from "./pages/ApresentacaoRedirect";
 import Apresentacao from "./pages/Apresentacao";
+import Duplicatas from "./pages/Duplicatas";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                     <Route path="/apresentacao" element={<Apresentacao />} />
                     <Route path="/prospeccao-ia" element={<ProspeccaoIA />} />
                     <Route path="/nova-obra" element={<NovaObra />} />
+                    <Route path="/duplicatas" element={<Duplicatas />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Layout>
