@@ -155,9 +155,13 @@ function mapPadraoObra(v: string): string {
     "mcmv": "Baixo Padrão",
     "popular": "Baixo Padrão",
     "baixo": "Baixo Padrão",
+    "baixo padrao": "Baixo Padrão",
     "medio": "Médio Padrão",
+    "medio padrao": "Médio Padrão",
     "medio/alto": "Médio/Alto Padrão",
+    "medio/alto padrao": "Médio/Alto Padrão",
     "alto": "Alto Padrão",
+    "alto padrao": "Alto Padrão",
   };
   return map[n] || "";
 }
@@ -180,11 +184,8 @@ function mapProdutosConstrutora(v: string): string {
 function buildObservacoesObra(o: ObraPromptInput): string {
   const extras: string[] = [];
   if (o.observacoes) extras.push(o.observacoes);
-  if (o.classificacao) extras.push(`Classificação: ${o.classificacao}`);
-  if (o.padraoObra) extras.push(`Padrão: ${o.padraoObra}`);
-  if (o.endereco) extras.push(`Endereço: ${o.endereco}`);
-  if (o.estado) extras.push(`Estado: ${o.estado}`);
   if (o.proximaAcao) extras.push(`Próxima ação: ${o.proximaAcao}`);
+  if (o.estado) extras.push(`Estado: ${o.estado}`);
   return extras.join(" | ");
 }
 
@@ -320,7 +321,9 @@ export default function ProspeccaoIA() {
           (x) => norm(x.nome) === nomeKey && norm(x.construtora) === ctKey,
         );
         const construtoraExistente = todasCts.find((x) => norm(x.nome) === ctKey);
-        const classificacaoFinal = mapPadraoObra(o.padraoObra || "");
+        const valClassificacao = mapPadraoObra(o.classificacao || "");
+        const valPadrao = mapPadraoObra(o.padraoObra || "");
+        const classificacaoFinal = valClassificacao || valPadrao || "";
         return {
           raw: o,
           data: {
@@ -328,6 +331,7 @@ export default function ProspeccaoIA() {
             construtora: o.construtora || "",
             classificacao: classificacaoFinal,
             cidade: o.cidade || "",
+            localizacao: o.endereco || "",
             produtoOferecido: mapProdutosObra(o.produtos || ""),
             estagioObra: mapEstagioObra(o.estagioObra || ""),
             statusProspeccao: mapStatusProspeccao(o.estagioComercial || ""),
@@ -467,7 +471,7 @@ export default function ProspeccaoIA() {
           telefone: "",
           email: "",
           cidade: entry.data.cidade || "",
-          localizacao: "",
+          localizacao: entry.data.localizacao || "",
           produtoOferecido: entry.data.produtoOferecido || "",
           estagioObra: entry.data.estagioObra || "",
           marcouReuniao: "",
