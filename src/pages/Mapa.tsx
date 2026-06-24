@@ -48,10 +48,43 @@ async function geocode(query: string): Promise<GeocodeResult> {
 
 const isUrl = (s: string) => /^https?:\/\//i.test((s || "").trim());
 
+export function cleanEnderecoParaGeocode(loc: string): string {
+  if (!loc) return "";
+  
+  // corta tudo a partir do primeiro " - " (descarta bairro/CEP)
+  let clean = loc.split(" - ")[0];
+  
+  // remove "CEP 00000-000", "nº"/"n°", "s/nº"
+  clean = clean.replace(/cep\s*:?\s*\d{5}-?\d{3}/gi, "");
+  clean = clean.replace(/\b\d{5}-?\d{3}\b/g, "");
+  clean = clean.replace(/\bcep\b/gi, "");
+  clean = clean.replace(/s\/n[º°]?/gi, "");
+  clean = clean.replace(/n[º°]/gi, "");
+  
+  // normaliza espaços e vírgulas
+  clean = clean.replace(/,+/g, ",");
+  clean = clean.replace(/\s*,\s*/g, ", ");
+  clean = clean.replace(/\s+/g, " ");
+  
+  // remove vírgulas ou espaços no início e fim
+  clean = clean.trim()
+    .replace(/^,+/, "")
+    .replace(/,+$/, "")
+    .trim();
+    
+  return clean;
+}
+
 function buildQuery(obra: Obra): string {
   const locTxt = isUrl(obra.localizacao) ? "" : (obra.localizacao || "").trim();
+  const logradouro = cleanEnderecoParaGeocode(locTxt);
   const cidade = (obra.cidade || "").trim();
-  return [locTxt, cidade].filter(Boolean).join(", ");
+  
+  if (!logradouro && !cidade) {
+    return "";
+  }
+  
+  return [logradouro, cidade, "Brasil"].filter(Boolean).join(", ");
 }
 
 function statusColor(status: string): string {
