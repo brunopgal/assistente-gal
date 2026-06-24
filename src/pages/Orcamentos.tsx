@@ -28,6 +28,8 @@ import {
   ArrowRightLeft,
   Copy,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import OrcamentoEditor from "@/components/OrcamentoEditor";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -50,6 +52,7 @@ export default function Orcamentos() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeObraForOrcamento, setActiveObraForOrcamento] = useState<Obra | null>(null);
+  const [sortDesc, setSortDesc] = useState(true);
 
   // Estados para abertura de novo orçamento
   const [novoOrcamentoOpen, setNovoOrcamentoOpen] = useState(false);
@@ -112,19 +115,35 @@ export default function Orcamentos() {
 
     // 2. Filtra pela busca
     const q = searchTerm.toLowerCase().trim();
-    if (!q) return list;
+    const filteredList = q
+      ? list.filter((item) => {
+          const matchObraName = item.obra?.nome?.toLowerCase().includes(q);
+          const matchConstrutora = item.obra?.construtora?.toLowerCase().includes(q);
+          const matchCodigo = item.codigoObra?.toLowerCase().includes(q);
+          const matchVersao = item.versoes.some((v) =>
+            v.titulo_versao?.toLowerCase().includes(q)
+          );
+          return matchObraName || matchConstrutora || matchCodigo || matchVersao;
+        })
+      : list;
 
-    return list.filter((item) => {
-      const matchObraName = item.obra?.nome?.toLowerCase().includes(q);
-      const matchConstrutora = item.obra?.construtora?.toLowerCase().includes(q);
-      const matchCodigo = item.codigoObra?.toLowerCase().includes(q);
-      const matchVersao = item.versoes.some((v) =>
-        v.titulo_versao?.toLowerCase().includes(q)
-      );
+    // 3. Ordena
+    return [...filteredList].sort((a, b) => {
+      const getMostRecentTime = (item: ObraComOrcamento) => {
+        if (!item.versoes || item.versoes.length === 0) return 0;
+        const times = item.versoes.map((v) => {
+          const dateStr = v.updated_at || v.created_at || 0;
+          return dateStr ? new Date(dateStr).getTime() : 0;
+        });
+        return Math.max(...times);
+      };
 
-      return matchObraName || matchConstrutora || matchCodigo || matchVersao;
+      const aTime = getMostRecentTime(a);
+      const bTime = getMostRecentTime(b);
+
+      return sortDesc ? bTime - aTime : aTime - bTime;
     });
-  }, [orcamentos, mapObras, searchTerm]);
+  }, [orcamentos, mapObras, searchTerm, sortDesc]);
 
   const handleAbrirEditor = (obra: Obra) => {
     setActiveObraForOrcamento(obra);
@@ -176,9 +195,9 @@ export default function Orcamentos() {
         </Button>
       </div>
 
-      {/* Busca */}
-      <div className="flex items-center gap-2 max-w-sm">
-        <div className="relative w-full">
+      {/* Busca e Ordenação */}
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="relative flex-1 w-full max-w-md">
           <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
             className="pl-9 bg-card/50"
@@ -187,6 +206,14 @@ export default function Orcamentos() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSortDesc(!sortDesc)}
+          className="shrink-0"
+        >
+          Data de atualização {sortDesc ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronUp className="ml-2 h-4 w-4" />}
+        </Button>
       </div>
 
       {/* Grid de Obras com Orçamentos */}

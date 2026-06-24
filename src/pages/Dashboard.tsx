@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
 import { listarPessoas, type Pessoa } from "@/services/pessoasService";
@@ -128,9 +128,11 @@ export default function Dashboard() {
   const [filtroEstagio, setFiltroEstagio] = useState<string>("__all__");
   const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUpCategory | null>(null);
 
+  const location = useLocation();
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+    const carregarDados = async (showLoading = true) => {
+      if (showLoading) setLoading(true);
       try {
         const [obrasData, ctsData, pesData, atvsData, atvsCtsData] = await Promise.all([
           listarObras().catch(() => [] as Obra[]),
@@ -145,10 +147,18 @@ export default function Dashboard() {
         setAtividades(atvsData);
         setAtividadesConstrutoras(atvsCtsData);
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
-    })();
-  }, []);
+    };
+
+    carregarDados(true);
+
+    const handleFocus = () => carregarDados(false);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [location.pathname]);
 
   // ─── Filtered obras based on global stage filter ─────────────────────
   const obrasFiltradas = useMemo(() => {
@@ -248,17 +258,24 @@ export default function Dashboard() {
   }, [obrasFiltradas]);
 
   const rankProdutos = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, number>([
+      ["PRADO", 0],
+      ["ROHDEN", 0],
+      ["IMAB", 0],
+      ["OUTROS", 0],
+    ]);
     obrasFiltradas.forEach((o) => {
       (o.produtoOferecido || "")
         .split(",")
         .map((p) => p.trim().toUpperCase())
-        .filter((p) => ["IMAB", "RHODEN", "PRADO"].includes(p))
-        .forEach((p) => map.set(p, (map.get(p) || 0) + 1));
+        .forEach((p) => {
+          if (p === "PRADO" || p === "ROHDEN" || p === "IMAB" || p === "OUTROS") {
+            map.set(p, (map.get(p) || 0) + 1);
+          }
+        });
     });
     return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
+      .sort((a, b) => b[1] - a[1]);
   }, [obrasFiltradas]);
 
   // ─── Follow-up detail list ───────────────────────────────────────────
@@ -661,6 +678,7 @@ function RankingCard({
     if (n.includes("PRADO")) return "text-orange-500";
     if (n.includes("RHODEN")) return "text-blue-500";
     if (n.includes("IMAB")) return "text-foreground";
+    if (n.includes("OUTROS")) return "text-slate-500";
     return "";
   }
 

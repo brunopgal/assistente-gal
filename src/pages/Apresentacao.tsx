@@ -5,6 +5,7 @@ import {
   garantirApresentacaoDaObra, 
   marcarEnviado,
   obterResumoAberturasPorVersoes,
+  resetarApresentacao,
   type ApresentacaoPagina,
   type ResumoAberturasVersao 
 } from "@/services/orcamentosService";
@@ -20,8 +21,21 @@ import {
   Calendar,
   ExternalLink,
   Copy,
-  Presentation
+  Presentation,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PUBLIC_BASE_URL } from "@/lib/config";
 
 export default function Apresentacao() {
@@ -32,6 +46,9 @@ export default function Apresentacao() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [sortDesc, setSortDesc] = useState(true);
+  const [confirmReset, setConfirmReset] = useState<ApresentacaoPagina | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -75,14 +92,25 @@ export default function Apresentacao() {
 
   const filteredObras = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
-    if (!q) return obras;
-    return obras.filter((o) => {
-      const matchName = o.nome?.toLowerCase().includes(q);
-      const matchConstrutora = o.construtora?.toLowerCase().includes(q);
-      const matchCodigo = o.codigoObra?.toLowerCase().includes(q);
-      return matchName || matchConstrutora || matchCodigo;
+    const result = q
+      ? obras.filter((o) => {
+          const matchName = o.nome?.toLowerCase().includes(q);
+          const matchConstrutora = o.construtora?.toLowerCase().includes(q);
+          const matchCodigo = o.codigoObra?.toLowerCase().includes(q);
+          return matchName || matchConstrutora || matchCodigo;
+        })
+      : obras;
+
+    return [...result].sort((a, b) => {
+      const aCod = a.codigoObra || a.id!;
+      const bCod = b.codigoObra || b.id!;
+      const aAp = apresentacoes[aCod];
+      const bAp = apresentacoes[bCod];
+      const aTime = aAp ? new Date(aAp.created_at).getTime() : 0;
+      const bTime = bAp ? new Date(bAp.created_at).getTime() : 0;
+      return sortDesc ? bTime - aTime : aTime - bTime;
     });
-  }, [obras, searchTerm]);
+  }, [obras, searchTerm, apresentacoes, sortDesc]);
 
   const handleCopiarLink = async (obra: Obra) => {
     const cod = obra.codigoObra || obra.id;
@@ -159,8 +187,8 @@ export default function Apresentacao() {
         </p>
       </div>
 
-      <div className="flex items-center gap-2 max-w-sm">
-        <div className="relative w-full">
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="relative flex-1 w-full max-w-md">
           <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
             className="pl-9 bg-card/50"
@@ -169,6 +197,14 @@ export default function Apresentacao() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSortDesc(!sortDesc)}
+          className="shrink-0"
+        >
+          Data de atualização {sortDesc ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronUp className="ml-2 h-4 w-4" />}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -190,6 +226,17 @@ export default function Apresentacao() {
                     <h3 className="font-bold text-foreground line-clamp-1">
                       {o.nome || "Obra Sem Nome"}
                     </h3>
+                    {ap && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() => setConfirmReset(ap)}
+                        title="Resetar Apresentação"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                     <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -317,6 +364,55 @@ export default function Apresentacao() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!confirmReset} onOpenChange={(o) => !o && !resetting && setConfirmReset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar apresentação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai apagar o histórico de envio e aberturas desta apresentação. Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={resetting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!confirmReset) return;
+                setResetting(true);
+                try {
+                  await resetarApresentacao(confirmReset.id);
+                  toast({
+                    title: "Apresentação resetada!",
+                    description: "O histórico de envios e aberturas foi limpo com sucesso.",
+                  });
+                  await fetchData();
+                  setConfirmReset(null);
+                } catch (error: any) {
+                  toast({
+                    title: "Erro ao resetar",
+                    description: error.message || "Tente novamente",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setResetting(false);
+                }
+              }}
+            >
+              {resetting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Resetando...
+                </>
+              ) : (
+                "Continuar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

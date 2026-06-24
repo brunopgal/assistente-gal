@@ -471,6 +471,28 @@ export async function marcarEnviado(tipo: "orcamento" | "apresentacao", id: stri
   }
 }
 
+export async function resetarApresentacao(apresentacaoId: string): Promise<void> {
+  // 1. Limpar enviado_em da apresentacao_paginas daquela obra (set enviado_em = null)
+  const { error: errorUpdate } = await supabase
+    .from("apresentacao_paginas" as any)
+    .update({ enviado_em: null })
+    .eq("id", apresentacaoId);
 
+  if (errorUpdate) {
+    console.error("Erro ao limpar enviado_em em apresentacao_paginas:", errorUpdate);
+    throw new Error(errorUpdate.message);
+  }
 
+  // 2. APAGAR os registros de abertura daquela apresentação em orcamento_aberturas
+  // (where pagina_id = id da apresentacao_paginas E tipo = "apresentacao")
+  const { error: errorDelete } = await supabase
+    .from("orcamento_aberturas" as any)
+    .delete()
+    .eq("pagina_id", apresentacaoId)
+    .eq("tipo", "apresentacao");
 
+  if (errorDelete) {
+    console.error("Erro ao deletar registros em orcamento_aberturas:", errorDelete);
+    throw new Error(errorDelete.message);
+  }
+}

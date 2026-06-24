@@ -71,7 +71,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import OrcamentoEditor from "@/components/OrcamentoEditor";
 import { obterResumoAberturasPorObra, type ResumoAberturasObra } from "@/services/orcamentosService";
 
 type StatusFiltro = "todos" | StatusProspeccao;
@@ -213,7 +212,6 @@ export default function Prospeccao() {
   const [obraAcessosOpen, setObraAcessosOpen] = useState<Obra | null>(null);
 
   const [novaProspeccaoOpen, setNovaProspeccaoOpen] = useState(false);
-  const [activeObraForOrcamento, setActiveObraForOrcamento] = useState<Obra | null>(null);
   const [novaObraComboboxOpen, setNovaObraComboboxOpen] = useState(false);
   const [novaContatoComboboxOpen, setNovaContatoComboboxOpen] = useState(false);
   const [selectedNovaObra, setSelectedNovaObra] = useState("");
@@ -1022,11 +1020,7 @@ export default function Prospeccao() {
                             Enviei Orçamento
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => setActiveObraForOrcamento(o)}>
-                            <FileText className="h-4 w-4 mr-2 text-indigo-600" />
-                            Editor de Orçamento
-                          </DropdownMenuItem>
-                          
+
                           <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); setAcaoDialogDias(null); }}>
                             <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
                             Avançar para Negociação
@@ -1226,19 +1220,7 @@ export default function Prospeccao() {
           </DialogContent>
         </Dialog>
 
-        {activeObraForOrcamento && (
-          <OrcamentoEditor
-            codigoObra={activeObraForOrcamento.codigoObra || activeObraForOrcamento.id || ""}
-            obraNome={activeObraForOrcamento.nome}
-            open={!!activeObraForOrcamento}
-            onOpenChange={(open) => {
-              if (!open) {
-                setActiveObraForOrcamento(null);
-                carregar();
-              }
-            }}
-          />
-        )}
+
       </div>
     </TooltipProvider>
   );
