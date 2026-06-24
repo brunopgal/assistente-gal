@@ -6,6 +6,8 @@ export function norm(s: string): string {
     .trim();
 }
 
+export const normalizeText = norm;
+
 export function strongNorm(s: string): string {
   return (s || "")
     .normalize("NFD")
