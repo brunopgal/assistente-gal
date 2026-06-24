@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import PautaReuniaoDialog from "@/components/PautaReuniaoDialog";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,9 +39,6 @@ import {
   ListChecks,
   Pencil,
   Trash2,
-  FileText,
-  CalendarClock,
-  ClipboardList,
   Info,
   Download,
   PlusCircle,
@@ -49,7 +46,7 @@ import {
 import ObraInfoDialog from "@/components/ObraInfoDialog";
 import ObraForm, { type ObraFormValues } from "@/components/ObraForm";
 import { useToast } from "@/hooks/use-toast";
-import { openFileSafe } from "@/lib/openFile";
+
 import { normalizeText } from "@/lib/normalize";
 import { exportarParaExcel } from "@/lib/exportXlsx";
 import { STATUS_PROSPECCAO } from "@/lib/statusProspeccao";
@@ -64,23 +61,6 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   if (s.includes("perdido")) return "destructive";
   if (s.includes("negocia")) return "secondary";
   return "outline";
-}
-
-function getOrcamentoLinks(o: Obra): { url: string; label: string }[] {
-  const split = (v: string) => (v || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const out: { url: string; label: string }[] = [];
-  const prado = split(o.linkOrcamentoPrado);
-  const imab = split(o.linkOrcamentoImab);
-  const rhoden = split(o.linkOrcamentoRhoden);
-  prado.forEach((u, i) => out.push({ url: u, label: prado.length > 1 ? `Prado ${i + 1}` : "Prado" }));
-  imab.forEach((u, i) => out.push({ url: u, label: imab.length > 1 ? `Imab ${i + 1}` : "Imab" }));
-  rhoden.forEach((u, i) => out.push({ url: u, label: rhoden.length > 1 ? `Rhoden ${i + 1}` : "Rhoden" }));
-  return out;
-}
-
-function temBotaoOrcamento(status: string): boolean {
-  const s = (status || "").toLowerCase();
-  return s.includes("orçamento enviado") || s.includes("orcamento enviado") || s.includes("fechado");
 }
 
 function produtoColor(p: string): string {
@@ -98,7 +78,7 @@ export default function Obras() {
   const [filtroCidade, setFiltroCidade] = useState<string>("__all__");
   const [filtroProduto, setFiltroProduto] = useState<string>("__all__");
   const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
-  const [pautaObra, setPautaObra] = useState<Obra | null>(null);
+
   const [infoObra, setInfoObra] = useState<Obra | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Obra | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -429,21 +409,6 @@ export default function Obras() {
                               <Info className="h-3.5 w-3.5 mr-1" />
                               Informações
                             </Button>
-                            {temBotaoOrcamento(o.statusProspeccao) &&
-                              getOrcamentoLinks(o).map((orc, idx) => (
-                                <Button
-                                  key={`${orc.url}-${idx}`}
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8"
-                                  onClick={() => openFileSafe(orc.url)}
-                                  title={`Abrir orçamento ${orc.label}`}
-                                >
-                                  <FileText className="h-3.5 w-3.5 mr-1" />
-                                  {orc.label}
-                                </Button>
-                              ))}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -452,22 +417,6 @@ export default function Obras() {
                             >
                               <Pencil className="h-3.5 w-3.5 mr-1" />
                               Editar
-                            </Button>
-                            <Button asChild variant="outline" size="sm" className="h-8">
-                              <Link to={`/visitas?obra=${encodeURIComponent(o.id || o.codigoObra || "")}`}>
-                                <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                                Visita/Reunião
-                              </Link>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              className="h-8"
-                              onClick={() => setPautaObra(o)}
-                            >
-                              <ClipboardList className="h-3.5 w-3.5 mr-1" />
-                              Pauta Reunião
                             </Button>
                             <Button asChild variant="default" size="sm" className="h-8">
                               <Link to={`/atividades/${encodeURIComponent(o.id || o.codigoObra || "")}`}>
@@ -522,12 +471,7 @@ export default function Obras() {
         </DialogContent>
       </Dialog>
 
-      <PautaReuniaoDialog
-        open={!!pautaObra}
-        onOpenChange={(o) => !o && setPautaObra(null)}
-        obraId={pautaObra?.id || pautaObra?.codigoObra || ""}
-        obraNome={pautaObra?.nome}
-      />
+
 
       <ObraInfoDialog
         open={!!infoObra}
