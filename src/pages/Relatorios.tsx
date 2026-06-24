@@ -1,18 +1,74 @@
 import { useEffect, useMemo, useState } from "react";
 import { listarObras, type Obra } from "@/services/obrasService";
-import { Loader2, FileBarChart, Download, ExternalLink, TrendingDown, Clock, Send, Trophy } from "lucide-react";
+import { Loader2, FileBarChart, Download, ExternalLink, TrendingDown, Clock, Send, Trophy, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Link, useLocation } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+
+interface MultiSelectFilterProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}
+
+function MultiSelectFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: MultiSelectFilterProps) {
+  const toggleOption = (opt: string) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter((x) => x !== opt));
+    } else {
+      onChange([...selected, opt]);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 flex flex-col">
+      <span className="text-xs text-muted-foreground font-medium">{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="w-[180px] justify-between text-left font-normal h-9 bg-card">
+            <span className="truncate font-medium text-xs">
+              {selected.length === 0
+                ? "Todos"
+                : selected.length === 1
+                ? selected[0]
+                : `${selected.length} selecionados`}
+            </span>
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-2 bg-card border border-border" align="start">
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {options.map((opt) => {
+              const isChecked = selected.includes(opt);
+              return (
+                <label
+                  key={opt}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted/50 cursor-pointer text-sm select-none"
+                >
+                  <Checkbox
+                    checked={isChecked}
+                    onCheckedChange={() => toggleOption(opt)}
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 // ─── Helpers (mesmos critérios do Dashboard) ───────────────────────────
 function parseDate(str: string): Date | null {
@@ -83,11 +139,10 @@ export default function Relatorios() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
 
-  // Filtros
-  const [fCategoria, setFCategoria] = useState<string>("todas");
-  const [fConstrutora, setFConstrutora] = useState<string>("todas");
-  const [fCidade, setFCidade] = useState<string>("todas");
-  const [fProduto, setFProduto] = useState<string>("todos");
+  // Filtros múltiplos
+  const [selectedCategorias, setSelectedCategorias] = useState<string[]>([]);
+  const [selectedProdutos, setSelectedProdutos] = useState<string[]>([]);
+  const [selectedCidades, setSelectedCidades] = useState<string[]>([]);
 
   const location = useLocation();
 
@@ -124,52 +179,93 @@ export default function Relatorios() {
       });
   }, [obras]);
 
-  const construtoras = useMemo(
-    () => Array.from(new Set(linhas.map((l) => (l.obra.construtora || "").trim()).filter(Boolean))).sort(),
-    [linhas]
-  );
   const cidades = useMemo(
     () => Array.from(new Set(linhas.map((l) => (l.obra.cidade || "").trim()).filter(Boolean))).sort(),
     [linhas]
   );
 
-  // Aplica filtros
+  // Lógica dos filtros:
+  // - Se vazio, considera "todos" (não filtra).
+  // - OR dentro do mesmo filtro.
+  // - AND entre filtros diferentes.
   const filtradas = useMemo<Linha[]>(() => {
     return linhas.filter((l) => {
-      if (fCategoria !== "todas" && l.categoria !== fCategoria) return false;
-      if (fConstrutora !== "todas" && (l.obra.construtora || "").trim() !== fConstrutora) return false;
-      if (fCidade !== "todas" && (l.obra.cidade || "").trim() !== fCidade) return false;
-      if (fProduto !== "todos") {
-        const prodUpper = fProduto.toUpperCase();
+      // 1. Filtro Categoria/Status (OR)
+      if (selectedCategorias.length > 0) {
+        if (!selectedCategorias.includes(l.categoria)) return false;
+      }
+
+      // 2. Filtro Cidade (OR)
+      if (selectedCidades.length > 0) {
+        const obraCidade = (l.obra.cidade || "").trim();
+        if (!selectedCidades.includes(obraCidade)) return false;
+      }
+
+      // 3. Filtro Produto (OR)
+      if (selectedProdutos.length > 0) {
         const obraProds = (l.obra.produtoOferecido || "")
           .split(",")
           .map((p) => p.trim().toUpperCase());
-        if (!obraProds.includes(prodUpper)) return false;
+        const match = selectedProdutos.some((p) => {
+          const up = p.toUpperCase();
+          if (up === "ROHDEN" || up === "RHODEN") {
+            return obraProds.includes("ROHDEN") || obraProds.includes("RHODEN");
+          }
+          if (up === "OUTROS") {
+            return (
+              obraProds.includes("OUTROS") ||
+              obraProds.some((op) => op !== "" && op !== "PRADO" && op !== "IMAB" && op !== "ROHDEN" && op !== "RHODEN" && op !== "NENHUM")
+            );
+          }
+          return obraProds.includes(up);
+        });
+        if (!match) return false;
       }
+
       return true;
     });
-  }, [linhas, fCategoria, fConstrutora, fCidade, fProduto]);
+  }, [linhas, selectedCategorias, selectedCidades, selectedProdutos]);
 
-  // Resumo (sempre sobre o conjunto filtrado por construtora/cidade/produto,
-  // ignorando o filtro de categoria, para os cards continuarem comparáveis)
+  // Resumo (ignora o filtro de categoria para os cards continuarem comparáveis)
   const resumoBase = useMemo<Linha[]>(() => {
     return linhas.filter((l) => {
-      if (fConstrutora !== "todas" && (l.obra.construtora || "").trim() !== fConstrutora) return false;
-      if (fCidade !== "todas" && (l.obra.cidade || "").trim() !== fCidade) return false;
-      if (fProduto !== "todos") {
-        const prodUpper = fProduto.toUpperCase();
+      // Filtro Cidade
+      if (selectedCidades.length > 0) {
+        const obraCidade = (l.obra.cidade || "").trim();
+        if (!selectedCidades.includes(obraCidade)) return false;
+      }
+
+      // Filtro Produto
+      if (selectedProdutos.length > 0) {
         const obraProds = (l.obra.produtoOferecido || "")
           .split(",")
           .map((p) => p.trim().toUpperCase());
-        if (!obraProds.includes(prodUpper)) return false;
+        const match = selectedProdutos.some((p) => {
+          const up = p.toUpperCase();
+          if (up === "ROHDEN" || up === "RHODEN") {
+            return obraProds.includes("ROHDEN") || obraProds.includes("RHODEN");
+          }
+          if (up === "OUTROS") {
+            return (
+              obraProds.includes("OUTROS") ||
+              obraProds.some((op) => op !== "" && op !== "PRADO" && op !== "IMAB" && op !== "ROHDEN" && op !== "RHODEN" && op !== "NENHUM")
+            );
+          }
+          return obraProds.includes(up);
+        });
+        if (!match) return false;
       }
+
       return true;
     });
-  }, [linhas, fConstrutora, fCidade, fProduto]);
+  }, [linhas, selectedCidades, selectedProdutos]);
 
   const contagem = useMemo(() => {
     const c: Record<Categoria, number> = {
-      "Orçamento Enviado": 0, "Negociação": 0, "Fechado": 0, "Perdido": 0,
+      "Orçamento Enviado": 0,
+      "Negociação": 0,
+      "Fechado": 0,
+      "Perdido": 0,
     };
     for (const l of resumoBase) c[l.categoria]++;
     return c;
@@ -186,7 +282,7 @@ export default function Relatorios() {
       // Mostrar linhas de grade
       worksheet.views = [{ showGridLines: true }];
 
-      // Estilos reutilizáveis
+      // Estilos de borda
       const thinBorder: Partial<ExcelJS.Borders> = {
         top: { style: 'thin', color: { argb: 'D1D5DB' } },
         left: { style: 'thin', color: { argb: 'D1D5DB' } },
@@ -194,35 +290,38 @@ export default function Relatorios() {
         right: { style: 'thin', color: { argb: 'D1D5DB' } }
       };
 
-      // 1. TÍTULO PRINCIPAL (Linha 1)
-      worksheet.mergeCells("A1:H1");
+      // 1. TÍTULO PRINCIPAL
+      worksheet.mergeCells("A1:E1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "RELATÓRIO DE ORÇAMENTOS";
       titleCell.font = { name: "Segoe UI", size: 16, bold: true, color: { argb: "FFFFFF" } };
       titleCell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "1E3A8A" } // Azul Escuro
+        fgColor: { argb: "1E3A8A" }
       };
       titleCell.alignment = { horizontal: "center", vertical: "middle" };
       worksheet.getRow(1).height = 30;
 
-      // SUBTÍTULO / FILTROS (Linha 2)
-      worksheet.mergeCells("A2:H2");
+      // SUBTÍTULO / FILTROS
+      worksheet.mergeCells("A2:E2");
       const subtitleCell = worksheet.getCell("A2");
-      subtitleCell.value = `Filtros aplicados - Categoria: ${fCategoria === "todas" ? "Todas" : CATEGORIA_LABEL[fCategoria as Categoria]} | Construtora: ${fConstrutora === "todas" ? "Todas" : fConstrutora} | Cidade: ${fCidade === "todas" ? "Todas" : fCidade} | Produto: ${fProduto === "todos" ? "Todos" : fProduto}`;
+      const catText = selectedCategorias.length === 0 ? "Todas" : selectedCategorias.join(", ");
+      const cidText = selectedCidades.length === 0 ? "Todas" : selectedCidades.join(", ");
+      const prodText = selectedProdutos.length === 0 ? "Todos" : selectedProdutos.join(", ");
+      subtitleCell.value = `Filtros aplicados - Categoria: ${catText} | Cidade: ${cidText} | Produto: ${prodText}`;
       subtitleCell.font = { name: "Segoe UI", size: 10, italic: true, color: { argb: "FFFFFF" } };
       subtitleCell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "2563EB" } // Azul Médio
+        fgColor: { argb: "2563EB" }
       };
       subtitleCell.alignment = { horizontal: "center", vertical: "middle" };
       worksheet.getRow(2).height = 20;
 
-      // 2. TABELA DE DADOS - CABEÇALHOS (Linha 4)
+      // 2. CABEÇALHOS DA TABELA (Obra, Construtora, Cidade, Categoria, Orçamento enviado)
       const headers = [
-        "Obra", "Construtora", "Cidade", "Categoria", "Orçamento enviado", "Concorrentes", "Próx. contato", "PDFs"
+        "Obra", "Construtora", "Cidade", "Categoria", "Orçamento enviado"
       ];
       
       const headerRowNumber = 4;
@@ -236,13 +335,13 @@ export default function Relatorios() {
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "1F2937" } // Cinza Escuro
+          fgColor: { argb: "1F2937" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = thinBorder;
       });
 
-      // 3. ADICIONAR LINHAS DE DADOS (Linha 5+)
+      // 3. LINHAS DE DADOS (Apenas as filtradas)
       let currentRowIdx = 5;
       
       filtradas.forEach((l) => {
@@ -253,16 +352,7 @@ export default function Relatorios() {
         row.getCell(3).value = l.obra.cidade || "—";
         row.getCell(4).value = CATEGORIA_LABEL[l.categoria];
         row.getCell(5).value = l.obra.dataOrcamentoEnviado || "";
-        row.getCell(6).value = l.obra.concorrentes || "—";
-        row.getCell(7).value = l.obra.proximoContato || "—";
 
-        const pdfParts: string[] = [];
-        if (l.obra.linkOrcamentoRhoden) pdfParts.push("Rhoden");
-        if (l.obra.linkOrcamentoPrado) pdfParts.push("Prado");
-        if (l.obra.linkOrcamentoImab) pdfParts.push("Imab");
-        row.getCell(8).value = pdfParts.join(", ") || "—";
-
-        // Estilizar a linha (Zebra e Bordas)
         const isZebra = currentRowIdx % 2 === 0;
         const rowBg = isZebra ? "F9FAFB" : "FFFFFF";
 
@@ -276,8 +366,7 @@ export default function Relatorios() {
             fgColor: { argb: rowBg }
           };
 
-          // Alinhamento inteligente
-          const alignCenterCols = [3, 4, 5, 7, 8]; // Cidade, Categoria, Orçamento enviado, Próx. contato, PDFs
+          const alignCenterCols = [3, 4, 5]; // Cidade, Categoria, Orçamento enviado
           cell.alignment = {
             horizontal: alignCenterCols.includes(colIndex + 1) ? "center" : "left",
             vertical: "middle"
@@ -288,7 +377,7 @@ export default function Relatorios() {
         currentRowIdx++;
       });
 
-      // 4. AUTO-AJUSTE DAS COLUNAS
+      // 4. LARGURA DAS COLUNAS
       worksheet.columns.forEach((column, index) => {
         let maxLen = 0;
         const headerVal = column.values ? column.values[headerRowNumber] : null;
@@ -302,13 +391,11 @@ export default function Relatorios() {
         }
 
         let finalWidth = maxLen + 4;
-        // Limites mínimos e máximos razoáveis
-        if ([1, 2].includes(index + 1)) finalWidth = Math.min(Math.max(finalWidth, 18), 35); // Obra, Construtora
-        if (index + 1 === 6) finalWidth = Math.min(Math.max(finalWidth, 15), 35); // Concorrentes
+        if ([1, 2].includes(index + 1)) finalWidth = Math.min(Math.max(finalWidth, 18), 35);
         column.width = finalWidth;
       });
 
-      // 5. GERAR ARQUIVO E SALVAR
+      // 5. SALVAR PLANILHA
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       saveAs(blob, `relatorio-orcamentos-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -317,6 +404,14 @@ export default function Relatorios() {
       console.error("Erro ao exportar excel:", err);
     }
   }
+
+  const handleCardClick = (cat: Categoria) => {
+    if (selectedCategorias.includes(cat)) {
+      setSelectedCategorias(selectedCategorias.filter((c) => c !== cat));
+    } else {
+      setSelectedCategorias([...selectedCategorias, cat]);
+    }
+  };
 
   const cards: { cat: Categoria; titulo: string; icone: JSX.Element; destaque?: string }[] = [
     { cat: "Orçamento Enviado", titulo: "Orçamento Enviado", icone: <Send className="h-5 w-5 text-amber-500" /> },
@@ -345,71 +440,58 @@ export default function Relatorios() {
 
       {/* Cards de resumo (clicáveis para filtrar) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map(({ cat, titulo, icone, destaque }) => (
-          <button
-            key={cat}
-            onClick={() => setFCategoria(fCategoria === cat ? "todas" : cat)}
-            className={`text-left rounded-lg border p-4 transition-colors hover:bg-muted/50 ${fCategoria === cat ? "border-primary ring-1 ring-primary" : "border-border"}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{titulo}</span>
-              {icone}
-            </div>
-            <p className="text-3xl font-bold mt-2">{contagem[cat]}</p>
-            {destaque && <p className="text-xs text-muted-foreground mt-1">{destaque}</p>}
-          </button>
-        ))}
+        {cards.map(({ cat, titulo, icone, destaque }) => {
+          const isSelected = selectedCategorias.includes(cat);
+          return (
+            <button
+              key={cat}
+              onClick={() => handleCardClick(cat)}
+              className={`text-left rounded-lg border p-4 transition-colors hover:bg-muted/50 ${
+                isSelected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border bg-card"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{titulo}</span>
+                {icone}
+              </div>
+              <p className="text-3xl font-bold mt-2">{contagem[cat]}</p>
+              {destaque && <p className="text-xs text-muted-foreground mt-1">{destaque}</p>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Categoria</label>
-          <Select value={fCategoria} onValueChange={setFCategoria}>
-            <SelectTrigger className="w-[210px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as categorias</SelectItem>
-              {(Object.keys(CATEGORIA_LABEL) as Categoria[]).map((c) => (
-                <SelectItem key={c} value={c}>{CATEGORIA_LABEL[c]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Produto</label>
-          <Select value={fProduto} onValueChange={setFProduto}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="PRADO">Prado</SelectItem>
-              <SelectItem value="ROHDEN">Rohden</SelectItem>
-              <SelectItem value="IMAB">Imab</SelectItem>
-              <SelectItem value="OUTROS">Outros</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Cidade</label>
-          <Select value={fCidade} onValueChange={setFCidade}>
-            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Construtora</label>
-          <Select value={fConstrutora} onValueChange={setFConstrutora}>
-            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              {construtoras.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        {(fCategoria !== "todas" || fConstrutora !== "todas" || fCidade !== "todas" || fProduto !== "todos") && (
-          <Button variant="ghost" size="sm" onClick={() => { setFCategoria("todas"); setFConstrutora("todas"); setFCidade("todas"); setFProduto("todos"); }}>
+      {/* Filtros múltiplos */}
+      <div className="flex flex-wrap items-end gap-3 bg-muted/20 p-4 rounded-lg border">
+        <MultiSelectFilter
+          label="Categoria / Status"
+          options={["Orçamento Enviado", "Negociação", "Fechado", "Perdido"]}
+          selected={selectedCategorias}
+          onChange={setSelectedCategorias}
+        />
+        <MultiSelectFilter
+          label="Produto"
+          options={["Prado", "Rohden", "Imab", "Outros"]}
+          selected={selectedProdutos}
+          onChange={setSelectedProdutos}
+        />
+        <MultiSelectFilter
+          label="Cidade"
+          options={cidades}
+          selected={selectedCidades}
+          onChange={setSelectedCidades}
+        />
+        {(selectedCategorias.length > 0 || selectedProdutos.length > 0 || selectedCidades.length > 0) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedCategorias([]);
+              setSelectedProdutos([]);
+              setSelectedCidades([]);
+            }}
+            className="h-9"
+          >
             Limpar filtros
           </Button>
         )}
@@ -427,61 +509,34 @@ export default function Relatorios() {
           Nenhuma obra encontrada com os filtros atuais.
         </p>
       ) : (
-        <div className="rounded-lg border border-border overflow-x-auto">
+        <div className="rounded-lg border border-border overflow-x-auto bg-card">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/50 border-b">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">Obra</th>
                 <th className="px-4 py-3 font-medium">Construtora</th>
                 <th className="px-4 py-3 font-medium">Cidade</th>
                 <th className="px-4 py-3 font-medium">Categoria</th>
-                <th className="px-4 py-3 font-medium">Orçamento enviado</th>
-                <th className="px-4 py-3 font-medium">Concorrentes</th>
-                <th className="px-4 py-3 font-medium">Próx. contato</th>
-                <th className="px-4 py-3 font-medium">PDFs</th>
+                <th className="px-4 py-3 font-medium text-center">Orçamento enviado</th>
               </tr>
             </thead>
             <tbody>
               {filtradas.map((l) => {
                 return (
-                  <tr key={l.obra.id} className="border-t border-border hover:bg-muted/30">
+                  <tr key={l.obra.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <Link to={`/atividades/${l.obra.id}`} className="font-medium text-primary hover:underline">
+                      <Link to={`/atividades/${l.obra.id}`} className="font-semibold text-primary hover:underline">
                         {l.obra.nome || "Sem nome"}
                       </Link>
                     </td>
                     <td className="px-4 py-3">{l.obra.construtora || "—"}</td>
-                    <td className="px-4 py-3">{l.obra.cidade || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{l.obra.cidade || "—"}</td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className={CATEGORIA_BADGE[l.categoria]}>
                         {CATEGORIA_LABEL[l.categoria]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">{l.obra.dataOrcamentoEnviado || "—"}</td>
-                    <td className="px-4 py-3 max-w-[180px] truncate" title={l.obra.concorrentes}>
-                      {l.obra.concorrentes || "—"}
-                    </td>
-                    <td className="px-4 py-3">{l.obra.proximoContato || "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        {[
-                          { label: "R", url: l.obra.linkOrcamentoRhoden },
-                          { label: "P", url: l.obra.linkOrcamentoPrado },
-                          { label: "I", url: l.obra.linkOrcamentoImab },
-                        ].filter((x) => (x.url || "").trim()).map((x) => (
-                          <a
-                            key={x.label}
-                            href={(x.url || "").split(",")[0].trim()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`Orçamento ${x.label === "R" ? "Rhoden" : x.label === "P" ? "Prado" : "Imab"}`}
-                            className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
-                          >
-                            {x.label}<ExternalLink className="h-3 w-3" />
-                          </a>
-                        ))}
-                      </div>
-                    </td>
+                    <td className="px-4 py-3 text-center text-muted-foreground">{l.obra.dataOrcamentoEnviado || "—"}</td>
                   </tr>
                 );
               })}
@@ -492,7 +547,7 @@ export default function Relatorios() {
 
       {!loading && filtradas.length > 0 && (
         <p className="text-xs text-muted-foreground text-center">
-          {filtradas.length} obra(s) no relatório • Clique nos cards para filtrar por categoria
+          {filtradas.length} obra(s) no relatório • Clique nos cards ou use os filtros acima para refinar
         </p>
       )}
     </div>
