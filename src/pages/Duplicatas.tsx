@@ -25,6 +25,22 @@ import { listarPessoas, atualizarPessoa, excluirPessoa, type Pessoa } from "@/se
 import { strongNorm, onlyDigits } from "@/lib/normalize";
 import { Building, Users, GitMerge, AlertTriangle, Check, Loader2 } from "lucide-react";
 
+const getCtGroupKey = (group: Construtora[]) => {
+  return group
+    .map((c) => c.codigo || "")
+    .filter(Boolean)
+    .sort()
+    .join("|");
+};
+
+const getPesGroupKey = (group: Pessoa[]) => {
+  return group
+    .map((p) => p.codigoPessoa || "")
+    .filter(Boolean)
+    .sort()
+    .join("|");
+};
+
 export default function Duplicatas() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -59,11 +75,22 @@ export default function Duplicatas() {
     duplicates: Pessoa[];
   } | null>(null);
 
+  // Load ignored groups from localStorage
+  const [ignoredCtKeys, setIgnoredCtKeys] = useState<string[]>([]);
+  const [ignoredPesKeys, setIgnoredPesKeys] = useState<string[]>([]);
+
   useEffect(() => {
-    fetchData();
+    const ignoredCts = localStorage.getItem("crm_ignored_ct_groups");
+    const ignoredPes = localStorage.getItem("crm_ignored_pes_groups");
+    const parsedCts = ignoredCts ? JSON.parse(ignoredCts) : [];
+    const parsedPes = ignoredPes ? JSON.parse(ignoredPes) : [];
+    setIgnoredCtKeys(parsedCts);
+    setIgnoredPesKeys(parsedPes);
+    
+    fetchData(parsedCts, parsedPes);
   }, []);
 
-  async function fetchData() {
+  async function fetchData(ignoredCtsRaw?: string[], ignoredPesRaw?: string[]) {
     setLoading(true);
     try {
       const [cts, obrs, pes] = await Promise.all([
@@ -75,8 +102,11 @@ export default function Duplicatas() {
       setObras(obrs);
       setPessoas(pes);
 
+      const ignoredCts = ignoredCtsRaw || JSON.parse(localStorage.getItem("crm_ignored_ct_groups") || "[]");
+      const ignoredPes = ignoredPesRaw || JSON.parse(localStorage.getItem("crm_ignored_pes_groups") || "[]");
+
       // Group duplicates
-      findDuplicates(cts, obrs, pes);
+      findDuplicates(cts, obrs, pes, ignoredCts, ignoredPes);
     } catch (err) {
       toast({
         title: "Erro ao carregar dados",
@@ -88,7 +118,13 @@ export default function Duplicatas() {
     }
   }
 
-  function findDuplicates(cts: Construtora[], obrs: Obra[], pes: Pessoa[]) {
+  function findDuplicates(
+    cts: Construtora[],
+    obrs: Obra[],
+    pes: Pessoa[],
+    ignoredCts: string[],
+    ignoredPes: string[]
+  ) {
     // 1) Group Construtoras
     const ctGroups: Construtora[][] = [];
     for (const c of cts) {
@@ -112,7 +148,9 @@ export default function Duplicatas() {
         ctGroups.push([c]);
       }
     }
-    const dupCts = ctGroups.filter((g) => g.length >= 2);
+    const dupCts = ctGroups
+      .filter((g) => g.length >= 2)
+      .filter((g) => !ignoredCts.includes(getCtGroupKey(g)));
     setDuplicateConstrutoras(dupCts);
 
     // Initialize default principals for Construtoras
@@ -158,7 +196,9 @@ export default function Duplicatas() {
         pesGroups.push([p]);
       }
     }
-    const dupPes = pesGroups.filter((g) => g.length >= 2);
+    const dupPes = pesGroups
+      .filter((g) => g.length >= 2)
+      .filter((g) => !ignoredPes.includes(getPesGroupKey(g)));
     setDuplicatePessoas(dupPes);
 
     // Initialize default principals for Pessoas
@@ -173,6 +213,42 @@ export default function Duplicatas() {
       initialPrincipalsPes[idx] = sorted[0].codigoPessoa || "";
     });
     setSelectedPrincipalsPes(initialPrincipalsPes);
+  }
+
+  function ignoreCtGroup(group: Construtora[]) {
+    const key = getCtGroupKey(group);
+    const next = [...ignoredCtKeys, key];
+    setIgnoredCtKeys(next);
+    localStorage.setItem("crm_ignored_ct_groups", JSON.stringify(next));
+    setDuplicateConstrutoras((prev) => prev.filter((g) => getCtGroupKey(g) !== key));
+    toast({
+      title: "Grupo ignorado",
+      description: "Esta sugestão não será mostrada novamente.",
+    });
+  }
+
+  function ignorePesGroup(group: Pessoa[]) {
+    const key = getPesGroupKey(group);
+    const next = [...ignoredPesKeys, key];
+    setIgnoredPesKeys(next);
+    localStorage.setItem("crm_ignored_pes_groups", JSON.stringify(next));
+    setDuplicatePessoas((prev) => prev.filter((g) => getPesGroupKey(g) !== key));
+    toast({
+      title: "Grupo ignorado",
+      description: "Esta sugestão não será mostrada novamente.",
+    });
+  }
+
+  function clearIgnored() {
+    setIgnoredCtKeys([]);
+    setIgnoredPesKeys([]);
+    localStorage.removeItem("crm_ignored_ct_groups");
+    localStorage.removeItem("crm_ignored_pes_groups");
+    fetchData([], []);
+    toast({
+      title: "Ignorados limpos",
+      description: "Todas as sugestões foram reescaneadas.",
+    });
   }
 
   // Merging Logic for Construtoras
@@ -361,6 +437,11 @@ export default function Duplicatas() {
             Detecte registros duplicados de Construtoras e Contatos para unificar seus históricos e vínculos.
           </p>
         </div>
+        {(ignoredCtKeys.length > 0 || ignoredPesKeys.length > 0) && (
+          <Button variant="outline" size="sm" onClick={clearIgnored}>
+            Restaurar Sugestões Ignoradas ({ignoredCtKeys.length + ignoredPesKeys.length})
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -474,15 +555,24 @@ export default function Duplicatas() {
                             <span className="text-xs text-muted-foreground">
                               Clique no card acima para escolher qual construtora será a <strong>Principal</strong> (a que será mantida).
                             </span>
-                            <Button
-                              onClick={() => handleCtPreMerge(groupIdx, group)}
-                              disabled={merging}
-                              size="sm"
-                              className="shadow-sm"
-                            >
-                              <GitMerge className="h-4 w-4 mr-1.5" />
-                              Mesclar
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => ignoreCtGroup(group)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                Não são duplicadas
+                              </Button>
+                              <Button
+                                onClick={() => handleCtPreMerge(groupIdx, group)}
+                                disabled={merging}
+                                size="sm"
+                                className="shadow-sm"
+                              >
+                                <GitMerge className="h-4 w-4 mr-1.5" />
+                                Mesclar
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -591,15 +681,24 @@ export default function Duplicatas() {
                             <span className="text-xs text-muted-foreground">
                               Escolha o contato <strong>Principal</strong> (que guardará as informações corretas e os vínculos).
                             </span>
-                            <Button
-                              onClick={() => handlePesPreMerge(groupIdx, group)}
-                              disabled={merging}
-                              size="sm"
-                              className="shadow-sm"
-                            >
-                              <GitMerge className="h-4 w-4 mr-1.5" />
-                              Mesclar Contatos
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => ignorePesGroup(group)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                Não são duplicados
+                              </Button>
+                              <Button
+                                onClick={() => handlePesPreMerge(groupIdx, group)}
+                                disabled={merging}
+                                size="sm"
+                                className="shadow-sm"
+                              >
+                                <GitMerge className="h-4 w-4 mr-1.5" />
+                                Mesclar Contatos
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
