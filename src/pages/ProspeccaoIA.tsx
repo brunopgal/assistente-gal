@@ -106,6 +106,20 @@ function norm(s: string) {
     .trim();
 }
 
+function strongNorm(s: string): string {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function onlyDigits(s: string): string {
+  return (s || "").replace(/\D/g, "");
+}
+
 // ============ Normalizadores (Opção A: prompt novo -> valores canônicos atuais) ============
 
 function mapStatusConstrutora(v: string): string {
@@ -300,8 +314,21 @@ export default function ProspeccaoIA() {
       ]);
 
       const ctEntries: ConstrutoraEntry[] = ctsIn.map((c) => {
-        const target = norm(c.nome || "");
-        const existing = todasCts.find((x) => norm(x.nome) === target);
+        const pNomeNorm = strongNorm(c.nome || "");
+        const pCnpjDigits = onlyDigits(c.cnpj || "");
+
+        const existing = todasCts.find((x) => {
+          const xCnpjDigits = onlyDigits(x.cnpj || "");
+          if (pCnpjDigits && xCnpjDigits && pCnpjDigits === xCnpjDigits) {
+            return true;
+          }
+          const xNomeNorm = strongNorm(x.nome || "");
+          if (pNomeNorm && xNomeNorm && pNomeNorm === xNomeNorm) {
+            return true;
+          }
+          return false;
+        });
+
         return {
           raw: c,
           data: {
@@ -318,20 +345,20 @@ export default function ProspeccaoIA() {
       });
 
       const obrEntries: ObraEntry[] = obrsIn.map((o) => {
-        const nomeKey = norm(o.nome || "");
-        const ctKey = norm(o.construtora || "");
+        const nomeKey = strongNorm(o.nome || "");
+        const ctKey = strongNorm(o.construtora || "");
         const duplicate = todasObras.find(
-          (x) => norm(x.nome) === nomeKey && norm(x.construtora) === ctKey,
+          (x) => strongNorm(x.nome) === nomeKey && strongNorm(x.construtora) === ctKey,
         );
-        const construtoraExistente = todasCts.find((x) => norm(x.nome) === ctKey);
+        const construtoraExistente = todasCts.find((x) => strongNorm(x.nome) === ctKey);
         const valClassificacao = mapPadraoObra(o.classificacao || "");
         const valPadrao = mapPadraoObra(o.padraoObra || "");
         const classificacaoFinal = valClassificacao || valPadrao || "";
 
         // Encontra pessoa relacionada para preencher dados de contato
         const matchingPeople = pesIn.filter((p) => {
-          const sameObra = norm(p.obraRelacionada || "") === nomeKey;
-          const sameConstrutora = !p.construtora || !o.construtora || norm(p.construtora) === ctKey;
+          const sameObra = strongNorm(p.obraRelacionada || "") === nomeKey;
+          const sameConstrutora = !p.construtora || !o.construtora || strongNorm(p.construtora) === ctKey;
           return sameObra && sameConstrutora;
         });
         const bestPerson = matchingPeople.find((p) => {
@@ -364,18 +391,42 @@ export default function ProspeccaoIA() {
       });
 
       const pesEntries: PessoaEntry[] = pesIn.map((p) => {
-        const nomeKey = norm(p.nome || "");
-        const ctKey = norm(p.construtora || "");
-        const obraKey = norm(p.obraRelacionada || "");
-        const construtora = todasCts.find((x) => norm(x.nome) === ctKey);
+        const pEmailNorm = (p.email || "").toLowerCase().replace(/\s+/g, "");
+        const pNomeNorm = strongNorm(p.nome || "");
+        const pTelDigits = onlyDigits(p.telefone || "");
+        const pCtNorm = strongNorm(p.construtora || "");
+
+        const construtora = todasCts.find((x) => strongNorm(x.nome) === pCtNorm);
         const obra = todasObras.find(
-          (x) => norm(x.nome) === obraKey && (!ctKey || norm(x.construtora) === ctKey),
+          (x) => strongNorm(x.nome) === strongNorm(p.obraRelacionada || "") && 
+                 (!p.construtora || strongNorm(x.construtora) === pCtNorm),
         );
-        const duplicate = todasPessoas.find(
-          (x) =>
-            norm(x.nome) === nomeKey &&
-            (!construtora || x.codigoConstrutora === construtora.codigo),
-        );
+
+        const duplicate = todasPessoas.find((x) => {
+          // 1) Email check
+          const xEmailNorm = (x.email || "").toLowerCase().replace(/\s+/g, "");
+          if (pEmailNorm && xEmailNorm && pEmailNorm === xEmailNorm) {
+            return true;
+          }
+
+          // 2) Nome matches AND (telefone matches OR construtora matches)
+          const xNomeNorm = strongNorm(x.nome || "");
+          if (pNomeNorm && xNomeNorm && pNomeNorm === xNomeNorm) {
+            const xTelDigits = onlyDigits(x.whatsapp || "");
+            const telMatches = pTelDigits && xTelDigits && pTelDigits === xTelDigits;
+
+            const xCt = todasCts.find((c) => c.codigo === x.codigoConstrutora);
+            const xCtNorm = xCt ? strongNorm(xCt.nome) : "";
+            const ctMatches = pCtNorm && xCtNorm && pCtNorm === xCtNorm;
+
+            if (telMatches || ctMatches) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+
         return {
           raw: p,
           data: {
@@ -422,7 +473,7 @@ export default function ProspeccaoIA() {
     try {
       // Mapas para resolver código de construtora/obra a partir do nome
       const ctCodigoPorNome = new Map<string, string>();
-      const obraCodigoPorChave = new Map<string, string>(); // norm(nome)+'|'+norm(ct)
+      const obraCodigoPorChave = new Map<string, string>(); // strongNorm(nome)+'|'+strongNorm(ct)
 
       let ctCriadas = 0;
       let ctAtualizadas = 0;
@@ -431,7 +482,7 @@ export default function ProspeccaoIA() {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         if (entry.existing) {
-          if (entry.existing.codigo) ctCodigoPorNome.set(norm(nome), entry.existing.codigo);
+          if (entry.existing.codigo) ctCodigoPorNome.set(strongNorm(nome), entry.existing.codigo);
           const novaIA = (entry.data.prospeccaoIA || "").trim();
           if (novaIA) {
             await atualizarConstrutora(entry.existing.codigo!, { prospeccaoIA: novaIA });
@@ -446,7 +497,7 @@ export default function ProspeccaoIA() {
             observacoes: entry.data.observacoes || "",
             prospeccaoIA: entry.data.prospeccaoIA || "",
           } as Construtora);
-          if (criada?.codigo) ctCodigoPorNome.set(norm(nome), criada.codigo);
+          if (criada?.codigo) ctCodigoPorNome.set(strongNorm(nome), criada.codigo);
           ctCriadas++;
         }
       }
@@ -463,7 +514,7 @@ export default function ProspeccaoIA() {
           const novaIA = (entry.data.prospeccaoIA || "").trim();
           if (entry.duplicate.codigoObra) {
             obraCodigoPorChave.set(
-              `${norm(nome)}|${norm(entry.duplicate.construtora || "")}`,
+              `${strongNorm(nome)}|${strongNorm(entry.duplicate.construtora || "")}`,
               entry.duplicate.codigoObra,
             );
           }
@@ -477,7 +528,7 @@ export default function ProspeccaoIA() {
           continue;
         }
         const ctNome = entry.data.construtora || "";
-        const codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        const codigoCt = ctCodigoPorNome.get(strongNorm(ctNome)) || "";
         const criada = await criarObra({
           dataCadastro: hoje,
           statusProspeccao: entry.data.statusProspeccao || "Prospectar",
@@ -505,7 +556,7 @@ export default function ProspeccaoIA() {
           prospeccaoIA: entry.data.prospeccaoIA || "",
         } as Obra);
         if (criada?.codigoObra) {
-          obraCodigoPorChave.set(`${norm(nome)}|${norm(ctNome)}`, criada.codigoObra);
+          obraCodigoPorChave.set(`${strongNorm(nome)}|${strongNorm(ctNome)}`, criada.codigoObra);
         }
         obrCriadas++;
       }
@@ -521,7 +572,7 @@ export default function ProspeccaoIA() {
         const nome = (entry.data.nome || "").trim();
         if (!nome) continue;
         const ctNome = entry.raw.construtora || "";
-        let codigoCt = ctCodigoPorNome.get(norm(ctNome)) || "";
+        let codigoCt = ctCodigoPorNome.get(strongNorm(ctNome)) || "";
         if (!codigoCt && entry.codigoConstrutoraOverride) {
           codigoCt = entry.codigoConstrutoraOverride;
         }
@@ -530,7 +581,7 @@ export default function ProspeccaoIA() {
           pesIgnoradas++;
           continue;
         }
-        const obraKey = `${norm(entry.raw.obraRelacionada || "")}|${norm(ctNome)}`;
+        const obraKey = `${strongNorm(entry.raw.obraRelacionada || "")}|${strongNorm(ctNome)}`;
         const codigoObra = obraCodigoPorChave.get(obraKey) || "";
         await criarPessoa({
           codigoConstrutora: codigoCt,
