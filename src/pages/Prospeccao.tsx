@@ -60,7 +60,9 @@ import { listarObras, atualizarCampoObra, type Obra } from "@/services/obrasServ
 import { criarAtividade, listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import { getConfig } from "@/services/configuracoesService";
 import { listarPessoas, type Pessoa } from "@/services/pessoasService";
-import { normalizeText } from "@/lib/normalize";
+import { normalizeText, strongNorm } from "@/lib/normalize";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ObraInfoDialog from "@/components/ObraInfoDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { STATUS_PROSPECCAO_ATIVOS, type StatusProspeccao } from "@/lib/statusProspeccao";
@@ -198,6 +200,11 @@ export default function Prospeccao() {
   const [stats, setStats] = useState<Record<string, ObraStats>>({});
   const [atividadesMap, setAtividadesMap] = useState<Record<string, Atividade>>({});
   const [resumoAberturas, setResumoAberturas] = useState<Record<string, ResumoAberturasObra>>({});
+
+  const [viewMode, setViewMode] = useState<"filtros" | "construtora">("filtros");
+  const [highlightedObraId, setHighlightedObraId] = useState<string | null>(null);
+  const [selectedObra, setSelectedObra] = useState<Obra | null>(null);
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
 
   const [globalStats, setGlobalStats] = useState({
     emailsAbertos: 0,
@@ -372,6 +379,96 @@ export default function Prospeccao() {
   const obrasParaIniciar = useMemo(() => {
     return todasObras;
   }, [todasObras]);
+
+  const construtorasAgrupadas = useMemo(() => {
+    const grupos: Record<string, {
+      key: string;
+      codigoConstrutora?: string;
+      nome: string;
+      cidade?: string;
+      obras: Obra[];
+    }> = {};
+
+    for (const o of obras) {
+      let key = "";
+      if (o.codigoConstrutora) {
+        key = `cod-${o.codigoConstrutora}`;
+      } else {
+        const norm = strongNorm(o.construtora || "");
+        key = norm ? `name-${norm}` : "sem-construtora";
+      }
+
+      if (!grupos[key]) {
+        grupos[key] = {
+          key,
+          codigoConstrutora: o.codigoConstrutora || undefined,
+          nome: o.construtora || "Sem Construtora",
+          obras: [],
+        };
+      }
+
+      grupos[key].obras.push(o);
+    }
+
+    const result = Object.values(grupos);
+
+    for (const g of result) {
+      const cidades = g.obras
+        .map((o) => o.cidade?.trim())
+        .filter(Boolean) as string[];
+      if (cidades.length > 0) {
+        g.cidade = Array.from(new Set(cidades)).join(", ");
+      }
+    }
+
+    result.sort((a, b) => a.nome.localeCompare(b.nome));
+
+    return result;
+  }, [obras]);
+
+  const handleOpenObraInfo = (obra: Obra) => {
+    setSelectedObra(obra);
+    setInfoDialogOpen(true);
+  };
+
+  const handleProspectarClick = (obra: Obra) => {
+    const codigo = obra.codigoObra || (obra as any).id;
+    if (!codigo) return;
+
+    setViewMode("filtros");
+
+    if (statusFiltro !== "todos") {
+      const workStatusNorm = normalizeText(obra.statusProspeccao || "");
+      const filterStatusNorm = normalizeText(statusFiltro);
+      if (workStatusNorm !== filterStatusNorm) {
+        setStatusFiltro("todos");
+      }
+    }
+
+    if (busca.trim()) {
+      const q = normalizeText(busca);
+      const blob = normalizeText(
+        [obra.nome, obra.construtora, obra.cidade, obra.produtoOferecido, obra.responsavel, obra.codigoObra]
+          .filter(Boolean).join(" "),
+      );
+      if (!blob.includes(q)) {
+        setBusca("");
+      }
+    }
+
+    setHighlightedObraId(codigo);
+
+    setTimeout(() => {
+      const element = document.getElementById(`obra-row-${codigo}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+
+    setTimeout(() => {
+      setHighlightedObraId(null);
+    }, 3000);
+  };
 
   // Fases disponíveis no modal Nova Prospecção (mesmos valores de STATUS_PROSPECCAO_ATIVOS)
   const FASES_INICIAIS = Array.from(STATUS_PROSPECCAO_ATIVOS);
@@ -804,298 +901,395 @@ export default function Prospeccao() {
           </DialogContent>
         </Dialog>
 
-        {/* Filtros e Chips */}
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex flex-wrap gap-2 items-center">
-              <Button
-                variant={statusFiltro === "todos" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFiltro("todos")}
-                className="rounded-full"
-              >
-                Todos ({obras.length})
-              </Button>
-              {Array.from(STATUS_PROSPECCAO_ATIVOS).map(status => {
-                const count = obras.filter(o => normalizeText(o.statusProspeccao || "") === normalizeText(status)).length;
-                return (
+        <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as "filtros" | "construtora")} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 max-w-[400px] mb-6">
+            <TabsTrigger value="filtros">Por filtros</TabsTrigger>
+            <TabsTrigger value="construtora">Por construtora</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="filtros" className="space-y-6 mt-0">
+            {/* Filtros e Chips */}
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <div className="flex flex-wrap gap-2 items-center">
                   <Button
-                    key={status}
-                    variant={statusFiltro === status ? "default" : "outline"}
+                    variant={statusFiltro === "todos" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setStatusFiltro(status as StatusFiltro)}
+                    onClick={() => setStatusFiltro("todos")}
                     className="rounded-full"
                   >
-                    {status} ({count})
+                    Todos ({obras.length})
                   </Button>
-                );
-              })}
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-              <div className="relative flex-1 w-full max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar por obra, construtora, cidade, produto…"
-                  className="pl-9"
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSortDesc(!sortDesc)}
-                className="shrink-0"
-              >
-                Data de atualização {sortDesc ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronUp className="ml-2 h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Lista */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">
-              Obras em prospecção ({filtradas.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando…
-              </div>
-            ) : filtradas.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                Nenhuma obra encontrada para os filtros atuais.
-              </div>
-            ) : (
-              filtradas.map((o) => {
-                const codigo = o.codigoObra || (o as any).id;
-                const s = stats[codigo];
-                const teveEvento = s && (s.emailsAbertos > 0 || s.acessosSite > 0);
-                const recente = teveEvento && s.ultimoEvento ? relativo(s.ultimoEvento) : "";
-                const statusAtivo = o.statusProspeccao;
-                return (
-                  <div
-                    key={codigo}
-                    className={cn(
-                      "flex flex-col md:flex-row md:items-center gap-3 p-4 rounded-lg border bg-card hover:shadow-sm transition",
-                      teveEvento && "ring-1 ring-emerald-500/40",
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold truncate">{o.nome || "(sem nome)"}</span>
-                        <Badge
-                          variant={statusAtivo === "Lead Quente" ? "destructive" : "secondary"}
-                          className={cn("text-xs", statusAtivo === "Lead Quente" && "bg-orange-500 hover:bg-orange-600")}
-                        >
-                          {o.statusProspeccao || "—"}
-                        </Badge>
-                        {o.statusDesde && (
-                          <span className="text-[10px] text-muted-foreground ml-1">
-                            desde {o.statusDesde}
-                          </span>
-                        )}
-                        {(() => {
-                          const resumo = resumoAberturas[codigo];
-                          if (!resumo || !resumo.temOrcamento) return null;
-                          if (resumo.totalAberturas > 0) {
-                            return (
-                              <Badge variant="outline" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20">
-                                Orçamento aberto · {resumo.totalAberturas}
-                              </Badge>
-                            );
-                          } else {
-                            return (
-                              <Badge variant="outline" className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10">
-                                Orçamento não aberto
-                              </Badge>
-                            );
-                          }
-                        })()}
-                        {teveEvento && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => setObraAcessosOpen(o)}
-                                className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:underline focus:outline-none"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                                abriu há {recente}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {s.emailsAbertos > 0 && <div>{s.emailsAbertos} aberturas de e-mail</div>}
-                              {s.cliquesEmail > 0 && <div>{s.cliquesEmail} cliques no e-mail</div>}
-                              {s.acessosSite > 0 && <div>{s.acessosSite} acessos ao site</div>}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
-                        {o.construtora && (
-                          <span className="inline-flex items-center gap-1">
-                            <Building2 className="h-3 w-3" />
-                            {o.construtora}
-                          </span>
-                        )}
-                        {o.cidade && (
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {o.cidade}
-                          </span>
-                        )}
-                        {o.produtoOferecido && (
-                          <span className="inline-flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            {o.produtoOferecido}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {atividadesMap[codigo] && (
-                        <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-md w-fit">
-                          <Clock className="h-3 w-3" />
-                          Última ação: {atividadesMap[codigo].comentario} ({atividadesMap[codigo].dataAtividade})
-                        </div>
-                      )}
-                      
-                      {s && s.acessosSite > 0 && (
-                        <div className="mt-1.5">
-                          <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">
-                            <Flame className="h-3 w-3 mr-1" /> Cliente viu o site!
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap shrink-0">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm">
-                            Ações <MoreVertical className="h-3.5 w-3.5 ml-1" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "iniciar", title: "Iniciar prospecção"}); setAcaoDialogDias(null); }}>
-                            <ArrowRight className="h-4 w-4 mr-2 text-primary" />
-                            Iniciar prospecção
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "email", title: "Enviei e-mail"}); setAcaoDialogDias(configFollow.email); }}>
-                            <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
-                            Enviei e-mail (Marcar)
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "whatsapp", title: "Enviei WhatsApp"}); setAcaoDialogDias(configFollow.whatsapp); }}>
-                            <Phone className="h-4 w-4 mr-2 text-emerald-600" />
-                            Enviei WhatsApp
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "visitei", title: "Visitei a obra"}); setAcaoDialogDias(null); }}>
-                            <MapPin className="h-4 w-4 mr-2 text-blue-600" />
-                            Visitei a obra
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "reuniao", title: "Fiz reunião"}); setAcaoDialogDias(null); }}>
-                            <Users className="h-4 w-4 mr-2 text-indigo-600" />
-                            Fiz reunião
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "respondeu", title: "Cliente respondeu!"}); setAcaoDialogDias(null); }}>
-                            <Flame className="h-4 w-4 mr-2 text-orange-500" />
-                            Cliente respondeu!
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "comecei_orcamento", title: "Comecei orçamento"}); setAcaoDialogDias(null); }}>
-                            <Clock className="h-4 w-4 mr-2 text-teal-600" />
-                            Comecei orçamento
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "orcamento", title: "Enviei Orçamento"}); setAcaoDialogDias(configFollow.orcamento); }}>
-                            <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
-                            Enviei Orçamento
-                          </DropdownMenuItem>
-
-
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); setAcaoDialogDias(null); }}>
-                            <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                            Avançar para Negociação
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "fechei", title: "Fechei / Ganhei"}); setAcaoDialogDias(null); }}>
-                            <Sparkles className="h-4 w-4 mr-2 text-emerald-600" />
-                            Fechei / Ganhei
-                          </DropdownMenuItem>
-                          
-                          <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "encerrar", title: "Encerrar / Perda"}); setAcaoDialogDias(null); }}>
-                            <Ban className="h-4 w-4 mr-2 text-red-500" />
-                            Encerrar / Perda
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-
-                      {/* Botão de Follow-up nativo preservado, caso precise agendar algo manualmente */}
-                      <Popover
-                        open={!!followObra && (followObra.codigoObra || (followObra as any).id) === codigo}
-                        onOpenChange={(open) => {
-                          if (open) {
-                            setFollowObra(o);
-                            setFollowDate(undefined);
-                            setFollowDesc("");
-                          } else {
-                            setFollowObra(null);
-                          }
-                        }}
+                  {Array.from(STATUS_PROSPECCAO_ATIVOS).map(status => {
+                    const count = obras.filter(o => normalizeText(o.statusProspeccao || "") === normalizeText(status)).length;
+                    return (
+                      <Button
+                        key={status}
+                        variant={statusFiltro === status ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setStatusFiltro(status as StatusFiltro)}
+                        className="rounded-full"
                       >
-                        <PopoverTrigger asChild>
-                          <Button size="sm" variant="outline" title="Agendar follow-up manual">
-                            <CalendarClock className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-3 space-y-3" align="end">
-                          <div className="text-sm font-medium">{o.nome}</div>
-                          <Calendar
-                            mode="single"
-                            selected={followDate}
-                            onSelect={setFollowDate}
-                            initialFocus
-                            className="p-0 pointer-events-auto"
-                          />
-                          <div>
-                            <Label className="text-xs">Descrição (opcional)</Label>
-                            <Input
-                              value={followDesc}
-                              onChange={(e) => setFollowDesc(e.target.value)}
-                              placeholder="ex: Ligar para confirmar interesse"
-                              className="mt-1"
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            className="w-full"
-                            disabled={!followDate || criandoFollow}
-                            onClick={criarFollowUp}
-                          >
-                            {criandoFollow ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                            ) : (
-                              <CalendarClock className="h-4 w-4 mr-1.5" />
-                            )}
-                            Criar
-                          </Button>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                        {status} ({count})
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+                  <div className="relative flex-1 w-full max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={busca}
+                      onChange={(e) => setBusca(e.target.value)}
+                      placeholder="Buscar por obra, construtora, cidade, produto…"
+                      className="pl-9"
+                    />
                   </div>
-                );
-              })
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSortDesc(!sortDesc)}
+                    className="shrink-0"
+                  >
+                    Data de atualização {sortDesc ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronUp className="ml-2 h-4 w-4" />}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Lista */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Obras em prospecção ({filtradas.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {loading ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando…
+                  </div>
+                ) : filtradas.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    Nenhuma obra encontrada para os filtros atuais.
+                  </div>
+                ) : (
+                  filtradas.map((o) => {
+                    const codigo = o.codigoObra || (o as any).id;
+                    const s = stats[codigo];
+                    const teveEvento = s && (s.emailsAbertos > 0 || s.acessosSite > 0);
+                    const recente = teveEvento && s.ultimoEvento ? relativo(s.ultimoEvento) : "";
+                    const statusAtivo = o.statusProspeccao;
+                    return (
+                      <div
+                        key={codigo}
+                        id={`obra-row-${codigo}`}
+                        className={cn(
+                          "flex flex-col md:flex-row md:items-center gap-3 p-4 rounded-lg border bg-card hover:shadow-sm transition",
+                          teveEvento && "ring-1 ring-emerald-500/40",
+                          highlightedObraId === codigo && "ring-2 ring-primary border-primary bg-primary/5 animate-pulse duration-1000",
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold truncate">{o.nome || "(sem nome)"}</span>
+                            <Badge
+                              variant={statusAtivo === "Lead Quente" ? "destructive" : "secondary"}
+                              className={cn("text-xs", statusAtivo === "Lead Quente" && "bg-orange-500 hover:bg-orange-600")}
+                            >
+                              {o.statusProspeccao || "—"}
+                            </Badge>
+                            {o.statusDesde && (
+                              <span className="text-[10px] text-muted-foreground ml-1">
+                                desde {o.statusDesde}
+                              </span>
+                            )}
+                            {(() => {
+                              const resumo = resumoAberturas[codigo];
+                              if (!resumo || !resumo.temOrcamento) return null;
+                              if (resumo.totalAberturas > 0) {
+                                return (
+                                  <Badge variant="outline" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200/50 bg-emerald-50 dark:bg-emerald-950/20">
+                                    Orçamento aberto · {resumo.totalAberturas}
+                                  </Badge>
+                                );
+                              } else {
+                                return (
+                                  <Badge variant="outline" className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10">
+                                    Orçamento não aberto
+                                  </Badge>
+                                );
+                              }
+                            })()}
+                            {teveEvento && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => setObraAcessosOpen(o)}
+                                    className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:underline focus:outline-none"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    abriu há {recente}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {s.emailsAbertos > 0 && <div>{s.emailsAbertos} aberturas de e-mail</div>}
+                                  {s.cliquesEmail > 0 && <div>{s.cliquesEmail} cliques no e-mail</div>}
+                                  {s.acessosSite > 0 && <div>{s.acessosSite} acessos ao site</div>}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+                            {o.construtora && (
+                              <span className="inline-flex items-center gap-1">
+                                <Building2 className="h-3 w-3" />
+                                {o.construtora}
+                              </span>
+                            )}
+                            {o.cidade && (
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {o.cidade}
+                              </span>
+                            )}
+                            {o.produtoOferecido && (
+                              <span className="inline-flex items-center gap-1">
+                                <Sparkles className="h-3 w-3" />
+                                {o.produtoOferecido}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {atividadesMap[codigo] && (
+                            <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-md w-fit">
+                              <Clock className="h-3 w-3" />
+                              Última ação: {atividadesMap[codigo].comentario} ({atividadesMap[codigo].dataAtividade})
+                            </div>
+                          )}
+                          
+                          {s && s.acessosSite > 0 && (
+                            <div className="mt-1.5">
+                              <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">
+                                <Flame className="h-3 w-3 mr-1" /> Cliente viu o site!
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm">
+                                Ações <MoreVertical className="h-3.5 w-3.5 ml-1" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "iniciar", title: "Iniciar prospecção"}); setAcaoDialogDias(null); }}>
+                                <ArrowRight className="h-4 w-4 mr-2 text-primary" />
+                                Iniciar prospecção
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "email", title: "Enviei e-mail"}); setAcaoDialogDias(configFollow.email); }}>
+                                <CheckIcon className="h-4 w-4 mr-2 text-emerald-600" />
+                                Enviei e-mail (Marcar)
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "whatsapp", title: "Enviei WhatsApp"}); setAcaoDialogDias(configFollow.whatsapp); }}>
+                                <Phone className="h-4 w-4 mr-2 text-emerald-600" />
+                                Enviei WhatsApp
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "visitei", title: "Visitei a obra"}); setAcaoDialogDias(null); }}>
+                                <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                                Visitei a obra
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "reuniao", title: "Fiz reunião"}); setAcaoDialogDias(null); }}>
+                                <Users className="h-4 w-4 mr-2 text-indigo-600" />
+                                Fiz reunião
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "respondeu", title: "Cliente respondeu!"}); setAcaoDialogDias(null); }}>
+                                <Flame className="h-4 w-4 mr-2 text-orange-500" />
+                                Cliente respondeu!
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "comecei_orcamento", title: "Comecei orçamento"}); setAcaoDialogDias(null); }}>
+                                <Clock className="h-4 w-4 mr-2 text-teal-600" />
+                                Comecei orçamento
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "orcamento", title: "Enviei Orçamento"}); setAcaoDialogDias(configFollow.orcamento); }}>
+                                <CheckIcon className="h-4 w-4 mr-2 text-blue-600" />
+                                Enviei Orçamento
+                              </DropdownMenuItem>
+
+
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "avancar", title: "Avançar para Negociação"}); setAcaoDialogDias(null); }}>
+                                <CheckIcon className="h-4 w-4 mr-2 text-muted-foreground" />
+                                Avançar para Negociação
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "fechei", title: "Fechei / Ganhei"}); setAcaoDialogDias(null); }}>
+                                <Sparkles className="h-4 w-4 mr-2 text-emerald-600" />
+                                Fechei / Ganhei
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem onClick={() => { setAcaoDialogDetalhes(""); setAcaoDialogOcorrencia({obra: o, acao: "encerrar", title: "Encerrar / Perda"}); setAcaoDialogDias(null); }}>
+                                <Ban className="h-4 w-4 mr-2 text-red-500" />
+                                Encerrar / Perda
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {/* Botão de Follow-up nativo preservado, caso precise agendar algo manualmente */}
+                          <Popover
+                            open={!!followObra && (followObra.codigoObra || (followObra as any).id) === codigo}
+                            onOpenChange={(open) => {
+                              if (open) {
+                                setFollowObra(o);
+                                setFollowDate(undefined);
+                                setFollowDesc("");
+                              } else {
+                                setFollowObra(null);
+                              }
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button size="sm" variant="outline" title="Agendar follow-up manual">
+                                <CalendarClock className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-3 space-y-3" align="end">
+                              <div className="text-sm font-medium">{o.nome}</div>
+                              <Calendar
+                                mode="single"
+                                selected={followDate}
+                                onSelect={setFollowDate}
+                                initialFocus
+                                className="p-0 pointer-events-auto"
+                              />
+                              <div>
+                                <Label className="text-xs">Descrição (opcional)</Label>
+                                <Input
+                                  value={followDesc}
+                                  onChange={(e) => setFollowDesc(e.target.value)}
+                                  placeholder="ex: Ligar para confirmar interesse"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                disabled={!followDate || criandoFollow}
+                                onClick={criarFollowUp}
+                              >
+                                {criandoFollow ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                                ) : (
+                                  <CalendarClock className="h-4 w-4 mr-1.5" />
+                                )}
+                                Criar
+                              </Button>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="construtora" className="space-y-6 mt-0">
+            {/* Constructor Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {construtorasAgrupadas.map((grupo) => (
+                <Card key={grupo.key} className="flex flex-col h-full hover:shadow-md transition duration-300">
+                  <CardHeader className="p-4 pb-2 border-b bg-muted/20">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <CardTitle className="text-sm font-bold truncate" title={grupo.nome}>
+                          {grupo.nome}
+                        </CardTitle>
+                        {grupo.cidade && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{grupo.cidade}</span>
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-xs font-semibold shrink-0">
+                        {grupo.obras.length} {grupo.obras.length === 1 ? "obra" : "obras"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 flex-1 overflow-y-auto max-h-[300px]">
+                    <div className="space-y-2">
+                      {grupo.obras.map((o) => {
+                        const codigo = o.codigoObra || (o as any).id;
+                        const isProspectar = o.statusProspeccao === "Prospectar";
+                        return (
+                          <div
+                            key={codigo}
+                            className="flex items-center justify-between gap-2 py-2 border-b border-border/40 last:border-0"
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <button
+                                onClick={() => handleOpenObraInfo(o)}
+                                className={cn(
+                                  "text-sm font-semibold hover:underline text-left truncate",
+                                  isProspectar ? "text-muted-foreground opacity-60 font-normal" : "text-foreground"
+                                )}
+                              >
+                                {o.nome || "(sem nome)"}
+                              </button>
+                              {!isProspectar && o.statusDesde && (
+                                <span className="text-[10px] text-muted-foreground mt-0.5">
+                                  desde {o.statusDesde}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isProspectar ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs px-2"
+                                  onClick={() => handleProspectarClick(o)}
+                                >
+                                  Prospectar
+                                </Button>
+                              ) : (
+                                <Badge
+                                  variant={o.statusProspeccao === "Lead Quente" ? "destructive" : "secondary"}
+                                  className={cn(
+                                    "text-[10px] px-1.5 py-0.5 whitespace-nowrap",
+                                    o.statusProspeccao === "Lead Quente" && "bg-orange-500 hover:bg-orange-600"
+                                  )}
+                                >
+                                  {o.statusProspeccao}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {construtorasAgrupadas.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">
+                Nenhuma construtora com obras ativas encontrada.
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
 
 
 
@@ -1220,6 +1414,12 @@ export default function Prospeccao() {
           </DialogContent>
         </Dialog>
 
+        <ObraInfoDialog
+          open={infoDialogOpen}
+          onOpenChange={setInfoDialogOpen}
+          obraId={selectedObra?.codigoObra || (selectedObra as any)?.id || ""}
+          obraInicial={selectedObra}
+        />
 
       </div>
     </TooltipProvider>
