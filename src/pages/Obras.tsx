@@ -71,6 +71,15 @@ function produtoColor(p: string): string {
   return "";
 }
 
+function produtoCanonico(raw: string): string {
+  const s = (raw || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if (!s) return "Nenhum";
+  if (s.includes("prado")) return "Prado";
+  if (s.includes("imab")) return "Imab";
+  if (s.includes("rhoden") || s.includes("rohden") || s.includes("holding")) return "Rohden";
+  return raw.trim();
+}
+
 export default function Obras() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,14 +178,16 @@ export default function Obras() {
 
   const produtosDisponiveis = useMemo(() => {
     const set = new Set<string>();
-    obras.forEach((o) =>
-      (o.produtoOferecido || "")
-        .split(",")
-        .map((p) => p.trim())
-        .filter(Boolean)
-        .forEach((p) => set.add(p)),
-    );
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    obras.forEach((o) => {
+      const tokens = (o.produtoOferecido || "").split(",").map((p) => p.trim()).filter(Boolean);
+      if (tokens.length === 0) { set.add("Nenhum"); return; }
+      tokens.forEach((p) => set.add(produtoCanonico(p)));
+    });
+    return Array.from(set).sort((a, b) => {
+      if (a === "Nenhum") return 1;
+      if (b === "Nenhum") return -1;
+      return a.localeCompare(b);
+    });
   }, [obras]);
 
 
@@ -197,11 +208,13 @@ export default function Obras() {
       if (filtroCidade !== "__all__" && normalizeText(o.cidade) !== nCidade) return false;
       if (filtroStatus !== "__all__" && normalizeText(o.statusProspeccao) !== nStatus) return false;
       if (filtroProduto !== "__all__") {
-        const prods = (o.produtoOferecido || "")
-          .split(",")
-          .map((p) => normalizeText(p))
-          .filter(Boolean);
-        if (!prods.includes(nProduto)) return false;
+        const tokens = (o.produtoOferecido || "").split(",").map((p) => p.trim()).filter(Boolean);
+        if (filtroProduto === "Nenhum") {
+          if (tokens.length > 0) return false;
+        } else {
+          const cans = tokens.map(produtoCanonico);
+          if (!cans.includes(filtroProduto)) return false;
+        }
       }
       return true;
     });
@@ -361,11 +374,10 @@ export default function Obras() {
                         <TableCell className="hidden lg:table-cell">
                           {o.produtoOferecido ? (
                             <div className="flex flex-wrap gap-1">
-                              {o.produtoOferecido
-                                .split(",")
-                                .map((p) => p.trim())
-                                .filter(Boolean)
-                                .map((p) => (
+                              {(() => {
+                                const tokens = o.produtoOferecido.split(",").map((p) => p.trim()).filter(Boolean);
+                                const cans = Array.from(new Set(tokens.map(produtoCanonico)));
+                                return cans.map((p) => (
                                   <Badge
                                     key={p}
                                     variant="outline"
@@ -373,7 +385,8 @@ export default function Obras() {
                                   >
                                     {p}
                                   </Badge>
-                                ))}
+                                ));
+                              })()}
                             </div>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
