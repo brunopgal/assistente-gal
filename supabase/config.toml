@@ -8,3 +8,33 @@ verify_jwt = false
 
 [functions.atividades]
 verify_jwt = false
+
+[functions.obras]
+verify_jwt = false
+
+[functions.construtoras]
+verify_jwt = false
+
+[functions.pessoas]
+verify_jwt = false
+
+[functions.michele-chat]
+verify_jwt = false
+
+[functions.michele-enviar-email]
+verify_jwt = false
+
+[functions.michele-executar-acao]
+verify_jwt = false
+
+[functions.michele-executar-lote]
+verify_jwt = false
+
+[functions.michele-importar-planilha]
+verify_jwt = false
+
+[functions.migrar-planilha]
+verify_jwt = false
+
+[functions.registrar-abertura]
+verify_jwt = false
