@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-const FIELDS = ['idAtividade', 'idObra', 'dataAtividade', 'tipoContato', 'status', 'proximoContato', 'comentario'];
+const FIELDS = ['idAtividade', 'idObra', 'dataAtividade', 'tipoContato', 'status', 'proximoContato', 'comentario', 'codigoConstrutora', 'codigoPessoa'];
 
 const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPA_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

@@ -64,3 +64,34 @@ export async function atualizarPessoa(codigo: string, p: Partial<Pessoa>): Promi
 export async function excluirPessoa(codigo: string): Promise<void> {
   await request("DELETE", `/${encodeURIComponent(codigo)}`);
 }
+
+export interface AtividadePessoa {
+  idAtividade?: string;
+  codigoPessoa: string;
+  tipoRegistro: "atividade" | "visita" | "reuniao";
+  data: string;                 // DD/MM/AAAA
+  horario?: string;
+  tipoContato?: string;
+  status?: string;
+  proximoContato?: string;
+  comentario?: string;
+  criarFollowUp?: string;
+  idObra?: string;              // vínculo com Obra
+  codigoConstrutora?: string;   // vínculo com Construtora
+}
+
+export async function listarAtividadesPessoa(codigoPessoa: string): Promise<AtividadePessoa[]> {
+  return request("GET", `/atividades?codigo=${encodeURIComponent(codigoPessoa)}`);
+}
+export async function listarTodasAtividadesPessoas(): Promise<AtividadePessoa[]> {
+  return request("GET", `/atividades`);
+}
+export async function criarAtividadePessoa(a: AtividadePessoa): Promise<AtividadePessoa> {
+  return request("POST", `/atividades`, a);
+}
+export async function atualizarAtividadePessoa(id: string, patch: Partial<AtividadePessoa>): Promise<AtividadePessoa> {
+  return request("PUT", `/atividades/${encodeURIComponent(id)}`, patch);
+}
+export async function excluirAtividadePessoa(id: string): Promise<void> {
+  await request("DELETE", `/atividades/${encodeURIComponent(id)}`);
+}

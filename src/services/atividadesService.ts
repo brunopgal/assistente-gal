@@ -9,6 +9,8 @@ export interface Atividade {
   status: string;
   proximoContato: string;  // DD/MM/AAAA (opcional)
   comentario: string;
+  codigoConstrutora?: string;
+  codigoPessoa?: string;
 }
 
 function buildUrl(opts: { id?: string; qs?: string } = {}) {

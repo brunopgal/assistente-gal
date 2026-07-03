@@ -28,6 +28,8 @@ export interface AtividadeConstrutora {
   proximoContato?: string;       // DD/MM/AAAA
   comentario?: string;
   criarFollowUp?: string;        // "sim" / ""
+  idObra?: string;
+  codigoPessoa?: string;
 }
 
 import { buildAuthHeaders } from "@/lib/authFetch";

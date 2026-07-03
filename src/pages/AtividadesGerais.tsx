@@ -20,6 +20,8 @@ import { listarObras, type Obra } from "@/services/obrasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
 import { listarTodasAtividades, type Atividade } from "@/services/atividadesService";
 import { listarTodasAtividadesConstrutoras, type AtividadeConstrutora } from "@/services/construtorasService";
+import { listarPessoas, listarTodasAtividadesPessoas, type Pessoa, type AtividadePessoa } from "@/services/pessoasService";
+import { extrairOrig } from "@/lib/atividadesUnificadas";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,15 +37,19 @@ import { Button } from "@/components/ui/button";
 
 interface AtividadeUnificada {
   id: string;
-  tipoOrigem: "obra" | "construtora";
+  tipoOrigem: "obra" | "construtora" | "pessoa";
   origemId: string;
   origemNome: string;
   dataOriginal: string;
   dataISO: Date;
   tipoContato: string;
-  tipoRegistro?: string; // atividade | visita | reuniao (apenas para construtora)
+  tipoRegistro?: string; // atividade | visita | reuniao
   status: string;
   comentario: string;
+  origIdEspelho?: string;
+  idObra?: string;
+  codigoConstrutora?: string;
+  codigoPessoa?: string;
 }
 
 function parseDataBr(dataStr: string): Date {
@@ -65,11 +71,13 @@ export default function AtividadesGerais() {
     (async () => {
       setLoading(true);
       try {
-        const [obrasData, ctsData, atvsData, atvsCtsData] = await Promise.all([
+        const [obrasData, ctsData, atvsData, atvsCtsData, pessoasData, atvsPessData] = await Promise.all([
           listarObras().catch(() => [] as Obra[]),
           listarConstrutoras().catch(() => [] as Construtora[]),
           listarTodasAtividades().catch(() => [] as Atividade[]),
           listarTodasAtividadesConstrutoras().catch(() => [] as AtividadeConstrutora[]),
+          listarPessoas().catch(() => [] as Pessoa[]),
+          listarTodasAtividadesPessoas().catch(() => [] as AtividadePessoa[]),
         ]);
 
         const mapObras = new Map<string, string>();
@@ -81,6 +89,11 @@ export default function AtividadesGerais() {
         const mapCts = new Map<string, string>();
         ctsData.forEach((c) => {
           if (c.codigo) mapCts.set(c.codigo, c.nome || "Construtora Sem Nome");
+        });
+
+        const mapPessoas = new Map<string, string>();
+        pessoasData.forEach((p) => {
+          if (p.codigoPessoa) mapPessoas.set(p.codigoPessoa, p.nome || "Contato Sem Nome");
         });
 
         const unificadas: AtividadeUnificada[] = [];
@@ -97,6 +110,10 @@ export default function AtividadesGerais() {
             tipoContato: a.tipoContato || "",
             status: a.status || "",
             comentario: a.comentario || "",
+            idObra: a.idObra,
+            codigoConstrutora: a.codigoConstrutora,
+            codigoPessoa: a.codigoPessoa,
+            origIdEspelho: extrairOrig(a.comentario || ""),
           });
         });
 
@@ -113,13 +130,41 @@ export default function AtividadesGerais() {
             tipoRegistro: a.tipoRegistro,
             status: a.status || "",
             comentario: a.comentario || "",
+            idObra: a.idObra,
+            codigoConstrutora: a.codigoConstrutora,
+            codigoPessoa: a.codigoPessoa,
+            origIdEspelho: extrairOrig(a.comentario || ""),
           });
         });
 
-        // Ordenar por data decrescente
-        unificadas.sort((a, b) => b.dataISO.getTime() - a.dataISO.getTime());
+        atvsPessData.forEach((a) => {
+          const nome = mapPessoas.get(a.codigoPessoa) || "Contato Desconhecido";
+          unificadas.push({
+            id: a.idAtividade || Math.random().toString(),
+            tipoOrigem: "pessoa",
+            origemId: a.codigoPessoa,
+            origemNome: nome,
+            dataOriginal: a.data,
+            dataISO: parseDataBr(a.data),
+            tipoContato: a.tipoContato || "",
+            tipoRegistro: a.tipoRegistro,
+            status: a.status || "",
+            comentario: a.comentario || "",
+            idObra: a.idObra,
+            codigoConstrutora: a.codigoConstrutora,
+            codigoPessoa: a.codigoPessoa,
+            origIdEspelho: extrairOrig(a.comentario || ""),
+          });
+        });
 
-        setAtividadesUnificadas(unificadas);
+        // Deduplicar: se a.origIdEspelho já existe na lista como id de outra atividade, remove
+        const idsPresentes = new Set(unificadas.map(x => x.id.toUpperCase()));
+        const unicas = unificadas.filter(x => !(x.origIdEspelho && idsPresentes.has(x.origIdEspelho.toUpperCase())));
+
+        // Ordenar por data decrescente
+        unicas.sort((a, b) => b.dataISO.getTime() - a.dataISO.getTime());
+
+        setAtividadesUnificadas(unicas);
       } finally {
         setLoading(false);
       }
@@ -172,7 +217,7 @@ export default function AtividadesGerais() {
             Atividades Gerais
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Histórico completo de todas as atividades de obras e construtoras.
+            Histórico completo de todas as atividades de obras, construtoras e contatos.
           </p>
         </div>
       </div>
@@ -243,13 +288,17 @@ export default function AtividadesGerais() {
                             className={`text-[10px] uppercase font-semibold px-1.5 py-0 rounded ${
                               atv.tipoOrigem === "obra"
                                 ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                : "bg-sky-500/10 text-sky-600 border-sky-500/20"
+                                : atv.tipoOrigem === "construtora"
+                                ? "bg-sky-500/10 text-sky-600 border-sky-500/20"
+                                : "bg-purple-500/10 text-purple-600 border-purple-500/20"
                             }`}
                           >
                             {atv.tipoOrigem === "obra" ? (
                               <Building2 className="h-3 w-3 mr-1 inline" />
-                            ) : (
+                            ) : atv.tipoOrigem === "construtora" ? (
                               <Building className="h-3 w-3 mr-1 inline" />
+                            ) : (
+                              <Users className="h-3 w-3 mr-1 inline" />
                             )}
                             {atv.tipoOrigem}
                           </Badge>
@@ -263,9 +312,17 @@ export default function AtividadesGerais() {
                           to={
                             atv.tipoOrigem === "obra"
                               ? `/atividades/${encodeURIComponent(atv.origemId)}`
-                              : `/construtoras?busca=${encodeURIComponent(atv.origemNome)}`
+                              : atv.tipoOrigem === "construtora"
+                              ? `/construtoras?busca=${encodeURIComponent(atv.origemNome)}`
+                              : `/pessoas?busca=${encodeURIComponent(atv.origemNome)}`
                           }
-                          title={atv.tipoOrigem === "obra" ? "Ver histórico da obra" : "Ver construtora"}
+                          title={
+                            atv.tipoOrigem === "obra"
+                              ? "Ver histórico da obra"
+                              : atv.tipoOrigem === "construtora"
+                              ? "Ver construtora"
+                              : "Ver contato"
+                          }
                         >
                           <ExternalLink className="h-4 w-4 text-muted-foreground" />
                         </Link>

@@ -6,6 +6,7 @@ import {
   excluirConstrutora,
   listarAtividadesConstrutora,
   criarAtividadeConstrutora,
+  atualizarAtividadeConstrutora,
   excluirAtividadeConstrutora,
   sincronizarConstrutoras,
   sincronizarAtividadesConstrutoras,
@@ -13,6 +14,9 @@ import {
   type AtividadeConstrutora,
   type TipoRegistroAtividade,
 } from "@/services/construtorasService";
+import { listarPessoas, listarTodasAtividadesPessoas, type Pessoa } from "@/services/pessoasService";
+import { listarObras, type Obra } from "@/services/obrasService";
+import { listarTodasAtividades, atualizarAtividade, excluirAtividade } from "@/services/atividadesService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +34,15 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info, Download,
+  Building, Loader2, Plus, Search, Trash2, ListChecks, CalendarClock, X, Pencil, Info, Download, HardHat, Users, Phone, MessageSquare, Mail, MapPin
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ConstrutoraInfoDialog from "@/components/ConstrutoraInfoDialog";
 import { normalizeText } from "@/lib/normalize";
 import { exportarParaExcel } from "@/lib/exportXlsx";
+import { type AtividadeUnificada, type OrigemAtividade, extrairOrig, deduplicar } from "@/lib/atividadesUnificadas";
+import ObraCombobox from "@/components/ObraCombobox";
+import PessoaCombobox from "@/components/PessoaCombobox";
 
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
@@ -196,30 +203,17 @@ export default function Construtoras() {
       .filter(Boolean)
       .map((p) => {
         const match = PRODUTOS.find((x) => x.toLowerCase() === p.toLowerCase());
-        return match || p;
-      });
-    // Remove duplicados preservando ordem
-    const unique = Array.from(new Set(canonicos));
-    setEditProdutosSel(unique);
-    setOpenEdit(true);
-  }
-
   async function salvarEdicao() {
-    if (!editForm?.codigo) return;
+    if (!editForm || !editForm.codigo) return;
     setSavingEdit(true);
     try {
-      const payload: Partial<Construtora> = {
-        nome: editForm.nome,
-        cnpj: editForm.cnpj,
+      const payload = {
+        ...editForm,
         produto: editProdutosSel.join(", "),
-        status: editForm.status,
-        observacoes: editForm.observacoes,
-        prospeccaoIA: editForm.prospeccaoIA,
       };
       await atualizarConstrutora(editForm.codigo, payload);
-      toast({ title: "Construtora atualizada" });
+      toast({ title: "Construtora atualizada com sucesso!" });
       setOpenEdit(false);
-      setEditForm(null);
       carregar();
     } catch (e) {
       toast({
@@ -238,6 +232,98 @@ export default function Construtoras() {
     );
   }
 
+  async function refreshAtividades(codigo: string) {
+    setLoadingAtv(true);
+    try {
+      const [todasObras, todasAtivsObras, ativsCt, todasAtivsPess, todasPess] = await Promise.all([
+        listarObras().catch(() => []),
+        listarTodasAtividades().catch(() => []),
+        listarAtividadesConstrutora(codigo).catch(() => []),
+        listarTodasAtividadesPessoas().catch(() => []),
+        listarPessoas().catch(() => []),
+      ]);
+
+      setObras(todasObras);
+      setPessoas(todasPess);
+
+      const builderObrasIds = new Set(todasObras.filter(o => o.codigoConstrutora === codigo).map(o => o.codigoObra || o.id));
+      const builderPessoasIds = new Set(todasPess.filter(p => p.codigoConstrutora === codigo).map(p => p.codigoPessoa));
+
+      const relacionadasCt = ativsCt.map(a => ({
+        idAtividade: a.idAtividade || "",
+        origem: "construtora" as const,
+        data: a.data,
+        horario: a.horario,
+        tipoRegistro: a.tipoRegistro,
+        tipoContato: a.tipoContato,
+        status: a.status,
+        proximoContato: a.proximoContato,
+        comentario: a.comentario || "",
+        criarFollowUp: a.criarFollowUp,
+        codigoConstrutora: a.codigoConstrutora,
+        idObra: a.idObra,
+        codigoPessoa: a.codigoPessoa,
+        origIdEspelho: extrairOrig(a.comentario || ""),
+      }));
+
+      const relacionadasObras = todasAtivsObras.filter(a => {
+        return a.codigoConstrutora === codigo || builderObrasIds.has(a.idObra);
+      }).map(a => ({
+        idAtividade: a.idAtividade || "",
+        origem: "obra" as const,
+        data: a.dataAtividade,
+        tipoContato: a.tipoContato,
+        status: a.status,
+        proximoContato: a.proximoContato,
+        comentario: a.comentario || "",
+        idObra: a.idObra,
+        codigoConstrutora: a.codigoConstrutora,
+        codigoPessoa: a.codigoPessoa,
+        origIdEspelho: extrairOrig(a.comentario || ""),
+      }));
+
+      const relacionadasPessoas = todasAtivsPess.filter(a => {
+        return a.codigoConstrutora === codigo || builderPessoasIds.has(a.codigoPessoa);
+      }).map(a => ({
+        idAtividade: a.idAtividade || "",
+        origem: "pessoa" as const,
+        data: a.data,
+        horario: a.horario,
+        tipoRegistro: a.tipoRegistro,
+        tipoContato: a.tipoContato,
+        status: a.status,
+        proximoContato: a.proximoContato,
+        comentario: a.comentario || "",
+        criarFollowUp: a.criarFollowUp,
+        codigoPessoa: a.codigoPessoa,
+        idObra: a.idObra,
+        codigoConstrutora: a.codigoConstrutora,
+        origIdEspelho: extrairOrig(a.comentario || ""),
+      }));
+
+      const unicas = deduplicar([...relacionadasCt, ...relacionadasObras, ...relacionadasPessoas]);
+      unicas.sort((a, b) => {
+        const parseBrDate = (dStr: string) => {
+          if (!dStr) return 0;
+          const parts = dStr.split("/");
+          if (parts.length === 3) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0])).getTime();
+          return new Date(dStr).getTime();
+        };
+        return parseBrDate(b.data || "") - parseBrDate(a.data || "");
+      });
+
+      setAtividades(unicas);
+    } catch (e) {
+      toast({
+        title: "Erro ao carregar histórico",
+        description: e instanceof Error ? e.message : "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingAtv(false);
+    }
+  }
+
   async function abrirAtividades(c: Construtora) {
     setConstrutoraSel(c);
     setOpenAtv(true);
@@ -251,20 +337,10 @@ export default function Construtoras() {
       proximoContato: "",
       comentario: "",
       criarFollowUp: "",
+      idObra: "",
+      codigoPessoa: "",
     });
-    setLoadingAtv(true);
-    try {
-      const data = await listarAtividadesConstrutora(c.codigo || "");
-      setAtividades(data);
-    } catch (e) {
-      toast({
-        title: "Erro ao carregar atividades",
-        description: e instanceof Error ? e.message : "Tente novamente",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingAtv(false);
-    }
+    await refreshAtividades(c.codigo || "");
   }
 
   async function salvarAtividade() {
@@ -273,8 +349,7 @@ export default function Construtoras() {
     try {
       await criarAtividadeConstrutora(atvForm);
       toast({ title: "Registro adicionado" });
-      const data = await listarAtividadesConstrutora(atvForm.codigoConstrutora);
-      setAtividades(data);
+      await refreshAtividades(atvForm.codigoConstrutora);
       setAtvForm({
         ...atvForm,
         horario: "",
@@ -283,6 +358,8 @@ export default function Construtoras() {
         proximoContato: "",
         comentario: "",
         criarFollowUp: "",
+        idObra: "",
+        codigoPessoa: "",
       });
     } catch (e) {
       toast({
@@ -295,13 +372,19 @@ export default function Construtoras() {
     }
   }
 
-  async function excluirAtv(id: string) {
+  async function excluirAtv(id: string, origem: OrigemAtividade) {
     if (!confirm("Excluir este registro?")) return;
     try {
-      await excluirAtividadeConstrutora(id);
+      if (origem === "obra") {
+        await excluirAtividade(id);
+      } else if (origem === "construtora") {
+        await excluirAtividadeConstrutora(id);
+      } else if (origem === "pessoa") {
+        await excluirAtividadePessoa(id);
+      }
+      toast({ title: "Registro excluído" });
       if (construtoraSel?.codigo) {
-        const data = await listarAtividadesConstrutora(construtoraSel.codigo);
-        setAtividades(data);
+        await refreshAtividades(construtoraSel.codigo);
       }
     } catch (e) {
       toast({
@@ -684,6 +767,31 @@ export default function Construtoras() {
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Obra Relacionada</Label>
+                  <div className="mt-1">
+                    <ObraCombobox
+                      value={atvForm.idObra || ""}
+                      onChange={(val) => setAtvForm({ ...atvForm, idObra: val })}
+                      placeholder="Pesquisar obra..."
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Contato Relacionado</Label>
+                  <div className="mt-1">
+                    <PessoaCombobox
+                      value={atvForm.codigoPessoa || ""}
+                      onChange={(val) => setAtvForm({ ...atvForm, codigoPessoa: val })}
+                      placeholder="Pesquisar contato..."
+                      codigoConstrutoraFilter={construtoraSel?.codigo}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <Label className="text-xs">Comentário</Label>
                 <Textarea
@@ -730,43 +838,86 @@ export default function Construtoras() {
               </p>
             ) : (
               <div className="space-y-2">
-                {atividades.map((a) => (
-                  <div
-                    key={a.idAtividade}
-                    className="border rounded-md p-3 flex items-start justify-between gap-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <Badge variant="outline" className="text-[10px] uppercase">
-                          {a.tipoRegistro}
-                        </Badge>
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {a.data}{a.horario ? ` ${a.horario}` : ""}
-                        </span>
-                        {a.tipoContato && (
-                          <Badge variant="secondary" className="text-[10px]">{a.tipoContato}</Badge>
+                {atividades.map((a) => {
+                  const relatedObra = obras.find(o => (o.codigoObra || o.id) === a.idObra);
+                  const relatedPessoa = pessoas.find(p => p.codigoPessoa === a.codigoPessoa);
+
+                  return (
+                    <div
+                      key={a.idAtividade}
+                      className="border rounded-md p-3 flex items-start justify-between gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {a.tipoRegistro || "Atividade"}
+                          </Badge>
+                          <span className="text-xs font-mono text-muted-foreground">
+                            {a.data}{a.horario ? ` ${a.horario}` : ""}
+                          </span>
+                          {a.tipoContato && (
+                            <Badge variant="secondary" className="text-[10px]">{a.tipoContato}</Badge>
+                          )}
+
+                          {/* Badge de Origem */}
+                          {a.origem === "obra" && (
+                            <Badge variant="outline" className="text-[10px] text-blue-500 border-blue-500/30 bg-blue-500/5">
+                              Obra
+                            </Badge>
+                          )}
+                          {a.origem === "construtora" && (
+                            <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30 bg-emerald-500/5">
+                              Construtora
+                            </Badge>
+                          )}
+                          {a.origem === "pessoa" && (
+                            <Badge variant="outline" className="text-[10px] text-purple-500 border-purple-500/30 bg-purple-500/5">
+                              Contato
+                            </Badge>
+                          )}
+
+                          {a.status && (
+                            <span className="text-xs text-muted-foreground">• {a.status}</span>
+                          )}
+                        </div>
+                        {a.comentario && <p className="text-sm whitespace-pre-wrap">{a.comentario}</p>}
+
+                        {/* Relações Vinculadas */}
+                        {(relatedObra || relatedPessoa) && (
+                          <div className="flex gap-2 flex-wrap mt-1">
+                            {relatedObra && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <HardHat className="h-3 w-3 text-blue-400" />
+                                Obra: {relatedObra.nome}
+                              </Badge>
+                            )}
+                            {relatedPessoa && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Users className="h-3 w-3 text-purple-400" />
+                                Contato: {relatedPessoa.nome}
+                              </Badge>
+                            )}
+                          </div>
                         )}
-                        {a.status && (
-                          <span className="text-xs text-muted-foreground">• {a.status}</span>
+
+                        {a.proximoContato && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <CalendarClock className="h-3.5 w-3.5 text-primary" />
+                            Próximo contato: {a.proximoContato}
+                          </p>
                         )}
                       </div>
-                      {a.comentario && <p className="text-sm">{a.comentario}</p>}
-                      {a.proximoContato && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Próximo contato: {a.proximoContato}
-                        </p>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => excluirAtv(a.idAtividade, a.origem)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => excluirAtv(a.idAtividade || "")}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

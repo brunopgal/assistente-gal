@@ -8,6 +8,8 @@ import {
   type Atividade,
 } from "@/services/atividadesService";
 import { buscarObra, atualizarFollowUp, type Obra } from "@/services/obrasService";
+import { listarPessoas, type Pessoa } from "@/services/pessoasService";
+import PessoaCombobox from "@/components/PessoaCombobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,7 @@ import {
   Trash2,
   X,
   Check,
+  Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -88,6 +91,7 @@ export default function Atividades() {
 
   const [obra, setObra] = useState<Obra | null>(null);
   const [atividades, setAtividades] = useState<Atividade[]>([]);
+  const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -97,6 +101,7 @@ export default function Atividades() {
   const [proximoContatoIso, setProximoContatoIso] = useState<string>("");
   const [comentario, setComentario] = useState<string>("");
   const [semProximoContato, setSemProximoContato] = useState<boolean>(false);
+  const [codigoPessoa, setCodigoPessoa] = useState<string>("");
 
   // edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -112,11 +117,13 @@ export default function Atividades() {
   const carregar = async () => {
     setLoading(true);
     try {
-      const [obraData, ativs] = await Promise.all([
+      const [obraData, ativs, pessoasData] = await Promise.all([
         buscarObra(obraId).catch(() => null),
         listarAtividadesPorObra(obraId),
+        listarPessoas().catch(() => []),
       ]);
       setObra(obraData);
+      setPessoas(pessoasData);
       const ordenadas = [...ativs].sort((a, b) =>
         dateForSort(b.dataAtividade).localeCompare(dateForSort(a.dataAtividade)),
       );
@@ -153,6 +160,8 @@ export default function Atividades() {
         status: status.trim(),
         proximoContato: proxBR,
         comentario: comentario.trim(),
+        codigoPessoa,
+        codigoConstrutora: obra?.codigoConstrutora || "",
       };
       const salva = await criarAtividade(nova);
       setAtividades((prev) =>
@@ -187,6 +196,7 @@ export default function Atividades() {
       setProximoContatoIso("");
       setComentario("");
       setSemProximoContato(false);
+      setCodigoPessoa("");
     } catch (e) {
       toast({
         title: "Erro ao salvar atividade",
@@ -205,6 +215,8 @@ export default function Atividades() {
       status: a.status,
       comentario: a.comentario,
       proximoContato: a.proximoContato,
+      codigoPessoa: a.codigoPessoa || "",
+      codigoConstrutora: a.codigoConstrutora || "",
     });
     setEditProxIso(brToIso(a.proximoContato || ""));
     setEditSemProx(!a.proximoContato);
@@ -226,6 +238,8 @@ export default function Atividades() {
         status: (editForm.status || "").trim(),
         comentario: (editForm.comentario || "").trim(),
         proximoContato: proxBR,
+        codigoPessoa: editForm.codigoPessoa || "",
+        codigoConstrutora: editForm.codigoConstrutora || "",
       };
       const atualizada = await atualizarAtividade(idAtividade, patch);
       setAtividades((prev) =>
@@ -337,6 +351,7 @@ export default function Atividades() {
                   const Icon = tipoIcon(a.tipoContato);
                   const isEditing = editingId === a.idAtividade;
                   const isDeleting = deletingId === a.idAtividade;
+                  const contact = a.codigoPessoa ? pessoas.find(p => p.codigoPessoa === a.codigoPessoa) : null;
 
                   if (isEditing) {
                     return (
@@ -414,6 +429,20 @@ export default function Atividades() {
                             disabled={editSemProx}
                             className="mt-1 h-9"
                           />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Contato Relacionado
+                          </label>
+                          <div className="mt-1">
+                            <PessoaCombobox
+                              value={editForm.codigoPessoa || ""}
+                              onChange={(val) => setEditForm((p) => ({ ...p, codigoPessoa: val }))}
+                              placeholder="Selecione um contato..."
+                              codigoConstrutoraFilter={obra?.codigoConstrutora}
+                            />
+                          </div>
                         </div>
 
                         <div>
@@ -508,6 +537,12 @@ export default function Atividades() {
                           {a.comentario}
                         </p>
                       )}
+                      {contact && (
+                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5 bg-muted/40 p-1.5 rounded border border-border/40 w-fit">
+                          <Users className="h-3.5 w-3.5 text-purple-400" />
+                          Contato: <span className="font-semibold text-foreground">{contact.nome}</span> ({contact.cargo})
+                        </p>
+                      )}
                       {a.proximoContato && (
                         <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                           <CalendarClock className="h-3 w-3" />
@@ -596,6 +631,20 @@ export default function Atividades() {
                     ✓ Será criado follow-up automático na obra
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">
+                  Contato Relacionado
+                </label>
+                <div className="mt-1">
+                  <PessoaCombobox
+                    value={codigoPessoa}
+                    onChange={(val) => setCodigoPessoa(val)}
+                    placeholder="Selecione um contato..."
+                    codigoConstrutoraFilter={obra?.codigoConstrutora}
+                  />
+                </div>
               </div>
 
               <div>

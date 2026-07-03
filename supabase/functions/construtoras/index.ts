@@ -13,6 +13,7 @@ const CT_FIELDS = ['codigo', 'nome', 'cnpj', 'produto', 'status', 'observacoes',
 const AT_FIELDS = [
   'idAtividade', 'codigoConstrutora', 'tipoRegistro',
   'data', 'horario', 'tipoContato', 'status', 'proximoContato', 'comentario', 'criarFollowUp',
+  'idObra', 'codigoPessoa',
 ];
 
 const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
