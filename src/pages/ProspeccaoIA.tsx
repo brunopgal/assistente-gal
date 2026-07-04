@@ -19,106 +19,125 @@ import { listarPessoas, criarPessoa, criarAtividadePessoa, type Pessoa } from "@
 import { criarAtividade } from "@/services/atividadesService";
 import { norm, strongNorm, onlyDigits } from "@/lib/normalize";
 
-const PROMPT_TEMPLATE = `Você vai me retornar informações de prospecção em formato JSON ESTRITO seguindo exatamente o schema abaixo.
+const PROMPT_TEMPLATE = `# PROMPT — Conversor de Obras → JSON do CRM (Painel de Obras) — v2 (com Atividades)
 
-IMPORTANTE:
-- Retorne APENAS um JSON válido.
-- Não utilize markdown.
-- Não escreva explicações.
-- Não escreva texto antes ou depois do JSON.
-- Nunca utilize null. Campos desconhecidos devem retornar "".
-- Datas sempre em DD/MM/AAAA.
-- Não invente informações. Se não encontrar um dado, deixe vazio.
+> Cole TUDO isto no ChatGPT/Claude e, no final, cole os dados (planilha, relatório Obras Online, ou suas observações). Agora também gera **atividades** para o histórico.
 
-==================================================
-OBJETIVO
-Identificar Construtoras, Obras, Pessoas relacionadas, atividades/interações comerciais e informações estratégicas para prospecção comercial.
+---
 
-==================================================
-REGRAS DE PADRONIZAÇÃO
+Você é um conversor de dados **determinístico**. Sua função é transformar dados de obras de construção e observações comerciais em JSON para importação no CRM "Painel de Obras".
 
-STATUS COMERCIAL CONSTRUTORA: Prospectar | Em Prospecção | Cliente | Inativa
-CLASSIFICAÇÃO DA OBRA: Prédio Residencial | Condomínio de Casas | Outro | Não Informado
-PADRÃO DA OBRA: MCMV | Popular | Médio | Alto | Não Informado
-ESTÁGIO DA OBRA: Terreno | Fundação | Estrutura | Alvenaria | Acabamento | Finalização | Entregue | Não Informado
-ESTÁGIO COMERCIAL: Prospectar | Em Prospecção | Contato Inicial | Visita Realizada | Orçamento Enviado | Negociação | Fechado | Perdido | Não Informado
-CARGOS: Compras | Engenheiro | Arquiteto | Mestre de Obras | Dono | Outros | Não Informado
-PRODUTOS DA OBRA (CAIXA ALTA, separados por vírgula): PRADO,RHODEN,IMAB
-PRODUTOS DA CONSTRUTORA (capitalizado, separados por vírgula): Prado,Rhoden,Imab
+**Siga as regras EXATAMENTE. Responda APENAS com JSON válido** — sem texto antes ou depois, sem comentários, sem blocos de markdown (nada de \`\`\`). Preserve os acentos (UTF-8). Nunca use null; campo desconhecido = "". Datas em DD/MM/AAAA. Não invente dados.
 
-ORIGEM DA ATIVIDADE: construtora | obra | pessoa
-TIPO DE CONTATO: Telefonema | WhatsApp | Email | Reunião | Visita | Outro
-STATUS DA ATIVIDADE: Sem Resposta | Apresentação Realizada | Em Negociação | Orçamento Enviado | Fechado | Perdido
+## ESTRUTURA DA SAÍDA (exatamente estas chaves, nesta ordem)
 
-==================================================
-SCHEMA
+\`\`\`
 {
   "construtoras": [
-    {
-      "nome": "",
-      "cnpj": "",
-      "cidade": "",
-      "estado": "",
-      "statusComercial": "",
-      "produtos": "",
-      "observacoes": "",
-      "prospeccaoIA": ""
-    }
+    { "nome": "", "cnpj": "", "produto": "", "status": "Prospecção", "observacoes": "", "prospeccaoIA": "" }
   ],
   "pessoas": [
-    {
-      "nome": "",
-      "cargo": "",
-      "telefone": "",
-      "email": "",
-      "construtora": "",
-      "obraRelacionada": "",
-      "observacoes": ""
-    }
+    { "nome": "", "cargo": "", "email": "", "telefone": "", "construtora": "", "obraRelacionada": "", "observacoes": "", "prospeccaoIA": "" }
   ],
   "obras": [
-    {
-      "nome": "",
-      "construtora": "",
-      "classificacao": "",
-      "padraoObra": "",
-      "cidade": "",
-      "estado": "",
-      "endereco": "",
-      "estagioObra": "",
-      "estagioComercial": "",
-      "produtos": "",
-      "concorrentes": "",
-      "proximaAcao": "",
-      "observacoes": "",
-      "prospeccaoIA": ""
-    }
+    { "nome": "", "construtora": "", "classificacao": "", "padraoObra": "", "cidade": "", "estado": "SP",
+      "endereco": "", "estagioObra": "", "estagioComercial": "Prospectar",
+      "produtos": "", "concorrentes": "", "proximaAcao": "", "observacoes": "", "prospeccaoIA": "" }
   ],
   "atividades": [
-    {
-      "origem": "",
-      "construtora": "",
-      "obra": "",
-      "contato": "",
-      "data": "",
-      "tipoContato": "",
-      "status": "",
-      "comentario": "",
-      "proximoContato": ""
-    }
+    { "origem": "construtora", "construtora": "", "obra": "", "contato": "",
+      "data": "", "tipoContato": "Observação", "status": "", "comentario": "", "proximoContato": "" }
   ]
 }
+\`\`\`
 
-==================================================
-REGRAS IMPORTANTES
-- Uma construtora pode possuir várias obras e várias pessoas.
-- Uma pessoa pode estar relacionada a uma obra específica.
-- Se identificar concorrentes (Papaiz, Pado, Yale, Stam, Soprano, etc.), preencher concorrentes.
-- O campo "prospeccaoIA" deve conter um resumo estratégico útil para vendas.
-- O array "atividades" lista interações comerciais realizadas. Cada atividade deve ter uma "origem" ("construtora", "obra" ou "pessoa") que indica a qual entidade principal a atividade pertence, e os campos "construtora" (nome), "obra" (nome) e "contato" (nome) para associar as entidades envolvidas na interação.
-- O campo "data" indica a data em que a atividade ocorreu (DD/MM/AAAA) e "proximoContato" indica a data do próximo follow-up agendado (DD/MM/AAAA).
+## VALORES PERMITIDOS (use EXATAMENTE estes textos)
 
-Agora preencha com os dados solicitados:`;
+### \`obras.classificacao\` — é o PADRÃO da obra (dropdown, só 1 destes 4, ou vazio)
+- **"Baixo Padrão"** ← Baixo, Popular, Econômico, MCMV, "Minha Casa Minha Vida", Standard
+- **"Médio Padrão"** ← Médio
+- **"Médio/Alto Padrão"** ← Médio/Alto, Médio-Alto
+- **"Alto Padrão"** ← Alto, Alto Luxo, Luxo, Altíssimo, Super Luxo
+- Sem informação de padrão: **""**. **NUNCA invente.**
+- ⚠️ **NUNCA** coloque o tipo de imóvel aqui (Prédio/Condomínio). Tipo vai em \`observacoes\`.
+
+### \`obras.padraoObra\` — eco curto: "Baixo" | "Médio" | "Médio/Alto" | "Alto" | ""
+
+### \`obras.estagioObra\` — dropdown
+- **"Não Iniciado"** ← terreno, lançamento, pré-obra, não iniciado
+- **"Inicial"** ← fundação, estrutura, "Execução / Inicial", início
+- **"Médio"** ← alvenaria, intermediária, em andamento
+- **"Final"** ← acabamento, "Execução / Final", fase final
+- **"Finalizado"** ← entregue, concluída, finalizada
+- Desconhecido: **"Inicial"**.
+
+### \`obras.estagioComercial\` — para prospecção, use SEMPRE **"Prospectar"**.
+### \`obras.produtos\` — **""** (a definir). Quando souber: "IMAB" | "RHODEN" | "PRADO" | "Nenhum".
+### \`obras.estado\` — UF 2 letras (default **"SP"**).
+### \`obras.observacoes\` — TIPO do imóvel + origem. Ex.: \`"Tipo: Prédio Residencial. Origem: Obras Online. Status: Obra em Construção."\`
+
+### \`pessoas.cargo\` — dropdown
+- **"Compras"** ← Comprador, Compras, Suprimentos, Coordenador/Gerente/Analista de Compras/Suprimentos
+- **"Engenheiro"** ← Engenheiro, Gerente/Coordenador/Diretor de Obras/Engenharia/Projetos, Orçamentista, RT, Assistente de Engenharia
+- **"Arquiteto"** ← Arquiteto
+- **"Mestre de Obras"** ← Mestre de Obras
+- **"Dono"** ← Sócio, Proprietário, Sócio Proprietário
+- **"Outros"** ← Diretor (genérico), Administrador, Gerente (genérico), Marketing, Financeiro, Recepção
+- **"Não Informado"** ← sem cargo
+### \`pessoas.telefone\` — como veio. \`pessoas.email\` — minúsculas.
+
+### \`construtoras\`
+- \`nome\`: razão social. \`cnpj\`: "" se não houver. \`produto\`: "". \`status\`: "Prospecção". \`prospeccaoIA\`: resumo curto (1 linha).
+
+### \`atividades\` — registros para o histórico (observações, contatos, decisões de produto, etc.)
+- **\`origem\`** — de quem é a atividade: **"construtora" | "obra" | "pessoa"**. É a entidade "dona" do registro.
+- **\`construtora\` / \`obra\` / \`contato\`** — NOMES. O da origem é obrigatório; os outros dois são **vínculos opcionais** (só preencha se a observação se referir a eles).
+  - origem "construtora" → \`construtora\` obrigatório; \`obra\`/\`contato\` opcionais.
+  - origem "obra" → \`obra\` obrigatório; \`construtora\`/\`contato\` opcionais.
+  - origem "pessoa" → \`contato\` obrigatório; \`construtora\`/\`obra\` opcionais.
+- **\`comentario\`** — o texto da observação em si. Ex.: \`"Posso atender esta obra com PRADO. Avaliar se RHODEN se aplica no acabamento."\`
+- **\`tipoContato\`** — "Observação" para notas estratégicas; ou "WhatsApp" | "Ligação" | "Visita" | "E-mail" | "Reunião" quando for um contato real.
+- **\`data\`** — DD/MM/AAAA; vazio = hoje. **\`status\`** e **\`proximoContato\`** — "" salvo se informado.
+- **Uma observação = uma atividade.** Não agrupe várias observações num comentário só.
+- Todo nome citado em \`construtora\`/\`obra\`/\`contato\` deve existir nas arrays acima OU já existir no CRM (será resolvido por nome). **Não invente entidade.**
+
+## REGRAS DE NEGÓCIO
+1. **Construtora da obra** = empresa com papel **"Construtor"**; senão **"Incorporadora"**; senão a primeira. **NUNCA** use Escritório de Arquitetura/Engenharia/Projetos externo como construtora.
+2. **Contatos**: inclua todas as pessoas COM NOME. **PULE** escritório de arquitetura externo e linhas sem nome. Vincule cada contato à construtora principal e à \`obraRelacionada\`.
+3. **Tipo do imóvel** → \`obras.observacoes\`. **Nunca** em \`classificacao\`.
+4. **Deduplicação**: construtoras por CNPJ (senão nome normalizado) → 1 registro. Pessoas por email (senão nome+construtora) → 1 registro. (Atividades **não** são deduplicadas — cada uma é um registro do histórico.)
+5. **Integridade**: toda \`obra.construtora\`, \`pessoa.construtora\`, \`pessoa.obraRelacionada\` e cada vínculo de \`atividades\` deve existir nas arrays ou no CRM. **Sem órfãos inventados.**
+6. **Não invente dados.** Campo desconhecido = "".
+7. Se houver **mais de 40 obras**, divida em blocos de ~35–40 (um bloco por resposta), cada um completo e íntegro.
+
+## EXEMPLO (referência de formato)
+\`\`\`
+{
+  "construtoras": [
+    { "nome": "Construtora Exemplo Ltda", "cnpj": "", "produto": "", "status": "Prospecção", "observacoes": "", "prospeccaoIA": "Construtora mapeada. 1 obra(s)." }
+  ],
+  "pessoas": [
+    { "nome": "Maria Compras", "cargo": "Compras", "email": "compras@exemplo.com.br", "telefone": "(11) 1234-5678", "construtora": "Construtora Exemplo Ltda", "obraRelacionada": "Residencial Exemplo", "observacoes": "", "prospeccaoIA": "" }
+  ],
+  "obras": [
+    { "nome": "Residencial Exemplo", "construtora": "Construtora Exemplo Ltda", "classificacao": "Médio Padrão", "padraoObra": "Médio",
+      "cidade": "Campinas", "estado": "SP", "endereco": "Rua Exemplo, 100 - Centro - 13000-000",
+      "estagioObra": "Final", "estagioComercial": "Prospectar", "produtos": "", "concorrentes": "", "proximaAcao": "",
+      "observacoes": "Tipo: Prédio Residencial. Origem: Obras Online. Status: Obra em Construção.",
+      "prospeccaoIA": "Obra Médio Padrão (Prédio Residencial) em Campinas, em construção. Priorizar Compras/Engenharia." }
+  ],
+  "atividades": [
+    { "origem": "construtora", "construtora": "Construtora Exemplo Ltda", "obra": "Residencial Exemplo", "contato": "Maria Compras",
+      "data": "", "tipoContato": "Observação", "status": "",
+      "comentario": "Posso atender com PRADO. Avaliar RHODEN para o acabamento. Confirmar com Compras.", "proximoContato": "" }
+  ]
+}
+\`\`\`
+
+## DADOS PARA CONVERTER
+Gere o JSON seguindo TODAS as regras acima a partir dos dados abaixo:
+
+[COLE AQUI OS DADOS DAS OBRAS / SUAS OBSERVAÇÕES]`;
 
 // ============ Normalizadores (Opção A: prompt novo -> valores canônicos atuais) ============
 
