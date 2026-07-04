@@ -155,8 +155,6 @@ export type Database = {
       }
       atividades: {
         Row: {
-          codigoConstrutora: string
-          codigoPessoa: string
           comentario: string
           created_at: string
           dataAtividade: string
@@ -168,8 +166,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          codigoConstrutora?: string
-          codigoPessoa?: string
           comentario?: string
           created_at?: string
           dataAtividade?: string
@@ -181,8 +177,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          codigoConstrutora?: string
-          codigoPessoa?: string
           comentario?: string
           created_at?: string
           dataAtividade?: string
@@ -303,14 +297,12 @@ export type Database = {
       construtoras_atividades: {
         Row: {
           codigoConstrutora: string
-          codigoPessoa: string
           comentario: string
           created_at: string
           criarFollowUp: string
           data: string
           horario: string
           idAtividade: string
-          idObra: string
           proximoContato: string
           status: string
           tipoContato: string
@@ -319,14 +311,12 @@ export type Database = {
         }
         Insert: {
           codigoConstrutora?: string
-          codigoPessoa?: string
           comentario?: string
           created_at?: string
           criarFollowUp?: string
           data?: string
           horario?: string
           idAtividade: string
-          idObra?: string
           proximoContato?: string
           status?: string
           tipoContato?: string
@@ -335,14 +325,12 @@ export type Database = {
         }
         Update: {
           codigoConstrutora?: string
-          codigoPessoa?: string
           comentario?: string
           created_at?: string
           criarFollowUp?: string
           data?: string
           horario?: string
           idAtividade?: string
-          idObra?: string
           proximoContato?: string
           status?: string
           tipoContato?: string
@@ -995,57 +983,6 @@ export type Database = {
           observacoes?: string
           updated_at?: string
           whatsapp?: string
-        }
-        Relationships: []
-      }
-      pessoas_atividades: {
-        Row: {
-          codigoConstrutora: string
-          codigoPessoa: string
-          comentario: string
-          created_at: string
-          criarFollowUp: string
-          data: string
-          horario: string
-          idAtividade: string
-          idObra: string
-          proximoContato: string
-          status: string
-          tipoContato: string
-          tipoRegistro: string
-          updated_at: string
-        }
-        Insert: {
-          codigoConstrutora?: string
-          codigoPessoa?: string
-          comentario?: string
-          created_at?: string
-          criarFollowUp?: string
-          data?: string
-          horario?: string
-          idAtividade: string
-          idObra?: string
-          proximoContato?: string
-          status?: string
-          tipoContato?: string
-          tipoRegistro?: string
-          updated_at?: string
-        }
-        Update: {
-          codigoConstrutora?: string
-          codigoPessoa?: string
-          comentario?: string
-          created_at?: string
-          criarFollowUp?: string
-          data?: string
-          horario?: string
-          idAtividade?: string
-          idObra?: string
-          proximoContato?: string
-          status?: string
-          tipoContato?: string
-          tipoRegistro?: string
-          updated_at?: string
         }
         Relationships: []
       }
