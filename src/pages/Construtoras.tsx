@@ -203,6 +203,13 @@ export default function Construtoras() {
       .filter(Boolean)
       .map((p) => {
         const match = PRODUTOS.find((x) => x.toLowerCase() === p.toLowerCase());
+        return match || p;
+      });
+    const unique = Array.from(new Set(canonicos));
+    setEditProdutosSel(unique);
+    setOpenEdit(true);
+  }
+
   async function salvarEdicao() {
     if (!editForm || !editForm.codigo) return;
     setSavingEdit(true);
