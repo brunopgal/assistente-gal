@@ -12,9 +12,11 @@ import {
   listarConstrutoras,
   criarConstrutora,
   atualizarConstrutora,
+  criarAtividadeConstrutora,
   type Construtora,
 } from "@/services/construtorasService";
-import { listarPessoas, criarPessoa, type Pessoa } from "@/services/pessoasService";
+import { listarPessoas, criarPessoa, criarAtividadePessoa, type Pessoa } from "@/services/pessoasService";
+import { criarAtividade } from "@/services/atividadesService";
 import { norm, strongNorm, onlyDigits } from "@/lib/normalize";
 
 const PROMPT_TEMPLATE = `Você vai me retornar informações de prospecção em formato JSON ESTRITO seguindo exatamente o schema abaixo.
@@ -30,7 +32,7 @@ IMPORTANTE:
 
 ==================================================
 OBJETIVO
-Identificar Construtoras, Obras, Pessoas relacionadas e informações estratégicas para prospecção comercial.
+Identificar Construtoras, Obras, Pessoas relacionadas, atividades/interações comerciais e informações estratégicas para prospecção comercial.
 
 ==================================================
 REGRAS DE PADRONIZAÇÃO
@@ -43,6 +45,10 @@ ESTÁGIO COMERCIAL: Prospectar | Em Prospecção | Contato Inicial | Visita Real
 CARGOS: Compras | Engenheiro | Arquiteto | Mestre de Obras | Dono | Outros | Não Informado
 PRODUTOS DA OBRA (CAIXA ALTA, separados por vírgula): PRADO,RHODEN,IMAB
 PRODUTOS DA CONSTRUTORA (capitalizado, separados por vírgula): Prado,Rhoden,Imab
+
+ORIGEM DA ATIVIDADE: construtora | obra | pessoa
+TIPO DE CONTATO: Telefonema | WhatsApp | Email | Reunião | Visita | Outro
+STATUS DA ATIVIDADE: Sem Resposta | Apresentação Realizada | Em Negociação | Orçamento Enviado | Fechado | Perdido
 
 ==================================================
 SCHEMA
@@ -87,6 +93,19 @@ SCHEMA
       "observacoes": "",
       "prospeccaoIA": ""
     }
+  ],
+  "atividades": [
+    {
+      "origem": "",
+      "construtora": "",
+      "obra": "",
+      "contato": "",
+      "data": "",
+      "tipoContato": "",
+      "status": "",
+      "comentario": "",
+      "proximoContato": ""
+    }
   ]
 }
 
@@ -96,6 +115,8 @@ REGRAS IMPORTANTES
 - Uma pessoa pode estar relacionada a uma obra específica.
 - Se identificar concorrentes (Papaiz, Pado, Yale, Stam, Soprano, etc.), preencher concorrentes.
 - O campo "prospeccaoIA" deve conter um resumo estratégico útil para vendas.
+- O array "atividades" lista interações comerciais realizadas. Cada atividade deve ter uma "origem" ("construtora", "obra" ou "pessoa") que indica a qual entidade principal a atividade pertence, e os campos "construtora" (nome), "obra" (nome) e "contato" (nome) para associar as entidades envolvidas na interação.
+- O campo "data" indica a data em que a atividade ocorreu (DD/MM/AAAA) e "proximoContato" indica a data do próximo follow-up agendado (DD/MM/AAAA).
 
 Agora preencha com os dados solicitados:`;
 
@@ -257,6 +278,33 @@ interface PessoaEntry {
   create: boolean;
 }
 
+interface AtividadePromptInput {
+  origem: "construtora" | "obra" | "pessoa";
+  construtora?: string;   // nome
+  obra?: string;          // nome
+  contato?: string;       // nome
+  data?: string;          // DD/MM/AAAA
+  tipoContato?: string;
+  status?: string;
+  comentario?: string;
+  proximoContato?: string;
+}
+interface AtividadeEntry {
+  raw: AtividadePromptInput;
+  origem: "construtora" | "obra" | "pessoa";
+  donoNome: string;        // nome da entidade dona (para exibir)
+  obraNome?: string;       // vínculo
+  construtoraNome?: string;// vínculo
+  contatoNome?: string;    // vínculo
+  comentario: string;
+  data: string;
+  tipoContato?: string;
+  status?: string;
+  proximoContato?: string;
+  resolvivel: boolean;     // se a entidade dona é resolvível (batch ou CRM)
+  create: boolean;
+}
+
 export default function ProspeccaoIA() {
   const { toast } = useToast();
   const [jsonText, setJsonText] = useState("");
@@ -265,6 +313,7 @@ export default function ProspeccaoIA() {
   const [construtoras, setConstrutoras] = useState<ConstrutoraEntry[]>([]);
   const [obras, setObras] = useState<ObraEntry[]>([]);
   const [pessoas, setPessoas] = useState<PessoaEntry[]>([]);
+  const [atividades, setAtividades] = useState<AtividadeEntry[]>([]);
   const [todasCtsList, setTodasCtsList] = useState<Construtora[]>([]);
   const [resumo, setResumo] = useState<string>("");
 
@@ -278,6 +327,7 @@ export default function ProspeccaoIA() {
     setConstrutoras([]);
     setObras([]);
     setPessoas([]);
+    setAtividades([]);
     setResumo("");
     try {
       const cleaned = jsonText.trim().replace(/^```json\s*/i, "").replace(/```$/, "").trim();
@@ -285,6 +335,7 @@ export default function ProspeccaoIA() {
       const ctsIn: ConstrutoraPromptInput[] = Array.isArray(parsed.construtoras) ? parsed.construtoras : [];
       const obrsIn: ObraPromptInput[] = Array.isArray(parsed.obras) ? parsed.obras : [];
       const pesIn: PessoaPromptInput[] = Array.isArray(parsed.pessoas) ? parsed.pessoas : [];
+      const ativsIn: AtividadePromptInput[] = Array.isArray(parsed.atividades) ? parsed.atividades : [];
 
       const [todasCts, todasObras, todasPessoas] = await Promise.all([
         listarConstrutoras(),
@@ -422,9 +473,52 @@ export default function ProspeccaoIA() {
         };
       });
 
+      const ativEntries: AtividadeEntry[] = ativsIn.map((raw) => {
+        const origem = raw.origem || "construtora";
+        
+        let donoNome = "";
+        if (origem === "construtora") donoNome = raw.construtora || "";
+        else if (origem === "obra") donoNome = raw.obra || "";
+        else if (origem === "pessoa") donoNome = raw.contato || "";
+
+        const donoNorm = strongNorm(donoNome);
+        let resolvivel = false;
+
+        if (origem === "construtora") {
+          const inBatch = ctsIn.some((x) => strongNorm(x.nome || "") === donoNorm);
+          const inCRM = todasCts.some((x) => strongNorm(x.nome || "") === donoNorm);
+          resolvivel = inBatch || inCRM;
+        } else if (origem === "obra") {
+          const inBatch = obrsIn.some((x) => strongNorm(x.nome || "") === donoNorm);
+          const inCRM = todasObras.some((x) => strongNorm(x.nome || "") === donoNorm);
+          resolvivel = inBatch || inCRM;
+        } else if (origem === "pessoa") {
+          const inBatch = pesIn.some((x) => strongNorm(x.nome || "") === donoNorm);
+          const inCRM = todasPessoas.some((x) => strongNorm(x.nome || "") === donoNorm);
+          resolvivel = inBatch || inCRM;
+        }
+
+        return {
+          raw,
+          origem,
+          donoNome,
+          obraNome: raw.obra,
+          construtoraNome: raw.construtora,
+          contatoNome: raw.contato,
+          comentario: raw.comentario || "",
+          data: raw.data || "",
+          tipoContato: raw.tipoContato || "",
+          status: raw.status || "",
+          proximoContato: raw.proximoContato || "",
+          resolvivel,
+          create: resolvivel,
+        };
+      });
+
       setConstrutoras(ctEntries);
       setObras(obrEntries);
       setPessoas(pesEntries);
+      setAtividades(ativEntries);
       setTodasCtsList(todasCts);
 
       const novasCt = ctEntries.filter((e) => !e.existing).length;
@@ -434,7 +528,8 @@ export default function ProspeccaoIA() {
       setResumo(
         `${ctEntries.length} construtoras (${novasCt} novas, ${reusedCt} já existem) — ` +
         `${pesEntries.length} pessoas (${dupPes} duplicatas) — ` +
-        `${obrEntries.length} obras (${dupObras} duplicatas)`,
+        `${obrEntries.length} obras (${dupObras} duplicatas) — ` +
+        `${ativEntries.length} atividades`,
       );
     } catch (e) {
       toast({
@@ -450,6 +545,11 @@ export default function ProspeccaoIA() {
   async function confirmar() {
     setImporting(true);
     try {
+      const [todasObras, todasPessoas] = await Promise.all([
+        listarObras(),
+        listarPessoas().catch(() => [] as Pessoa[]),
+      ]);
+
       // Mapas para resolver código de construtora/obra a partir do nome
       const ctCodigoPorNome = new Map<string, string>();
       const obraCodigoPorChave = new Map<string, string>(); // strongNorm(nome)+'|'+strongNorm(ct)
@@ -478,6 +578,13 @@ export default function ProspeccaoIA() {
           } as Construtora);
           if (criada?.codigo) ctCodigoPorNome.set(strongNorm(nome), criada.codigo);
           ctCriadas++;
+        }
+      }
+
+      for (const c of todasCtsList) {
+        const key = strongNorm(c.nome || "");
+        if (key && c.codigo && !ctCodigoPorNome.has(key)) {
+          ctCodigoPorNome.set(key, c.codigo);
         }
       }
 
@@ -540,7 +647,22 @@ export default function ProspeccaoIA() {
         obrCriadas++;
       }
 
+      const obraCodigoPorNome = new Map<string, string>();
+      for (const o of todasObras) {
+        const key = `${strongNorm(o.nome || "")}|${strongNorm(o.construtora || "")}`;
+        if (o.codigoObra) {
+          if (!obraCodigoPorChave.has(key)) {
+            obraCodigoPorChave.set(key, o.codigoObra);
+          }
+          const nameKey = strongNorm(o.nome || "");
+          if (nameKey && !obraCodigoPorNome.has(nameKey)) {
+            obraCodigoPorNome.set(nameKey, o.codigoObra);
+          }
+        }
+      }
+
       // 3) Pessoas
+      const pessoaCodigoPorNome = new Map<string, string>();
       let pesCriadas = 0;
       let pesIgnoradas = 0;
       for (const entry of pessoas) {
@@ -562,7 +684,7 @@ export default function ProspeccaoIA() {
         }
         const obraKey = `${strongNorm(entry.raw.obraRelacionada || "")}|${strongNorm(ctNome)}`;
         const codigoObra = obraCodigoPorChave.get(obraKey) || "";
-        await criarPessoa({
+        const criada = await criarPessoa({
           codigoConstrutora: codigoCt,
           codigoObraAtual: codigoObra || undefined,
           nome,
@@ -571,7 +693,98 @@ export default function ProspeccaoIA() {
           email: entry.data.email || "",
           observacoes: entry.data.observacoes || "",
         });
+        if (criada?.codigoPessoa) {
+          pessoaCodigoPorNome.set(strongNorm(nome), criada.codigoPessoa);
+        }
         pesCriadas++;
+      }
+
+      for (const p of todasPessoas) {
+        const key = strongNorm(p.nome || "");
+        if (key && p.codigoPessoa && !pessoaCodigoPorNome.has(key)) {
+          pessoaCodigoPorNome.set(key, p.codigoPessoa);
+        }
+      }
+
+      // 4) Atividades
+      let ativCriadas = 0;
+      let ativIgnoradas = 0;
+      const d = new Date();
+      const dia = String(d.getDate()).padStart(2, '0');
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const ano = d.getFullYear();
+      const hojeBR = `${dia}/${mes}/${ano}`;
+
+      for (const entry of atividades) {
+        if (!entry.create) {
+          ativIgnoradas++;
+          continue;
+        }
+
+        const construtoraNorm = strongNorm(entry.construtoraNome || "");
+        const obraNorm = strongNorm(entry.obraNome || "");
+        const contatoNorm = strongNorm(entry.contatoNome || "");
+
+        const codConstrutora = construtoraNorm ? (ctCodigoPorNome.get(construtoraNorm) || "") : "";
+        const chaveObra = `${obraNorm}|${construtoraNorm}`;
+        const codObra = obraNorm ? (obraCodigoPorChave.get(chaveObra) || obraCodigoPorNome.get(obraNorm) || "") : "";
+        const codPessoa = contatoNorm ? (pessoaCodigoPorNome.get(contatoNorm) || "") : "";
+
+        // Validar dono resolvido
+        let codDono = "";
+        if (entry.origem === "construtora") codDono = codConstrutora;
+        else if (entry.origem === "obra") codDono = codObra;
+        else if (entry.origem === "pessoa") codDono = codPessoa;
+
+        if (!codDono) {
+          ativIgnoradas++;
+          continue;
+        }
+
+        const dataAtiv = entry.raw.data?.trim() || hojeBR;
+        const tipoContato = entry.raw.tipoContato || "Outro";
+        const status = entry.raw.status || "";
+        const comentario = entry.raw.comentario || "";
+        const proximoContato = entry.raw.proximoContato || "";
+
+        if (entry.origem === "obra") {
+          await criarAtividade({
+            idObra: codObra,
+            dataAtividade: dataAtiv,
+            tipoContato,
+            status,
+            comentario,
+            proximoContato,
+            codigoConstrutora: codConstrutora || undefined,
+            codigoPessoa: codPessoa || undefined,
+          });
+        } else if (entry.origem === "construtora") {
+          await criarAtividadeConstrutora({
+            codigoConstrutora: codConstrutora,
+            tipoRegistro: "atividade",
+            data: dataAtiv,
+            tipoContato,
+            status,
+            comentario,
+            proximoContato,
+            idObra: codObra || undefined,
+            codigoPessoa: codPessoa || undefined,
+          });
+        } else if (entry.origem === "pessoa") {
+          await criarAtividadePessoa({
+            codigoPessoa: codPessoa,
+            tipoRegistro: "atividade",
+            data: dataAtiv,
+            tipoContato,
+            status,
+            comentario,
+            proximoContato,
+            idObra: codObra || undefined,
+            codigoConstrutora: codConstrutora || undefined,
+          });
+        }
+
+        ativCriadas++;
       }
 
       toast({
@@ -579,11 +792,13 @@ export default function ProspeccaoIA() {
         description:
           `${ctCriadas} construtoras criadas, ${ctAtualizadas} atualizadas • ` +
           `${pesCriadas} pessoas criadas${pesIgnoradas ? ` (${pesIgnoradas} ignoradas)` : ""} • ` +
-          `${obrCriadas} obras criadas, ${obrAtualizadas} atualizadas.`,
+          `${obrCriadas} obras criadas, ${obrAtualizadas} atualizadas • ` +
+          `${ativCriadas} atividades criadas${ativIgnoradas ? ` (${ativIgnoradas} ignoradas)` : ""}.`,
       });
       setConstrutoras([]);
       setObras([]);
       setPessoas([]);
+      setAtividades([]);
       setJsonText("");
       setResumo("");
     } catch (e) {
@@ -597,7 +812,7 @@ export default function ProspeccaoIA() {
     }
   }
 
-  const temResultado = construtoras.length > 0 || obras.length > 0 || pessoas.length > 0;
+  const temResultado = construtoras.length > 0 || obras.length > 0 || pessoas.length > 0 || atividades.length > 0;
 
   return (
     <div className="space-y-6">
@@ -799,6 +1014,77 @@ export default function ProspeccaoIA() {
                         {e.duplicate
                           ? "Atualizar Prospecção IA da obra existente"
                           : "Criar esta obra"}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {atividades.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Atividades</h3>
+                <div className="space-y-2">
+                  {atividades.map((e, i) => (
+                    <div key={i} className="border rounded-md p-3 text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="capitalize">
+                          {e.origem === "pessoa" ? "contato" : e.origem}
+                        </Badge>
+                        <span className="font-medium">{e.donoNome || "(sem nome)"}</span>
+                        {e.data ? (
+                          <span className="text-xs text-muted-foreground">
+                            • Data: {e.data}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            • Data: hoje
+                          </span>
+                        )}
+                        {e.tipoContato && (
+                          <span className="text-xs text-muted-foreground">
+                            • Tipo: {e.tipoContato}
+                          </span>
+                        )}
+                        {e.status && (
+                          <span className="text-xs text-muted-foreground">
+                            • Status: {e.status}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Vínculos */}
+                      {(e.obraNome || e.construtoraNome || e.contatoNome) && (
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                          {e.obraNome && <span>Obra: {e.obraNome}</span>}
+                          {e.construtoraNome && <span>Construtora: {e.construtoraNome}</span>}
+                          {e.contatoNome && <span>Contato: {e.contatoNome}</span>}
+                        </div>
+                      )}
+
+                      {e.comentario && (
+                        <p className="text-xs text-muted-foreground mt-1 bg-muted p-1.5 rounded font-mono">
+                          {e.comentario}
+                        </p>
+                      )}
+
+                      {e.resolvivel === false && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-amber-600">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          <span>Entidade não encontrada — será ignorada se não marcada</span>
+                        </div>
+                      )}
+
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
+                        <Checkbox
+                          checked={e.create}
+                          onCheckedChange={(c) => {
+                            const next = [...atividades];
+                            next[i] = { ...next[i], create: !!c };
+                            setAtividades(next);
+                          }}
+                        />
+                        Criar esta atividade
                       </label>
                     </div>
                   ))}
