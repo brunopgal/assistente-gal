@@ -97,6 +97,17 @@ export default function PessoaCombobox({ value, onChange, placeholder, codigoCon
             {filtradas.length === 0 && (
               <CommandEmpty>Nenhum contato encontrado.</CommandEmpty>
             )}
+            <CommandItem
+              value="__none__"
+              onSelect={() => {
+                onChange("");
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <Check className={cn("mr-2 h-4 w-4 shrink-0", !value ? "opacity-100" : "opacity-0")} />
+              <span className="text-muted-foreground">Nenhum contato</span>
+            </CommandItem>
             <CommandGroup heading="Contatos">
               {filtradas.map((p) => {
                 const key = p.codigoPessoa || "";

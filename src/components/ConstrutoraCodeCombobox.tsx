@@ -68,6 +68,17 @@ export default function ConstrutoraCodeCombobox({ value, onChange, placeholder }
             {filtradas.length === 0 && (
               <CommandEmpty>Nenhuma construtora encontrada.</CommandEmpty>
             )}
+            <CommandItem
+              value="__none__"
+              onSelect={() => {
+                onChange("");
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <Check className={cn("mr-2 h-4 w-4 shrink-0", !value ? "opacity-100" : "opacity-0")} />
+              <span className="text-muted-foreground">Nenhuma construtora</span>
+            </CommandItem>
             <CommandGroup heading="Construtoras">
               {filtradas.map((c) => {
                 const key = c.codigo || "";
