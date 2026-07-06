@@ -17,7 +17,10 @@ import {
 } from "@/services/construtorasService";
 import { listarPessoas, criarPessoa, criarAtividadePessoa, type Pessoa } from "@/services/pessoasService";
 import { criarAtividade } from "@/services/atividadesService";
-import { norm, strongNorm, onlyDigits } from "@/lib/normalize";
+import { norm, strongNorm, onlyDigits, resolverCodigo } from "@/lib/normalize";
+import ConstrutoraCodeCombobox from "@/components/ConstrutoraCodeCombobox";
+import ObraCombobox from "@/components/ObraCombobox";
+import PessoaCombobox from "@/components/PessoaCombobox";
 
 const PROMPT_TEMPLATE = `# PROMPT — Conversor de Obras → JSON do CRM (Painel de Obras) — v2 (com Atividades)
 
@@ -321,6 +324,19 @@ interface AtividadeEntry {
   status?: string;
   proximoContato?: string;
   resolvivel: boolean;     // se a entidade dona é resolvível (batch ou CRM)
+  codigoDonoResolvido: string;
+  donoAmbiguo: boolean;
+  codObraResolvido: string;
+  codConstrutoraResolvido: string;
+  codPessoaResolvido: string;
+  codigoDonoManual?: string;
+  codObraManual?: string;
+  codConstrutoraManual?: string;
+  codPessoaManual?: string;
+  donoResolvidoNome?: string;
+  obraResolvidaNome?: string;
+  construtoraResolvidaNome?: string;
+  contatoResolvidoNome?: string;
   create: boolean;
 }
 
@@ -492,6 +508,56 @@ export default function ProspeccaoIA() {
         };
       });
 
+      // Prepare construtora candidates:
+      const construtoraCandidatesMap = new Map<string, { nome: string; codigo: string }>();
+      todasCts.forEach(c => {
+        if (c.codigo) {
+          construtoraCandidatesMap.set(c.codigo, { nome: c.nome, codigo: c.codigo });
+        }
+      });
+      ctEntries.forEach(e => {
+        const code = e.existing?.codigo || `batch:${e.data.nome}`;
+        construtoraCandidatesMap.set(code, { nome: e.data.nome || "", codigo: code });
+      });
+      const construtoraCandidates = Array.from(construtoraCandidatesMap.values());
+
+      // Prepare obra candidates:
+      const obraCandidatesMap = new Map<string, { nome: string; codigo: string }>();
+      todasObras.forEach(o => {
+        const code = o.codigoObra || o.id;
+        if (code) {
+          obraCandidatesMap.set(code, { nome: o.nome, codigo: code });
+        }
+      });
+      obrEntries.forEach(e => {
+        const code = e.duplicate?.codigoObra || e.duplicate?.id || `batch:${e.data.nome}`;
+        obraCandidatesMap.set(code, { nome: e.data.nome || "", codigo: code });
+      });
+      const obraCandidates = Array.from(obraCandidatesMap.values());
+
+      // Prepare pessoa candidates:
+      const pessoaCandidatesMap = new Map<string, { nome: string; codigo: string }>();
+      todasPessoas.forEach(p => {
+        const code = p.codigoPessoa || p.id;
+        if (code) {
+          pessoaCandidatesMap.set(code, { nome: p.nome, codigo: code });
+        }
+      });
+      pesEntries.forEach(e => {
+        const code = e.duplicate?.codigoPessoa || e.duplicate?.id || `batch:${e.data.nome}`;
+        pessoaCandidatesMap.set(code, { nome: e.data.nome || "", codigo: code });
+      });
+      const pessoaCandidates = Array.from(pessoaCandidatesMap.values());
+
+      const findNameByCode = (code: string, candidates: { nome: string; codigo: string }[]) => {
+        if (!code) return "";
+        if (code.startsWith("batch:")) {
+          return code.substring(6);
+        }
+        const match = candidates.find(c => c.codigo === code);
+        return match ? match.nome : "";
+      };
+
       const ativEntries: AtividadeEntry[] = ativsIn.map((raw) => {
         const origem = raw.origem || "construtora";
         
@@ -500,22 +566,27 @@ export default function ProspeccaoIA() {
         else if (origem === "obra") donoNome = raw.obra || "";
         else if (origem === "pessoa") donoNome = raw.contato || "";
 
-        const donoNorm = strongNorm(donoNome);
-        let resolvivel = false;
+        // Resolve Dono
+        const candidatesForDono = origem === "construtora" ? construtoraCandidates : (origem === "obra" ? obraCandidates : pessoaCandidates);
+        const resDono = resolverCodigo(donoNome, candidatesForDono, c => c.nome, c => c.codigo);
 
-        if (origem === "construtora") {
-          const inBatch = ctsIn.some((x) => strongNorm(x.nome || "") === donoNorm);
-          const inCRM = todasCts.some((x) => strongNorm(x.nome || "") === donoNorm);
-          resolvivel = inBatch || inCRM;
-        } else if (origem === "obra") {
-          const inBatch = obrsIn.some((x) => strongNorm(x.nome || "") === donoNorm);
-          const inCRM = todasObras.some((x) => strongNorm(x.nome || "") === donoNorm);
-          resolvivel = inBatch || inCRM;
-        } else if (origem === "pessoa") {
-          const inBatch = pesIn.some((x) => strongNorm(x.nome || "") === donoNorm);
-          const inCRM = todasPessoas.some((x) => strongNorm(x.nome || "") === donoNorm);
-          resolvivel = inBatch || inCRM;
-        }
+        // Resolve Links
+        const resObra = raw.obra ? resolverCodigo(raw.obra, obraCandidates, c => c.nome, c => c.codigo) : { codigo: "", ambiguo: false };
+        const resConstrutora = raw.construtora ? resolverCodigo(raw.construtora, construtoraCandidates, c => c.nome, c => c.codigo) : { codigo: "", ambiguo: false };
+        const resPessoa = raw.contato ? resolverCodigo(raw.contato, pessoaCandidates, c => c.nome, c => c.codigo) : { codigo: "", ambiguo: false };
+
+        const codigoDonoResolvido = resDono.codigo;
+        const donoAmbiguo = resDono.ambiguo;
+        const codObraResolvido = resObra.codigo;
+        const codConstrutoraResolvido = resConstrutora.codigo;
+        const codPessoaResolvido = resPessoa.codigo;
+
+        const donoResolvidoNome = findNameByCode(codigoDonoResolvido, candidatesForDono);
+        const obraResolvidaNome = findNameByCode(codObraResolvido, obraCandidates);
+        const construtoraResolvidaNome = findNameByCode(codConstrutoraResolvido, construtoraCandidates);
+        const contatoResolvidoNome = findNameByCode(codPessoaResolvido, pessoaCandidates);
+
+        const resolvivel = !!codigoDonoResolvido;
 
         return {
           raw,
@@ -530,6 +601,15 @@ export default function ProspeccaoIA() {
           status: raw.status || "",
           proximoContato: raw.proximoContato || "",
           resolvivel,
+          codigoDonoResolvido,
+          donoAmbiguo,
+          codObraResolvido,
+          codConstrutoraResolvido,
+          codPessoaResolvido,
+          donoResolvidoNome,
+          obraResolvidaNome,
+          construtoraResolvidaNome,
+          contatoResolvidoNome,
           create: resolvivel,
         };
       });
@@ -572,6 +652,36 @@ export default function ProspeccaoIA() {
       // Mapas para resolver código de construtora/obra a partir do nome
       const ctCodigoPorNome = new Map<string, string>();
       const obraCodigoPorChave = new Map<string, string>(); // strongNorm(nome)+'|'+strongNorm(ct)
+      const obraCodigoPorNome = new Map<string, string>();
+      const pessoaCodigoPorNome = new Map<string, string>();
+
+      // Populate with existing database construtoras
+      for (const c of todasCtsList) {
+        const key = strongNorm(c.nome || "");
+        if (key && c.codigo) {
+          ctCodigoPorNome.set(key, c.codigo);
+        }
+      }
+
+      // Populate with existing database obras
+      for (const o of todasObras) {
+        const key = `${strongNorm(o.nome || "")}|${strongNorm(o.construtora || "")}`;
+        if (o.codigoObra) {
+          obraCodigoPorChave.set(key, o.codigoObra);
+          const nameKey = strongNorm(o.nome || "");
+          if (nameKey) {
+            obraCodigoPorNome.set(nameKey, o.codigoObra);
+          }
+        }
+      }
+
+      // Populate with existing database pessoas
+      for (const p of todasPessoas) {
+        const key = strongNorm(p.nome || "");
+        if (key && p.codigoPessoa) {
+          pessoaCodigoPorNome.set(key, p.codigoPessoa);
+        }
+      }
 
       let ctCriadas = 0;
       let ctAtualizadas = 0;
@@ -600,13 +710,6 @@ export default function ProspeccaoIA() {
         }
       }
 
-      for (const c of todasCtsList) {
-        const key = strongNorm(c.nome || "");
-        if (key && c.codigo && !ctCodigoPorNome.has(key)) {
-          ctCodigoPorNome.set(key, c.codigo);
-        }
-      }
-
       // 2) Obras
       let obrCriadas = 0;
       let obrAtualizadas = 0;
@@ -622,6 +725,7 @@ export default function ProspeccaoIA() {
               `${strongNorm(nome)}|${strongNorm(entry.duplicate.construtora || "")}`,
               entry.duplicate.codigoObra,
             );
+            obraCodigoPorNome.set(strongNorm(nome), entry.duplicate.codigoObra);
           }
           if (novaIA && entry.duplicate.codigoObra) {
             await atualizarObra(entry.duplicate.codigoObra, {
@@ -662,26 +766,12 @@ export default function ProspeccaoIA() {
         } as Obra);
         if (criada?.codigoObra) {
           obraCodigoPorChave.set(`${strongNorm(nome)}|${strongNorm(ctNome)}`, criada.codigoObra);
+          obraCodigoPorNome.set(strongNorm(nome), criada.codigoObra);
         }
         obrCriadas++;
       }
 
-      const obraCodigoPorNome = new Map<string, string>();
-      for (const o of todasObras) {
-        const key = `${strongNorm(o.nome || "")}|${strongNorm(o.construtora || "")}`;
-        if (o.codigoObra) {
-          if (!obraCodigoPorChave.has(key)) {
-            obraCodigoPorChave.set(key, o.codigoObra);
-          }
-          const nameKey = strongNorm(o.nome || "");
-          if (nameKey && !obraCodigoPorNome.has(nameKey)) {
-            obraCodigoPorNome.set(nameKey, o.codigoObra);
-          }
-        }
-      }
-
       // 3) Pessoas
-      const pessoaCodigoPorNome = new Map<string, string>();
       let pesCriadas = 0;
       let pesIgnoradas = 0;
       for (const entry of pessoas) {
@@ -697,7 +787,6 @@ export default function ProspeccaoIA() {
           codigoCt = entry.codigoConstrutoraOverride;
         }
         if (!codigoCt) {
-          // Sem construtora vinculável: pula com aviso
           pesIgnoradas++;
           continue;
         }
@@ -718,13 +807,6 @@ export default function ProspeccaoIA() {
         pesCriadas++;
       }
 
-      for (const p of todasPessoas) {
-        const key = strongNorm(p.nome || "");
-        if (key && p.codigoPessoa && !pessoaCodigoPorNome.has(key)) {
-          pessoaCodigoPorNome.set(key, p.codigoPessoa);
-        }
-      }
-
       // 4) Atividades
       let ativCriadas = 0;
       let ativIgnoradas = 0;
@@ -734,31 +816,43 @@ export default function ProspeccaoIA() {
       const ano = d.getFullYear();
       const hojeBR = `${dia}/${mes}/${ano}`;
 
+      const getFinalCode = (rawCode: string, mapByNormName: Map<string, string>) => {
+        if (!rawCode) return "";
+        if (rawCode.startsWith("batch:")) {
+          const batchName = rawCode.substring(6);
+          return mapByNormName.get(strongNorm(batchName)) || "";
+        }
+        return rawCode;
+      };
+
       for (const entry of atividades) {
         if (!entry.create) {
           ativIgnoradas++;
           continue;
         }
 
-        const construtoraNorm = strongNorm(entry.construtoraNome || "");
-        const obraNorm = strongNorm(entry.obraNome || "");
-        const contatoNorm = strongNorm(entry.contatoNome || "");
-
-        const codConstrutora = construtoraNorm ? (ctCodigoPorNome.get(construtoraNorm) || "") : "";
-        const chaveObra = `${obraNorm}|${construtoraNorm}`;
-        const codObra = obraNorm ? (obraCodigoPorChave.get(chaveObra) || obraCodigoPorNome.get(obraNorm) || "") : "";
-        const codPessoa = contatoNorm ? (pessoaCodigoPorNome.get(contatoNorm) || "") : "";
-
-        // Validar dono resolvido
+        const rawDonoCode = entry.codigoDonoManual || entry.codigoDonoResolvido;
         let codDono = "";
-        if (entry.origem === "construtora") codDono = codConstrutora;
-        else if (entry.origem === "obra") codDono = codObra;
-        else if (entry.origem === "pessoa") codDono = codPessoa;
+        if (entry.origem === "construtora") {
+          codDono = getFinalCode(rawDonoCode, ctCodigoPorNome);
+        } else if (entry.origem === "obra") {
+          codDono = getFinalCode(rawDonoCode, obraCodigoPorNome);
+        } else if (entry.origem === "pessoa") {
+          codDono = getFinalCode(rawDonoCode, pessoaCodigoPorNome);
+        }
 
         if (!codDono) {
           ativIgnoradas++;
           continue;
         }
+
+        const rawObraCode = entry.codObraManual !== undefined ? entry.codObraManual : entry.codObraResolvido;
+        const rawConstrutoraCode = entry.codConstrutoraManual !== undefined ? entry.codConstrutoraManual : entry.codConstrutoraResolvido;
+        const rawPessoaCode = entry.codPessoaManual !== undefined ? entry.codPessoaManual : entry.codPessoaResolvido;
+
+        const codObra = getFinalCode(rawObraCode, obraCodigoPorNome);
+        const codConstrutora = getFinalCode(rawConstrutoraCode, ctCodigoPorNome);
+        const codPessoa = getFinalCode(rawPessoaCode, pessoaCodigoPorNome);
 
         const dataAtiv = entry.raw.data?.trim() || hojeBR;
         const tipoContato = entry.raw.tipoContato || "Outro";
@@ -768,7 +862,7 @@ export default function ProspeccaoIA() {
 
         if (entry.origem === "obra") {
           await criarAtividade({
-            idObra: codObra,
+            idObra: codDono,
             dataAtividade: dataAtiv,
             tipoContato,
             status,
@@ -779,7 +873,7 @@ export default function ProspeccaoIA() {
           });
         } else if (entry.origem === "construtora") {
           await criarAtividadeConstrutora({
-            codigoConstrutora: codConstrutora,
+            codigoConstrutora: codDono,
             tipoRegistro: "atividade",
             data: dataAtiv,
             tipoContato,
@@ -791,7 +885,7 @@ export default function ProspeccaoIA() {
           });
         } else if (entry.origem === "pessoa") {
           await criarAtividadePessoa({
-            codigoPessoa: codPessoa,
+            codigoPessoa: codDono,
             tipoRegistro: "atividade",
             data: dataAtiv,
             tipoContato,
@@ -1043,70 +1137,200 @@ export default function ProspeccaoIA() {
             {atividades.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold mb-2">Atividades</h3>
-                <div className="space-y-2">
-                  {atividades.map((e, i) => (
-                    <div key={i} className="border rounded-md p-3 text-sm">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className="capitalize">
-                          {e.origem === "pessoa" ? "contato" : e.origem}
-                        </Badge>
-                        <span className="font-medium">{e.donoNome || "(sem nome)"}</span>
-                        {e.data ? (
-                          <span className="text-xs text-muted-foreground">
-                            • Data: {e.data}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            • Data: hoje
-                          </span>
+                <div className="space-y-3">
+                  {atividades.map((e, i) => {
+                    const hasValidDono = !!(e.codigoDonoManual || e.codigoDonoResolvido);
+
+                    return (
+                      <div key={i} className="border rounded-md p-3 text-sm space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="capitalize">
+                            {e.origem === "pessoa" ? "contato" : e.origem}
+                          </Badge>
+                          <span className="font-medium">{e.donoNome || "(sem nome)"}</span>
+                          {e.data ? (
+                            <span className="text-xs text-muted-foreground">
+                              • Data: {e.data}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              • Data: hoje
+                            </span>
+                          )}
+                          {e.tipoContato && (
+                            <span className="text-xs text-muted-foreground">
+                              • Tipo: {e.tipoContato}
+                            </span>
+                          )}
+                          {e.status && (
+                            <span className="text-xs text-muted-foreground">
+                              • Status: {e.status}
+                            </span>
+                          )}
+
+                          {/* Status do Dono */}
+                          {e.donoAmbiguo ? (
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              Vários nomes parecidos — selecione
+                            </Badge>
+                          ) : hasValidDono ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white border-transparent">
+                              Vinculado a: {e.donoResolvidoNome || e.donoNome}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              Não encontrada — selecione
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Vínculos Originais */}
+                        {(e.obraNome || e.construtoraNome || e.contatoNome) && (
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-1">
+                            {e.obraNome && <span>Obra original: {e.obraNome}</span>}
+                            {e.construtoraNome && <span>Construtora original: {e.construtoraNome}</span>}
+                            {e.contatoNome && <span>Contato original: {e.contatoNome}</span>}
+                          </div>
                         )}
-                        {e.tipoContato && (
-                          <span className="text-xs text-muted-foreground">
-                            • Tipo: {e.tipoContato}
-                          </span>
+
+                        {e.comentario && (
+                          <p className="text-xs text-muted-foreground bg-muted p-1.5 rounded font-mono">
+                            {e.comentario}
+                          </p>
                         )}
-                        {e.status && (
-                          <span className="text-xs text-muted-foreground">
-                            • Status: {e.status}
+
+                        {/* Seletor do Dono */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-medium text-muted-foreground block">
+                            Dono da atividade ({e.origem === "pessoa" ? "contato" : e.origem}):
                           </span>
+                          {e.origem === "construtora" && (
+                            <ConstrutoraCodeCombobox
+                              value={e.codigoDonoManual !== undefined ? e.codigoDonoManual : (e.codigoDonoResolvido.startsWith("batch:") ? "" : e.codigoDonoResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codigoDonoManual: codigo,
+                                  donoResolvidoNome: nome,
+                                  donoAmbiguo: false,
+                                  create: true,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar/trocar construtora..."
+                            />
+                          )}
+                          {e.origem === "obra" && (
+                            <ObraCombobox
+                              value={e.codigoDonoManual !== undefined ? e.codigoDonoManual : (e.codigoDonoResolvido.startsWith("batch:") ? "" : e.codigoDonoResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codigoDonoManual: codigo,
+                                  donoResolvidoNome: nome,
+                                  donoAmbiguo: false,
+                                  create: true,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar/trocar obra..."
+                            />
+                          )}
+                          {e.origem === "pessoa" && (
+                            <PessoaCombobox
+                              value={e.codigoDonoManual !== undefined ? e.codigoDonoManual : (e.codigoDonoResolvido.startsWith("batch:") ? "" : e.codigoDonoResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codigoDonoManual: codigo,
+                                  donoResolvidoNome: nome,
+                                  donoAmbiguo: false,
+                                  create: true,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar/trocar contato..."
+                            />
+                          )}
+                        </div>
+
+                        {/* Seletores de Vínculos Opcionais */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-t pt-2">
+                          <div>
+                            <span className="text-[11px] text-muted-foreground block mb-0.5">Obra vinculada (opcional):</span>
+                            <ObraCombobox
+                              value={e.codObraManual !== undefined ? e.codObraManual : (e.codObraResolvido.startsWith("batch:") ? "" : e.codObraResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codObraManual: codigo,
+                                  obraResolvidaNome: nome,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar obra..."
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-muted-foreground block mb-0.5">Construtora vinculada (opcional):</span>
+                            <ConstrutoraCodeCombobox
+                              value={e.codConstrutoraManual !== undefined ? e.codConstrutoraManual : (e.codConstrutoraResolvido.startsWith("batch:") ? "" : e.codConstrutoraResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codConstrutoraManual: codigo,
+                                  construtoraResolvidaNome: nome,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar construtora..."
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-muted-foreground block mb-0.5">Contato vinculado (opcional):</span>
+                            <PessoaCombobox
+                              value={e.codPessoaManual !== undefined ? e.codPessoaManual : (e.codPessoaResolvido.startsWith("batch:") ? "" : e.codPessoaResolvido)}
+                              onChange={(codigo, nome) => {
+                                const next = [...atividades];
+                                next[i] = {
+                                  ...next[i],
+                                  codPessoaManual: codigo,
+                                  contatoResolvidoNome: nome,
+                                };
+                                setAtividades(next);
+                              }}
+                              placeholder="Pesquisar contato..."
+                            />
+                          </div>
+                        </div>
+
+                        {!hasValidDono && (
+                          <div className="text-xs text-amber-600 flex items-center gap-1.5 mt-2">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                            <span>O dono desta atividade não foi resolvido nem escolhido manualmente. Ela será ignorada.</span>
+                          </div>
                         )}
+
+                        <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
+                          <Checkbox
+                            checked={e.create && hasValidDono}
+                            disabled={!hasValidDono}
+                            onCheckedChange={(c) => {
+                              const next = [...atividades];
+                              next[i] = { ...next[i], create: !!c };
+                              setAtividades(next);
+                            }}
+                          />
+                          Criar esta atividade
+                        </label>
                       </div>
-
-                      {/* Vínculos */}
-                      {(e.obraNome || e.construtoraNome || e.contatoNome) && (
-                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-2 gap-y-1">
-                          {e.obraNome && <span>Obra: {e.obraNome}</span>}
-                          {e.construtoraNome && <span>Construtora: {e.construtoraNome}</span>}
-                          {e.contatoNome && <span>Contato: {e.contatoNome}</span>}
-                        </div>
-                      )}
-
-                      {e.comentario && (
-                        <p className="text-xs text-muted-foreground mt-1 bg-muted p-1.5 rounded font-mono">
-                          {e.comentario}
-                        </p>
-                      )}
-
-                      {e.resolvivel === false && (
-                        <div className="mt-2 flex items-center gap-2 text-xs text-amber-600">
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                          <span>Entidade não encontrada — será ignorada se não marcada</span>
-                        </div>
-                      )}
-
-                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs">
-                        <Checkbox
-                          checked={e.create}
-                          onCheckedChange={(c) => {
-                            const next = [...atividades];
-                            next[i] = { ...next[i], create: !!c };
-                            setAtividades(next);
-                          }}
-                        />
-                        Criar esta atividade
-                      </label>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
