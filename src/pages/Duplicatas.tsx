@@ -18,11 +18,21 @@ import {
 import {
   listarConstrutoras,
   excluirConstrutora,
+  listarTodasAtividadesConstrutoras,
+  atualizarAtividadeConstrutora,
   type Construtora,
 } from "@/services/construtorasService";
 import { listarObras, atualizarObra, type Obra } from "@/services/obrasService";
-import { listarPessoas, atualizarPessoa, excluirPessoa, type Pessoa } from "@/services/pessoasService";
-import { strongNorm, onlyDigits } from "@/lib/normalize";
+import {
+  listarPessoas,
+  atualizarPessoa,
+  excluirPessoa,
+  listarTodasAtividadesPessoas,
+  atualizarAtividadePessoa,
+  type Pessoa,
+} from "@/services/pessoasService";
+import { listarTodasAtividades, atualizarAtividade } from "@/services/atividadesService";
+import { strongNorm, onlyDigits, nomesCompativeis } from "@/lib/normalize";
 import { Building, Users, GitMerge, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 const getCtGroupKey = (group: Construtora[]) => {
@@ -136,7 +146,7 @@ export default function Duplicatas() {
           if (cCnpj && itemCnpj && cCnpj === itemCnpj) {
             return true;
           }
-          return strongNorm(c.nome) === strongNorm(item.nome);
+          return strongNorm(c.nome) === strongNorm(item.nome) || nomesCompativeis(c.nome, item.nome);
         });
         if (match) {
           group.push(c);
@@ -183,6 +193,13 @@ export default function Duplicatas() {
           const itemTel = onlyDigits(item.whatsapp || "");
           if (pName && itemName && pName === itemName && pTel && itemTel && pTel === itemTel) {
             return true;
+          }
+          if (pName && itemName && nomesCompativeis(p.nome, item.nome)) {
+            const hasPhoneConflict = pTel && itemTel && pTel !== itemTel;
+            const hasEmailConflict = pEmail && itemEmail && pEmail !== itemEmail;
+            if (!hasPhoneConflict && !hasEmailConflict) {
+              return true;
+            }
           }
           return false;
         });
@@ -287,15 +304,52 @@ export default function Duplicatas() {
         });
       }
 
-      // 3) Excluir Construtoras Duplicadas (após sucesso de todos os updates anteriores)
+      // 3) Religar Atividades das Construtoras Duplicadas
+      let atvMovidas = 0;
+      const [atvCt, atvObra, atvPes] = await Promise.all([
+        listarTodasAtividadesConstrutoras().catch(() => []),
+        listarTodasAtividades().catch(() => []),
+        listarTodasAtividadesPessoas().catch(() => [])
+      ]);
+
+      for (const dup of duplicates) {
+        if (!dup.codigo) continue;
+        // 3.1) atividades NATIVAS da construtora duplicada -> principal
+        for (const a of atvCt.filter((x) => x.codigoConstrutora === dup.codigo)) {
+          if (a.idAtividade) {
+            await atualizarAtividadeConstrutora(a.idAtividade, { codigoConstrutora: principal.codigo });
+            atvMovidas++;
+          }
+        }
+        // 3.2) vínculos codigoConstrutora em atividades de OBRA -> principal
+        for (const a of atvObra.filter((x) => x.codigoConstrutora === dup.codigo)) {
+          if (a.idAtividade) {
+            await atualizarAtividade(a.idAtividade, { codigoConstrutora: principal.codigo });
+            atvMovidas++;
+          }
+        }
+        // 3.3) vínculos codigoConstrutora em atividades de PESSOA -> principal
+        for (const a of atvPes.filter((x) => x.codigoConstrutora === dup.codigo)) {
+          if (a.idAtividade) {
+            await atualizarAtividadePessoa(a.idAtividade, { codigoConstrutora: principal.codigo });
+            atvMovidas++;
+          }
+        }
+      }
+
+      // 4) Excluir Construtoras Duplicadas (após sucesso de todos os updates anteriores)
       for (const dup of duplicates) {
         if (!dup.codigo) continue;
         await excluirConstrutora(dup.codigo);
       }
 
+      const summaryText = `${obrasToMigrate.length} ${obrasToMigrate.length === 1 ? "obra" : "obras"}, ` +
+        `${contatosToMigrate.length} ${contatosToMigrate.length === 1 ? "contato" : "contatos"} e ` +
+        `${atvMovidas} ${atvMovidas === 1 ? "atividade" : "atividades"} movidos para "${principal.nome}".`;
+
       toast({
         title: "Construtoras mescladas",
-        description: `Obras e contatos migrados com sucesso para "${principal.nome}".`,
+        description: summaryText,
       });
 
       // Fetch fresh data and reload duplicate lists
@@ -359,15 +413,51 @@ export default function Duplicatas() {
         await atualizarPessoa(principal.codigoPessoa, patch);
       }
 
+      // Step 1.5: Religar Atividades das Pessoas Duplicadas
+      let atvMovidas = 0;
+      const [atvPes, atvObra, atvCt] = await Promise.all([
+        listarTodasAtividadesPessoas().catch(() => []),
+        listarTodasAtividades().catch(() => []),
+        listarTodasAtividadesConstrutoras().catch(() => [])
+      ]);
+
+      for (const dup of duplicates) {
+        if (!dup.codigoPessoa) continue;
+        // 1) atividades NATIVAS da pessoa duplicada -> principal
+        for (const a of atvPes.filter((x) => x.codigoPessoa === dup.codigoPessoa)) {
+          if (a.idAtividade) {
+            await atualizarAtividadePessoa(a.idAtividade, { codigoPessoa: principal.codigoPessoa });
+            atvMovidas++;
+          }
+        }
+        // 2) vínculos codigoPessoa em atividades de OBRA -> principal
+        for (const a of atvObra.filter((x) => x.codigoPessoa === dup.codigoPessoa)) {
+          if (a.idAtividade) {
+            await atualizarAtividade(a.idAtividade, { codigoPessoa: principal.codigoPessoa });
+            atvMovidas++;
+          }
+        }
+        // 3) vínculos codigoPessoa em atividades de CONSTRUTORA -> principal
+        for (const a of atvCt.filter((x) => x.codigoPessoa === dup.codigoPessoa)) {
+          if (a.idAtividade) {
+            await atualizarAtividadeConstrutora(a.idAtividade, { codigoPessoa: principal.codigoPessoa });
+            atvMovidas++;
+          }
+        }
+      }
+
       // Step 2: Excluir contatos duplicados
       for (const dup of duplicates) {
         if (!dup.codigoPessoa) continue;
         await excluirPessoa(dup.codigoPessoa);
       }
 
+      const summaryText = `${atvMovidas} ${atvMovidas === 1 ? "atividade" : "atividades"} movidas. ` +
+        `Os contatos duplicados foram removidos e seus vínculos unificados em "${principal.nome}".`;
+
       toast({
         title: "Contatos mesclados",
-        description: `Os contatos duplicados foram removidos e seus vínculos unificados em "${principal.nome}".`,
+        description: summaryText,
       });
 
       await fetchData();
