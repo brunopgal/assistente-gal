@@ -67,6 +67,8 @@ function statusBadge(status: string): "default" | "secondary" | "outline" {
 
 export default function Construtoras() {
   const [items, setItems] = useState<Construtora[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
+  const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const { toast } = useToast();
