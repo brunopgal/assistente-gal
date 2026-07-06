@@ -42,6 +42,32 @@ function normalizeName(s: string): string {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+const STOPWORDS_EMPRESA_CT = new Set([
+  "construtora","construtoras","incorporadora","incorporadoras","incorporacoes","incorporacao",
+  "empreendimentos","empreendimento","engenharia","construcao","construcoes","participacoes",
+  "desenvolvimento","imobiliario","imobiliaria","imobiliarios","realty","group","grupo","holding","spe",
+  "ltda","me","epp","eireli","sa","s","cia","companhia","e","de","do","da","dos","das"
+]);
+
+function coreTokensCT(nome: string): string[] {
+  return normalizeName(nome)
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "")
+    .split(" ")
+    .filter((t) => t.length > 1 && !STOPWORDS_EMPRESA_CT.has(t));
+}
+
+function nomesCompativeisCT(a: string, b: string): boolean {
+  const na = normalizeName(a), nb = normalizeName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.replace(/ /g, "") === nb.replace(/ /g, "")) return true;
+  const ca = coreTokensCT(a), cb = coreTokensCT(b);
+  if (!ca.length || !cb.length) return false;
+  const menor = ca.length <= cb.length ? ca : cb;
+  const maior = new Set(ca.length <= cb.length ? cb : ca);
+  return menor.every((t) => maior.has(t));
+}
+
 async function listAll(rest: string): Promise<any[]> {
   const res = await fetch(`${rest}?select=*`, { headers: sbHeaders() });
   if (!res.ok) throw new Error(`Supabase error: ${await res.text()}`);
@@ -67,6 +93,10 @@ async function findOrCreateConstrutoraByName(nome: string): Promise<string> {
   const all = await listAll(CT_REST);
   for (const c of all) {
     if (normalizeName(c.nome || '') === target) return c.codigo;
+  }
+  // tenta casamento inteligente antes de criar (evita recriar duplicatas)
+  for (const c of all) {
+    if (c.codigo && nomesCompativeisCT(c.nome || "", nome)) return c.codigo;
   }
   const codigo = await generateNextId(CT_REST, 'codigo', 'CT', 9);
   const row = { codigo, nome: nome.trim(), cnpj: '', produto: '', status: 'Prospecção', observacoes: '', prospeccaoIA: '' };
