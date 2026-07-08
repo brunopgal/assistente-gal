@@ -169,7 +169,8 @@ Deno.serve(async (req) => {
 
       // === Religar obras órfãs à construtora canônica (por casamento inteligente) ===
       // Candidatos = todas as construtoras conhecidas (existentes + criadas neste sync)
-      const candidatosCt = Array.from(ctByNome.values()).filter((c: any) => c && c.codigo);
+      // usar a lista REAL de construtoras (nome canônico), não o ctByNome (que pode conter o nome bruto da obra)
+      const candidatosCt = (await listAll(CT_REST)).filter((c: any) => c && c.codigo);
 
       function resolverConstrutoraLocal(nome: string): any | null {
         const target = normalizeName(nome);
