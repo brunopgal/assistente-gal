@@ -167,7 +167,37 @@ Deno.serve(async (req) => {
         if (res.ok) produtosAtualizados++;
       }
 
-      return new Response(JSON.stringify({ success: true, criadas, total: nomesUnicos.length, produtosAtualizados }), {
+      // === Religar obras órfãs à construtora canônica (por casamento inteligente) ===
+      // Candidatos = todas as construtoras conhecidas (existentes + criadas neste sync)
+      const candidatosCt = Array.from(ctByNome.values()).filter((c: any) => c && c.codigo);
+
+      function resolverConstrutoraLocal(nome: string): any | null {
+        const target = normalizeName(nome);
+        if (!target) return null;
+        let hit = candidatosCt.find((c: any) => normalizeName(c.nome || "") === target);
+        if (!hit) hit = candidatosCt.find((c: any) => nomesCompativeisCT(c.nome || "", nome));
+        return hit || null;
+      }
+
+      let obrasRevinculadas = 0;
+      for (const o of obras) {
+        const nomeCt = String(o.construtora || "").trim();
+        const codigoObra = String(o.codigoObra || "").trim();
+        if (!nomeCt || !codigoObra) continue;
+        const alvo = resolverConstrutoraLocal(nomeCt);
+        if (!alvo || !alvo.codigo) continue;
+        const nomeCanonico = alvo.nome || nomeCt;
+        if (o.codigoConstrutora !== alvo.codigo || o.construtora !== nomeCanonico) {
+          const res = await fetch(`${OBRAS_REST}?codigoObra=eq.${encodeURIComponent(codigoObra)}`, {
+            method: "PATCH",
+            headers: sbHeaders(),
+            body: JSON.stringify({ codigoConstrutora: alvo.codigo, construtora: nomeCanonico }),
+          });
+          if (res.ok) obrasRevinculadas++;
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, criadas, total: nomesUnicos.length, produtosAtualizados, obrasRevinculadas }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
