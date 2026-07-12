@@ -50,7 +50,23 @@ import { useToast } from "@/hooks/use-toast";
 import { normalizeText } from "@/lib/normalize";
 import { exportarParaExcel } from "@/lib/exportXlsx";
 import { STATUS_PROSPECCAO } from "@/lib/statusProspeccao";
+import { fetchAll } from "@/lib/supabaseFetchAll";
 
+function formatDateTime(isoStr?: string): string {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return isoStr;
+  }
+}
 
 const SHEETS_EXTERNAL_URL =
   "https://docs.google.com/spreadsheets/d/1cwVc4NwTrS5kx7q5Lt-RmTQ9WhnVhxbS3eBr3bJXv0g/edit?usp=sharing";
@@ -98,6 +114,63 @@ export default function Obras() {
   const [modalLoading, setModalLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  async function exportarObras() {
+    setExporting(true);
+    try {
+      const allObras = await fetchAll("obras");
+      const q = normalizeText(query);
+      const nCidade = normalizeText(filtroCidade);
+      const nStatus = normalizeText(filtroStatus);
+      const nProduto = normalizeText(filtroProduto);
+      
+      const filtered = allObras.filter((o) => {
+        if (
+          q &&
+          ![o.codigoObra, o.nome, o.construtora, o.responsavel, o.cidade, o.statusProspeccao]
+            .filter(Boolean)
+            .some((v) => normalizeText(v).includes(q))
+        )
+          return false;
+        if (filtroCidade !== "__all__" && normalizeText(o.cidade) !== nCidade) return false;
+        if (filtroStatus !== "__all__" && normalizeText(o.statusProspeccao) !== nStatus) return false;
+        if (filtroProduto !== "__all__") {
+          const tokens = (o.produtoOferecido || "").split(",").map((p: string) => p.trim()).filter(Boolean);
+          if (filtroProduto === "Nenhum") {
+            if (tokens.length > 0) return false;
+          } else {
+            const cans = tokens.map(produtoCanonico);
+            if (!cans.includes(filtroProduto)) return false;
+          }
+        }
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        const aDate = new Date(a.updated_at || a.dataCadastro || 0).getTime();
+        const bDate = new Date(b.updated_at || b.dataCadastro || 0).getTime();
+        return bDate - aDate;
+      });
+
+      const formatted = filtered.map(o => ({
+        ...o,
+        created_at: formatDateTime(o.created_at),
+        updated_at: formatDateTime(o.updated_at)
+      }));
+
+      exportarParaExcel(formatted as unknown as Record<string, unknown>[], "obras", "Obras");
+      toast({ title: "Exportação concluída com sucesso!" });
+    } catch (err: any) {
+      toast({
+        title: "Erro na exportação",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function openNovaObra() {
     setObraModalEdit(null);
@@ -247,11 +320,20 @@ export default function Obras() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => exportarParaExcel(filtradas as unknown as Record<string, unknown>[], "obras", "Obras")}
-            disabled={loading || obras.length === 0}
+            onClick={exportarObras}
+            disabled={loading || exporting}
           >
-            <Download className="h-4 w-4 mr-1" />
-            Exportar Excel
+            {exporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1" />
+                Exportar Excel
+              </>
+            )}
           </Button>
           <Button variant="outline" size="sm" asChild>
             <a href={SHEETS_EXTERNAL_URL} target="_blank" rel="noopener noreferrer">

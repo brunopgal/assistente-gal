@@ -15,6 +15,7 @@ import {
   Clock,
   Loader2,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import { listarObras, type Obra } from "@/services/obrasService";
 import { listarConstrutoras, type Construtora } from "@/services/construtorasService";
@@ -22,6 +23,9 @@ import { listarTodasAtividades, type Atividade } from "@/services/atividadesServ
 import { listarTodasAtividadesConstrutoras, type AtividadeConstrutora } from "@/services/construtorasService";
 import { listarPessoas, listarTodasAtividadesPessoas, type Pessoa, type AtividadePessoa } from "@/services/pessoasService";
 import { extrairOrig } from "@/lib/atividadesUnificadas";
+import { fetchAll } from "@/lib/supabaseFetchAll";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +54,11 @@ interface AtividadeUnificada {
   idObra?: string;
   codigoConstrutora?: string;
   codigoPessoa?: string;
+  horario?: string;
+  criarFollowUp?: string;
+  proximoContato?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 function parseDataBr(dataStr: string): Date {
@@ -61,11 +70,227 @@ function parseDataBr(dataStr: string): Date {
   }
 }
 
+function formatDateTime(isoStr?: string): string {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return isoStr;
+  }
+}
+
+function setupSheetMeta(ws: XLSX.WorkSheet, rowCount: number, colCount: number) {
+  if (rowCount > 0 && colCount > 0) {
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({
+        s: { c: 0, r: 0 },
+        e: { c: colCount - 1, r: rowCount }
+      })
+    };
+  }
+  ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' }];
+}
+
 export default function AtividadesGerais() {
   const [loading, setLoading] = useState(true);
   const [atividadesUnificadas, setAtividadesUnificadas] = useState<AtividadeUnificada[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string>("__all__");
+  const [exportando, setExportando] = useState(false);
+
+  async function handleExportExcel() {
+    setExportando(true);
+    try {
+      const [obrasData, ctsData, atvsData, atvsCtsData, pessoasData, atvsPessData] = await Promise.all([
+        fetchAll("obras", "codigoObra,nome"),
+        fetchAll("construtoras", "codigo,nome"),
+        fetchAll("atividades"),
+        fetchAll("construtoras_atividades"),
+        fetchAll("pessoas", "codigoPessoa,nome"),
+        fetchAll("pessoas_atividades"),
+      ]);
+
+      const mapObras = new Map<string, string>();
+      obrasData.forEach((o) => {
+        if (o.codigoObra) mapObras.set(o.codigoObra, o.nome || "");
+      });
+
+      const mapCts = new Map<string, string>();
+      ctsData.forEach((c) => {
+        if (c.codigo) mapCts.set(c.codigo, c.nome || "");
+      });
+
+      const mapPessoas = new Map<string, string>();
+      pessoasData.forEach((p) => {
+        if (p.codigoPessoa) mapPessoas.set(p.codigoPessoa, p.nome || "");
+      });
+
+      const unificadas: AtividadeUnificada[] = [];
+
+      atvsData.forEach((a) => {
+        const nome = mapObras.get(a.idObra) || "Obra Desconhecida";
+        unificadas.push({
+          id: a.idAtividade || "",
+          tipoOrigem: "obra",
+          origemId: a.idObra,
+          origemNome: nome,
+          dataOriginal: a.dataAtividade,
+          dataISO: parseDataBr(a.dataAtividade),
+          tipoContato: a.tipoContato || "",
+          status: a.status || "",
+          comentario: a.comentario || "",
+          idObra: a.idObra,
+          codigoConstrutora: a.codigoConstrutora,
+          codigoPessoa: a.codigoPessoa,
+          origIdEspelho: extrairOrig(a.comentario || ""),
+          horario: "",
+          tipoRegistro: "atividade",
+          criarFollowUp: "",
+          proximoContato: a.proximoContato || "",
+          created_at: a.created_at,
+          updated_at: a.updated_at,
+        });
+      });
+
+      atvsCtsData.forEach((a) => {
+        const nome = mapCts.get(a.codigoConstrutora) || "Construtora Desconhecida";
+        unificadas.push({
+          id: a.idAtividade || "",
+          tipoOrigem: "construtora",
+          origemId: a.codigoConstrutora,
+          origemNome: nome,
+          dataOriginal: a.data,
+          dataISO: parseDataBr(a.data),
+          tipoContato: a.tipoContato || "",
+          tipoRegistro: a.tipoRegistro,
+          status: a.status || "",
+          comentario: a.comentario || "",
+          idObra: a.idObra,
+          codigoConstrutora: a.codigoConstrutora,
+          codigoPessoa: a.codigoPessoa,
+          origIdEspelho: extrairOrig(a.comentario || ""),
+          horario: a.horario || "",
+          criarFollowUp: a.criarFollowUp || "",
+          proximoContato: a.proximoContato || "",
+          created_at: a.created_at,
+          updated_at: a.updated_at,
+        });
+      });
+
+      atvsPessData.forEach((a) => {
+        const nome = mapPessoas.get(a.codigoPessoa) || "Contato Desconhecido";
+        unificadas.push({
+          id: a.idAtividade || "",
+          tipoOrigem: "pessoa",
+          origemId: a.codigoPessoa,
+          origemNome: nome,
+          dataOriginal: a.data,
+          dataISO: parseDataBr(a.data),
+          tipoContato: a.tipoContato || "",
+          tipoRegistro: a.tipoRegistro,
+          status: a.status || "",
+          comentario: a.comentario || "",
+          idObra: a.idObra,
+          codigoConstrutora: a.codigoConstrutora,
+          codigoPessoa: a.codigoPessoa,
+          origIdEspelho: extrairOrig(a.comentario || ""),
+          horario: a.horario || "",
+          criarFollowUp: a.criarFollowUp || "",
+          proximoContato: a.proximoContato || "",
+          created_at: a.created_at,
+          updated_at: a.updated_at,
+        });
+      });
+
+      const idsPresentes = new Set(unificadas.map(x => x.id.toUpperCase()));
+      const unicas = unificadas.filter(x => !(x.origIdEspelho && idsPresentes.has(x.origIdEspelho.toUpperCase())));
+
+      unicas.sort((a, b) => b.dataISO.getTime() - a.dataISO.getTime());
+
+      const wb = XLSX.utils.book_new();
+
+      const headersAll = [
+        "idAtividade", "origem", "data", "horario", "tipoRegistro", "tipoContato", 
+        "status", "proximoContato", "comentario", "construtoraNome", "obraNome", 
+        "pessoaNome", "codigoConstrutora", "idObra", "codigoPessoa", "criarFollowUp", 
+        "created_at", "updated_at"
+      ];
+
+      const rowsAll = unicas.map(atv => ({
+        idAtividade: atv.id,
+        origem: atv.tipoOrigem,
+        data: atv.dataOriginal || "",
+        horario: atv.horario || "",
+        tipoRegistro: atv.tipoRegistro || "",
+        tipoContato: atv.tipoContato || "",
+        status: atv.status || "",
+        proximoContato: atv.proximoContato || "",
+        comentario: atv.comentario || "",
+        construtoraNome: mapCts.get(atv.codigoConstrutora || "") || "",
+        obraNome: mapObras.get(atv.idObra || "") || "",
+        pessoaNome: mapPessoas.get(atv.codigoPessoa || "") || "",
+        codigoConstrutora: atv.codigoConstrutora || "",
+        idObra: atv.idObra || "",
+        codigoPessoa: atv.codigoPessoa || "",
+        criarFollowUp: atv.criarFollowUp || "",
+        created_at: formatDateTime(atv.created_at),
+        updated_at: formatDateTime(atv.updated_at)
+      }));
+
+      const wsAll = XLSX.utils.json_to_sheet(rowsAll, { header: headersAll });
+      setupSheetMeta(wsAll, rowsAll.length, headersAll.length);
+      XLSX.utils.book_append_sheet(wb, wsAll, "Todas");
+
+      const mapRawAtvs = (arr: any[]) => {
+        if (arr.length === 0) return [{ aviso: "Sem registros" }];
+        return arr.map(item => {
+          const copy = { ...item };
+          if (copy.created_at) copy.created_at = formatDateTime(copy.created_at);
+          if (copy.updated_at) copy.updated_at = formatDateTime(copy.updated_at);
+          return copy;
+        });
+      };
+
+      const rowsObrasRaw = mapRawAtvs(atvsData);
+      const wsObras = XLSX.utils.json_to_sheet(rowsObrasRaw);
+      if (atvsData.length > 0) {
+        const numCols = Object.keys(rowsObrasRaw[0]).length;
+        setupSheetMeta(wsObras, rowsObrasRaw.length, numCols);
+      }
+      XLSX.utils.book_append_sheet(wb, wsObras, "Atividades Obras");
+
+      const rowsCtsRaw = mapRawAtvs(atvsCtsData);
+      const wsCts = XLSX.utils.json_to_sheet(rowsCtsRaw);
+      if (atvsCtsData.length > 0) {
+        const numCols = Object.keys(rowsCtsRaw[0]).length;
+        setupSheetMeta(wsCts, rowsCtsRaw.length, numCols);
+      }
+      XLSX.utils.book_append_sheet(wb, wsCts, "Atividades Construtoras");
+
+      const rowsPessRaw = mapRawAtvs(atvsPessData);
+      const wsPess = XLSX.utils.json_to_sheet(rowsPessRaw);
+      if (atvsPessData.length > 0) {
+        const numCols = Object.keys(rowsPessRaw[0]).length;
+        setupSheetMeta(wsPess, rowsPessRaw.length, numCols);
+      }
+      XLSX.utils.book_append_sheet(wb, wsPess, "Atividades Pessoas");
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `atividades_backup_${today}.xlsx`);
+      toast.success("Excel de atividades gerado com sucesso!");
+    } catch (err: any) {
+      toast.error(`Falha ao exportar atividades: ${err.message}`);
+    } finally {
+      setExportando(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -114,6 +339,12 @@ export default function AtividadesGerais() {
             codigoConstrutora: a.codigoConstrutora,
             codigoPessoa: a.codigoPessoa,
             origIdEspelho: extrairOrig(a.comentario || ""),
+            horario: "",
+            tipoRegistro: "atividade",
+            criarFollowUp: "",
+            proximoContato: a.proximoContato || "",
+            created_at: (a as any).created_at,
+            updated_at: (a as any).updated_at,
           });
         });
 
@@ -134,6 +365,11 @@ export default function AtividadesGerais() {
             codigoConstrutora: a.codigoConstrutora,
             codigoPessoa: a.codigoPessoa,
             origIdEspelho: extrairOrig(a.comentario || ""),
+            horario: a.horario || "",
+            criarFollowUp: a.criarFollowUp || "",
+            proximoContato: a.proximoContato || "",
+            created_at: (a as any).created_at,
+            updated_at: (a as any).updated_at,
           });
         });
 
@@ -154,6 +390,11 @@ export default function AtividadesGerais() {
             codigoConstrutora: a.codigoConstrutora,
             codigoPessoa: a.codigoPessoa,
             origIdEspelho: extrairOrig(a.comentario || ""),
+            horario: a.horario || "",
+            criarFollowUp: a.criarFollowUp || "",
+            proximoContato: a.proximoContato || "",
+            created_at: (a as any).created_at,
+            updated_at: (a as any).updated_at,
           });
         });
 
@@ -219,6 +460,26 @@ export default function AtividadesGerais() {
           <p className="text-muted-foreground mt-1 text-sm">
             Histórico completo de todas as atividades de obras, construtoras e contatos.
           </p>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={exportando || loading}
+            className="w-full sm:w-auto"
+          >
+            {exportando ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Exportar Excel
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

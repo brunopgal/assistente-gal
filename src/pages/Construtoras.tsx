@@ -43,6 +43,7 @@ import { exportarParaExcel } from "@/lib/exportXlsx";
 import { type AtividadeUnificada, type OrigemAtividade, extrairOrig, deduplicar } from "@/lib/atividadesUnificadas";
 import ObraCombobox from "@/components/ObraCombobox";
 import PessoaCombobox from "@/components/PessoaCombobox";
+import { fetchAll } from "@/lib/supabaseFetchAll";
 
 
 const PRODUTOS = ["Prado", "Rhoden", "Imab"] as const;
@@ -53,6 +54,22 @@ const TIPOS_REGISTRO: { value: TipoRegistroAtividade; label: string }[] = [
   { value: "reuniao", label: "Reunião" },
 ];
 const TIPOS_CONTATO = ["ligação", "whatsapp", "email", "visita", "presencial"];
+
+function formatDateTime(isoStr?: string): string {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return isoStr;
+  }
+}
 
 function hoje(): string {
   const d = new Date();
@@ -72,6 +89,39 @@ export default function Construtoras() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  async function exportarConstrutoras() {
+    setExporting(true);
+    try {
+      const allCts = await fetchAll("construtoras");
+      const q = normalizeText(query);
+      const filtered = q
+        ? allCts.filter((c) =>
+            [c.codigo, c.nome, c.cnpj, c.produto, c.status]
+              .filter(Boolean)
+              .some((v) => normalizeText(v).includes(q))
+          )
+        : allCts;
+
+      const formatted = filtered.map(c => ({
+        ...c,
+        created_at: formatDateTime(c.created_at),
+        updated_at: formatDateTime(c.updated_at)
+      }));
+
+      exportarParaExcel(formatted as unknown as Record<string, unknown>[], "construtoras", "Construtoras");
+      toast({ title: "Exportação concluída com sucesso!" });
+    } catch (err: any) {
+      toast({
+        title: "Erro na exportação",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Form nova construtora
   const [openNew, setOpenNew] = useState(false);
@@ -423,11 +473,20 @@ export default function Construtoras() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => exportarParaExcel(filtradas as unknown as Record<string, unknown>[], "construtoras", "Construtoras")}
-            disabled={loading || items.length === 0}
+            onClick={exportarConstrutoras}
+            disabled={loading || exporting}
           >
-            <Download className="h-4 w-4 mr-1" />
-            Exportar Excel
+            {exporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1" />
+                Exportar Excel
+              </>
+            )}
           </Button>
           <Dialog open={openNew} onOpenChange={setOpenNew}>
             <DialogTrigger asChild>

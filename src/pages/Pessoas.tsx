@@ -29,7 +29,23 @@ import { exportarParaExcel } from "@/lib/exportXlsx";
 import { type AtividadeUnificada, type OrigemAtividade, extrairOrig, deduplicar } from "@/lib/atividadesUnificadas";
 import ObraCombobox from "@/components/ObraCombobox";
 import ConstrutoraCodeCombobox from "@/components/ConstrutoraCodeCombobox";
+import { fetchAll } from "@/lib/supabaseFetchAll";
 
+function formatDateTime(isoStr?: string): string {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return isoStr;
+  }
+}
 
 const EMPTY: Pessoa = {
   codigoConstrutora: "",
@@ -52,6 +68,56 @@ export default function Pessoas() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Pessoa | null>(null);
   const [form, setForm] = useState<Pessoa>(EMPTY);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportarPessoas() {
+    setExporting(true);
+    try {
+      const [allPessoas, allObras, allCts] = await Promise.all([
+        fetchAll("pessoas"),
+        fetchAll("obras", "codigoObra,nome"),
+        fetchAll("construtoras", "codigo,nome")
+      ]);
+
+      const obraByCodigo = new Map<string, string>();
+      allObras.forEach((o) => {
+        const key = o.codigoObra || "";
+        if (key) obraByCodigo.set(key, o.nome || "");
+      });
+
+      const ctByCodigoMap = new Map<string, string>();
+      allCts.forEach((c) => {
+        if (c.codigo) ctByCodigoMap.set(c.codigo, c.nome || "");
+      });
+
+      const q = normalizeText(query);
+      const filtered = allPessoas.filter(p => {
+        if (filtroCT !== "__all__" && p.codigoConstrutora !== filtroCT) return false;
+        if (filtroCargo !== "__all__" && (p.cargo || "") !== filtroCargo) return false;
+        if (!q) return true;
+        const haystack = [
+          p.nome, p.cargo, p.whatsapp, p.email,
+          ctByCodigoMap.get(p.codigoConstrutora) || "",
+        ].map(normalizeText).join(" ");
+        return haystack.includes(q);
+      });
+
+      const rows = filtered.map((p) => ({
+        ...p,
+        construtoraNome: ctByCodigoMap.get(p.codigoConstrutora) || "",
+        obraNome: obraByCodigo.get(p.codigoObraAtual || "") || "",
+        created_at: formatDateTime(p.created_at),
+        updated_at: formatDateTime(p.updated_at)
+      }));
+
+      exportarParaExcel(rows as unknown as Record<string, unknown>[], "contatos", "Contatos");
+      toast.success("Exportação concluída com sucesso!");
+    } catch (e: any) {
+      toast.error(`Falha ao exportar pessoas: ${e.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Pessoa | null>(null);
 
@@ -404,28 +470,20 @@ export default function Pessoas() {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={async () => {
-              try {
-                const { listarObras } = await import("@/services/obrasService");
-                const obras = await listarObras().catch(() => []);
-                const obraByCodigo = new Map<string, string>();
-                obras.forEach((o) => {
-                  const key = o.codigoObra || o.id || "";
-                  if (key) obraByCodigo.set(key, o.nome || "");
-                });
-                const rows = filtradas.map((p) => ({
-                  ...p,
-                  construtoraNome: ctByCodigo.get(p.codigoConstrutora)?.nome || "",
-                  obraNome: obraByCodigo.get(p.codigoObraAtual || "") || "",
-                }));
-                exportarParaExcel(rows as unknown as Record<string, unknown>[], "contatos", "Contatos");
-              } catch (e) {
-                toast.error((e as Error).message);
-              }
-            }}
-            disabled={loading || pessoas.length === 0}
+            onClick={exportarPessoas}
+            disabled={loading || exporting}
           >
-            <Download className="h-4 w-4 mr-1" /> Exportar Excel
+            {exporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1" />
+                Exportar Excel
+              </>
+            )}
           </Button>
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> Nova pessoa
